@@ -4,6 +4,7 @@ struct DeepTutorMessageRowView: View {
     let model: DeepTutorMessageRowModel
     let actions: DeepTutorMessageRowActions
     let members: [Member]
+    let fileTransferService: FileTransferService?
 
     private var bubbleMaxWidth: CGFloat {
         DeepTutorPalette.bubbleMaxWidth(for: UIScreen.main.bounds.width)
@@ -16,6 +17,7 @@ struct DeepTutorMessageRowView: View {
                 Spacer(minLength: 40)
                 DeepTutorUserBubble(
                     message: message,
+                    fileTransferService: fileTransferService,
                     branchInfo: model.branchInfo.map { ($0.index, $0.count) },
                     onCopy: { actions.onCopy(message.id) },
                     onEdit: { actions.onEdit(message.id, $0) },

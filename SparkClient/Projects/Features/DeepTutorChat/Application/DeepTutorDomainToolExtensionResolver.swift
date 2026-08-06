@@ -217,6 +217,9 @@ enum DeepTutorDomainToolExtensionResolver: Sendable {
         guard intentMatched else {
             return ineligible(source: "weather_location", reason: "intent_not_matched")
         }
+        guard context.weatherToolEnabled else {
+            return ineligible(source: "weather_location", reason: "weather_disabled")
+        }
 
         var tools: Set<String> = [
             SparkToolName.queryWeather.rawValue,
@@ -227,6 +230,9 @@ enum DeepTutorDomainToolExtensionResolver: Sendable {
             DeepTutorToolGateResult(toolName: SparkToolName.queryLocation.rawValue, allowed: true, reason: "weather_intent"),
         ]
 
+        let hasExplicitCity = DeepTutorWeatherLocationHint.hasExplicitCity(in: context.userInput)
+        let nextPhase: String
+
         if context.hasLocationPermission {
             tools.insert(SparkToolName.getCurrentLocation.rawValue)
             gates.append(
@@ -236,6 +242,7 @@ enum DeepTutorDomainToolExtensionResolver: Sendable {
                     reason: "has_location_permission"
                 )
             )
+            nextPhase = "weather_fetch"
         } else {
             gates.append(
                 DeepTutorToolGateResult(
@@ -244,6 +251,19 @@ enum DeepTutorDomainToolExtensionResolver: Sendable {
                     reason: "no_location_permission"
                 )
             )
+            if hasExplicitCity {
+                nextPhase = "weather_fetch"
+            } else {
+                tools.insert(SparkToolName.askUserQuestion.rawValue)
+                gates.append(
+                    DeepTutorToolGateResult(
+                        toolName: SparkToolName.askUserQuestion.rawValue,
+                        allowed: true,
+                        reason: "city_required"
+                    )
+                )
+                nextPhase = "weather_city_prompt"
+            }
         }
 
         return DeepTutorDomainToolExtensionResult(
@@ -253,7 +273,7 @@ enum DeepTutorDomainToolExtensionResolver: Sendable {
             eligible: true,
             ineligibleReason: nil,
             subdomain: nil,
-            nextPhase: "weather_fetch"
+            nextPhase: nextPhase
         )
     }
 

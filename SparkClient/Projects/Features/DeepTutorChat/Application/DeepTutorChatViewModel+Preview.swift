@@ -9,6 +9,7 @@ extension DeepTutorChatViewModel {
             aiConfigCenter: container.aiConfigCenter,
             toolInteractionCoordinator: container.toolInteractionCoordinator,
             memberContextStore: container.memberContextStore,
+            fileTransferService: container.fileTransferService,
             logger: container.logger
         )
     }

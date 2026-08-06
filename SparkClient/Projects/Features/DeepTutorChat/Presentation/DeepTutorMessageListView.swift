@@ -27,6 +27,7 @@ final class DeepTutorMessageListViewController: UIViewController, UICollectionVi
     var onUserInteraction: (() -> Void)?
     var rowActions: DeepTutorMessageRowActions?
     var rowMembers: [Member] = []
+    var fileTransferService: FileTransferService?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -77,7 +78,7 @@ final class DeepTutorMessageListViewController: UIViewController, UICollectionVi
 
         let signature = DeepTutorListApplySignature.make(conversationID: conversationID, payload: payload)
         if signature == lastAppliedSignature {
-            DeepTutorChatLog.listSnapshotApplySkipped(conversationID: conversationID, reason: "same_signature")
+            DeepTutorChatLog.refreshApplySkipped(conversationID: conversationID, reason: "same_signature")
             return
         }
 
@@ -150,7 +151,12 @@ final class DeepTutorMessageListViewController: UIViewController, UICollectionVi
             self.isApplyingSnapshot = false
             self.lastAppliedSignature = signature
             let durationMs = Int(Date().timeIntervalSince(start) * 1000)
-            self.renderObserver?.messageListDidApplySnapshot(conversationID: conversationID, durationMs: durationMs)
+            let hasMorePending = self.pendingApply != nil
+            self.renderObserver?.messageListDidApplySnapshot(
+                conversationID: conversationID,
+                durationMs: durationMs,
+                hasMorePending: hasMorePending
+            )
 
             if let pending = self.pendingApply {
                 self.pendingApply = nil
@@ -207,7 +213,12 @@ final class DeepTutorMessageListViewController: UIViewController, UICollectionVi
                     signature: rowModel.renderSignature
                 )
                 cell.contentConfiguration = UIHostingConfiguration {
-                    DeepTutorMessageRowView(model: rowModel, actions: actions, members: self.rowMembers)
+                    DeepTutorMessageRowView(
+                        model: rowModel,
+                        actions: actions,
+                        members: self.rowMembers,
+                        fileTransferService: self.fileTransferService
+                    )
                 }
             } else {
                 cell.contentConfiguration = UIHostingConfiguration {
@@ -266,6 +277,7 @@ struct DeepTutorMessageListRepresentable: UIViewControllerRepresentable {
     let conversationID: UUID
     @ObservedObject var viewModel: DeepTutorChatViewModel
     @ObservedObject var refreshCoordinator: DeepTutorRefreshCoordinator
+    let fileTransferService: FileTransferService
 
     func makeUIViewController(context: Context) -> DeepTutorMessageListViewController {
         let controller = DeepTutorMessageListViewController()
@@ -285,6 +297,7 @@ struct DeepTutorMessageListRepresentable: UIViewControllerRepresentable {
         )
         context.coordinator.appliedLayoutNonce = refreshCoordinator.layoutNonce
         uiViewController.rowMembers = viewModel.availableMembers
+        uiViewController.fileTransferService = fileTransferService
         uiViewController.apply(conversationID: conversationID, payload: payload)
     }
 
@@ -304,6 +317,7 @@ struct DeepTutorMessageListRepresentable: UIViewControllerRepresentable {
             viewModel.handleUserScrollInteraction()
         }
         controller.rowMembers = viewModel.availableMembers
+        controller.fileTransferService = fileTransferService
         controller.rowActions = DeepTutorMessageRowActions(
             onCopy: { messageID in
                 viewModel.handleRowCopy(messageID: messageID)

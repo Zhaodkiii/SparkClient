@@ -25,6 +25,7 @@ final class ToolHub: @unchecked Sendable {
     let healthResourceToolService: any HealthResourceToolService
     let appleHealthToolConsentPolicy: AppleHealthToolConsentPolicy
     let webSearchGateway: WebSearchGateway
+    let weatherGateway: WeatherGateway
     let logger: Logger
 
     /// 内存画布：标题 → 正文（`createCanvas` / `editCanvas` 使用，进程内有效）。
@@ -51,6 +52,7 @@ final class ToolHub: @unchecked Sendable {
         healthResourceToolService: (any HealthResourceToolService)? = nil,
         appleHealthToolConsentPolicy: AppleHealthToolConsentPolicy = AppleHealthToolConsentPolicy(),
         webSearchGateway: WebSearchGateway = WebSearchGateway(),
+        weatherGateway: WeatherGateway = WeatherGateway(),
         logger: Logger = ConsoleLogger()
     ) {
         self.chatRepository = chatRepository
@@ -74,11 +76,17 @@ final class ToolHub: @unchecked Sendable {
             ?? DefaultHealthResourceToolService(medicalQueryAPI: medicalQueryAPI)
         self.appleHealthToolConsentPolicy = appleHealthToolConsentPolicy
         self.webSearchGateway = webSearchGateway
+        self.weatherGateway = weatherGateway
         self.logger = logger
     }
 
     func shortID(_ value: Int?) -> String {
         guard let value else { return "-" }
         return String(value)
+    }
+
+    func shortConversationID(_ value: UUID?) -> String {
+        guard let value else { return "-" }
+        return String(value.uuidString.prefix(8))
     }
 }

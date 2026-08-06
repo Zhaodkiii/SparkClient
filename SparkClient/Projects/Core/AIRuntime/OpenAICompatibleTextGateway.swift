@@ -1,5 +1,6 @@
 import Foundation
 import os
+import CryptoKit
 
 /// 最终类：OpenAI兼容格式的文本AI网关
 /// 实现AIRuntimeGateway协议，用于处理流式/非流式的AI文本生成请求，适配OpenAI规范的接口
@@ -122,14 +123,25 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
         let requestBodyData = try encodeMergedRequestBody(base: payload, reasoningExtras: reasoning.extras)
         request.httpBody = requestBodyData
         
-        // 日志：打印请求信息（截断超长报文）
+        // 日志：默认摘要；verbose 开关下才展开完整报文。
         let requestBodyText = String(data: requestBodyData, encoding: .utf8) ?? "<non-utf8>"
         let redactedRequestBodyText = AIRuntimeRequestLogRedactor.redact(requestBodyText)
+        let bodyHash = Self.shortBodyHash(requestBodyData)
+        let thinkingEnabled = runtimeRequest.reasoning.isEnabled
         logger.debug(
             "AI 流式网关请求开始，model=\(client.model), endpoint=\(client.endpoint.absoluteString), messages=\(runtimeRequest.messages.count), tools=\(runtimeRequest.tools.count), apiKeyPresent=\(client.apiKey?.isEmpty == false)",
             module: .aiConfig
         )
-        logger.debug("AI 流式网关请求报文=\(truncate(redactedRequestBodyText, limit: 20000))", module: .aiConfig)
+        logger.debug(
+            "AI 流式网关请求摘要 model=\(client.model) endpoint=\(client.endpoint.absoluteString) messages=\(runtimeRequest.messages.count) tools=\(runtimeRequest.tools.count) max_tokens=\(client.maxTokens) temperature=\(client.temperature) stream=true thinking=\(thinkingEnabled) toolChoice=\(payload.toolChoice ?? "none") bodyBytes=\(requestBodyData.count) bodyHash=\(bodyHash)",
+            module: .aiConfig
+        )
+        if AIRuntimeDebugFlags.verboseRequestLogs {
+            logger.debug(
+                "AI 流式网关请求报文=\(truncate(redactedRequestBodyText, limit: 2000))",
+                module: .aiConfig
+            )
+        }
 
         // 返回异步抛出流，处理流式响应
         return AsyncThrowingStream { continuation in
@@ -501,6 +513,11 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
     private func truncate(_ text: String, limit: Int) -> String {
         guard text.count > limit else { return text }
         return "\(text.prefix(limit))...(truncated)"
+    }
+
+    /// 请求体短哈希，用于摘要日志关联同一次请求。
+    private static func shortBodyHash(_ data: Data) -> String {
+        SHA256.hash(data: data).prefix(8).map { String(format: "%02x", $0) }.joined()
     }
 
     /// 将 `AIRuntimeMessage` 编码为 OpenAI `content`：纯字符串或多模态 JSON 数组。

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DeepTutorUserBubble: View {
     let message: DeepTutorMessage
+    let fileTransferService: FileTransferService?
     let branchInfo: (index: Int, count: Int)?
     let onCopy: () -> Void
     let onEdit: (String) -> Void
@@ -11,6 +12,14 @@ struct DeepTutorUserBubble: View {
     @State private var isEditing = false
     @State private var isEditingFocused = false
     @State private var draft = ""
+
+    private var imageChatAttachments: [ChatAttachment] {
+        message.attachments.compactMap { $0.toChatAttachment() }.filter { $0.type == .image }
+    }
+
+    private var fileChatAttachments: [ChatAttachment] {
+        message.attachments.compactMap { $0.toChatAttachment() }.filter { $0.type == .pdf || $0.type == .file }
+    }
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 6) {
@@ -25,42 +34,81 @@ struct DeepTutorUserBubble: View {
                 messageBubble
             }
 
+            if let fileTransferService, imageChatAttachments.isEmpty == false {
+                ChatImageGalleryBlockView(
+                    images: imagePayloads,
+                    fileTransferService: fileTransferService,
+                    style: .user
+                )
+            }
+
+            if let fileTransferService, fileChatAttachments.isEmpty == false {
+                ChatFileAttachmentBlockView(
+                    attachments: fileChatAttachments,
+                    role: .user,
+                    fileTransferService: fileTransferService
+                )
+            }
+
             if let branchInfo {
                 branchControls(branchInfo)
             }
 
-            DeepTutorContextReferenceTreeView(
-                attachments: message.attachments,
-                references: message.requestSnapshot?.references ?? []
-            )
+            if message.requestSnapshot?.references.isEmpty == false {
+                DeepTutorContextReferenceTreeView(
+                    attachments: [],
+                    references: message.requestSnapshot?.references ?? []
+                )
+            }
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
     }
 
+    private var imagePayloads: [ChatImagePayload] {
+        let blocks = [
+            ChatMessageBlock(
+                kind: .imageGallery,
+                attachments: imageChatAttachments
+            )
+        ]
+        let chatMessage = ChatMessage(
+            threadID: message.conversationID,
+            role: .user,
+            blocks: blocks,
+            clientMessageID: message.id,
+            createdAt: message.createdAt
+        )
+        return ChatImagePayloadBuilder.imagePayloads(from: chatMessage)
+    }
+
     private var messageBubble: some View {
-        Text(message.content)
-            .font(.system(size: DeepTutorPalette.bodyFontSize))
-            .lineSpacing(DeepTutorPalette.bodyLineSpacing)
-            .foregroundStyle(.primary)
-            .multilineTextAlignment(.leading)
-            .padding(.horizontal, DeepTutorPalette.bubbleHorizontalPadding)
-            .padding(.vertical, DeepTutorPalette.bubbleVerticalPadding)
-            .background(DeepTutorPalette.secondarySurface, in: bubbleShape)
-            .deepTutorBubbleShadow()
-            .contextMenu {
-                Button {
-                    onCopy()
-                } label: {
-                    Label("Copy", systemImage: "doc.on.doc")
-                }
-                Button {
-                    draft = message.content
-                    isEditing = true
-                    isEditingFocused = true
-                } label: {
-                    Label("Edit", systemImage: "pencil")
-                }
+        Group {
+            if message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                Text(message.content)
+                    .font(.system(size: DeepTutorPalette.bodyFontSize))
+                    .lineSpacing(DeepTutorPalette.bodyLineSpacing)
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.leading)
+                    .padding(.horizontal, DeepTutorPalette.bubbleHorizontalPadding)
+                    .padding(.vertical, DeepTutorPalette.bubbleVerticalPadding)
+                    .background(DeepTutorPalette.secondarySurface, in: bubbleShape)
+                    .deepTutorBubbleShadow()
             }
+        }
+        .contextMenu {
+            Button {
+                onCopy()
+            } label: {
+                Label("Copy", systemImage: "doc.on.doc")
+            }
+            Button {
+                draft = message.content
+                isEditing = true
+                isEditingFocused = true
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+        }
     }
 
     private var editingCard: some View {

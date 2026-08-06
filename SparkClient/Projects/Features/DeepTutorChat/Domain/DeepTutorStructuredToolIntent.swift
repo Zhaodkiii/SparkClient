@@ -88,7 +88,8 @@ enum DeepTutorToolIntentClassifier: Sendable {
                 )
             )
         }
-        if matchesAny(normalized, patterns: weatherLocationPatterns) {
+        if isWeatherProductQuestion(normalized) == false,
+           matchesAny(normalized, patterns: weatherLocationPatterns) {
             intents.append(
                 DeepTutorStructuredToolIntent(
                     domain: .weatherLocation,
@@ -276,6 +277,15 @@ enum DeepTutorToolIntentClassifier: Sendable {
         "天气", "气温", "weather", "下雨", "温度", "forecast",
         "附近", "路线", "导航", "定位", "在哪", "哪个城市", "city",
     ]
+
+    private nonisolated static let weatherProductQuestionPatterns = [
+        "weatherkit", "weather kit", "weather api", "天气 api", "天气kit",
+        "weatherkit 是什么", "weather kit 是什么", "apple weather api",
+    ]
+
+    private nonisolated static func isWeatherProductQuestion(_ normalizedInput: String) -> Bool {
+        matchesAny(normalizedInput, patterns: weatherProductQuestionPatterns)
+    }
 
     private nonisolated static let healthDataPatterns = [
         "步数", "睡眠", "运动", "饮食", "营养", "能量", "锻炼", "走路", "卡路里",

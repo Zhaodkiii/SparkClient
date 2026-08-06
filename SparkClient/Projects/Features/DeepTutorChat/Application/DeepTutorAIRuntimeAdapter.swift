@@ -12,6 +12,7 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
         let conversationTitle: String
         let settings: DeepTutorConversationGenerationSettings
         let visibleHistory: [DeepTutorMessage]
+        let currentUserMessage: DeepTutorMessage?
         let assistantMessageID: UUID
         let boundMemberID: Int?
         let requestSnapshot: DeepTutorRequestSnapshot?
@@ -70,6 +71,8 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
         )
         mountContext.modelSupportsToolCalling = modelSupportsToolCalling
         mountContext.hasSelectedMember = request.boundMemberID != nil && (request.boundMemberID ?? 0) > 0
+        mountContext.hasLocationPermission = SparkLocationService.hasWhenInUsePermission()
+        mountContext.weatherToolEnabled = (try? await aiConfigCenter.currentSnapshot().weatherToolPreferences.useWeather) ?? true
         mountContext.snapshotRequestedTools = request.requestSnapshot?.enabledTools
             ?? request.requestSnapshot?.toolSnapshot?.requestedCanonicalTools
         if request.capability == .deepQuestion {
@@ -94,6 +97,17 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
             mountContext: mountContext
         )
 
+        var modelHistory = built.history
+        if let currentUserMessage = request.currentUserMessage {
+            modelHistory.append(DeepTutorRuntimeRequestBuilder.chatMessage(from: currentUserMessage))
+        }
+
+        let hasImageAttachments = request.currentUserMessage?.attachments.contains { $0.type == "image" } ?? false
+        let multimodalCapabilities = bundles?.chatMultimodalCapabilities(
+            selectedModelName: built.preferredModelName ?? resolvedConfig.model
+        )
+        let deliverMultimodal = hasImageAttachments && (multimodalCapabilities?.supportsMultimodal ?? false)
+
         DeepTutorChatLog.toolPolicyResolved(
             conversationID: request.conversationID,
             assistantMessageID: request.assistantMessageID,
@@ -102,6 +116,56 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
             policy: built.toolPolicy,
             modelSupportsToolCalling: modelSupportsToolCalling
         )
+
+        var resolvedSearchProvider: String?
+        if built.toolPolicy.useWebSearch {
+            do {
+                let searchConfig = try await aiConfigCenter.effectiveSearchConfig()
+                resolvedSearchProvider = searchConfig.provider.rawValue
+                DeepTutorChatLog.searchConfigResolved(
+                    conversationID: request.conversationID,
+                    provider: searchConfig.provider.rawValue,
+                    keyID: searchConfig.rawKeyID,
+                    revision: searchConfig.revision.localRevision,
+                    count: searchConfig.searchCount,
+                    bilingual: searchConfig.bilingualSearch
+                )
+            } catch let error as SearchRuntimeError {
+                DeepTutorChatLog.searchConfigFailed(
+                    conversationID: request.conversationID,
+                    error: error.errorDescription ?? error.localizedDescription
+                )
+            } catch {
+                DeepTutorChatLog.searchConfigFailed(
+                    conversationID: request.conversationID,
+                    error: error.localizedDescription
+                )
+            }
+        }
+
+        if built.toolPolicy.allowedToolNames.contains(SparkToolName.queryWeather.rawValue) {
+            do {
+                let weatherConfig = try await aiConfigCenter.effectiveWeatherConfig()
+                DeepTutorChatLog.weatherConfigResolved(
+                    conversationID: request.conversationID,
+                    provider: weatherConfig.provider.rawValue,
+                    keyID: weatherConfig.rawKeyID,
+                    revision: weatherConfig.revision.localRevision
+                )
+            } catch let error as WeatherRuntimeError {
+                DeepTutorChatLog.weatherConfigFailed(
+                    conversationID: request.conversationID,
+                    error: error.errorDescription ?? error.localizedDescription
+                )
+            } catch {
+                DeepTutorChatLog.weatherConfigFailed(
+                    conversationID: request.conversationID,
+                    error: error.localizedDescription
+                )
+            }
+        }
+
+        let capturedSearchProvider = resolvedSearchProvider
 
         let outboundSchemaNames = DeepTutorToolPolicyResolver.effectiveToolSchemaNames(inference: built.inference)
         let toolChoiceLabel = built.inference.useTools && outboundSchemaNames.isEmpty == false ? "auto" : "none"
@@ -128,11 +192,12 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
         let cancellationToken = await request.session.cancellationToken
         let toolCallLogger = DeepTutorToolCallLogTracker()
         let flushTracker = DeepTutorPartialFlushTracker()
+        let partialLogTracker = DeepTutorStreamPartialLogTracker()
         let output: ChatOrchestratorOutput
         do {
             output = try await orchestrator.generateReply(
                 userInput: request.userInput,
-                history: built.history,
+                history: modelHistory,
                 memberContextSummary: "",
                 memberID: request.boundMemberID,
                 threadID: request.conversationID,
@@ -146,6 +211,9 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
                 maxTokens: resolvedConfig.maxTokens,
                 maxMessages: built.maxMessages,
                 cancellationToken: cancellationToken,
+                deliverMultimodalImages: deliverMultimodal,
+                sendsOriginalImagesToAI: false,
+                providerCompanyUppercased: multimodalCapabilities?.providerCompanyUppercased,
                 preferInlineAskUser: true,
                 preferInlineMemberSelection: true,
                 onPartial: { partial in
@@ -172,10 +240,29 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
                     )
                     let shouldLogPartial = shouldUpdateUI && hasNewEvents
                     if shouldLogPartial {
-                        logger.debug(
-                            "deeptutor.stream.partial.mapped conversation=\(conversationShortID) assistant=\(DeepTutorChatLog.shortID(request.assistantMessageID)) tool=\(partial.toolName ?? "-") call=\(partial.toolCallID ?? "-") answerLen=\(partial.answer.count) reasoningLen=\(partial.reasoning?.count ?? 0) events=\(Self.eventSummary(mapped.events)) forceFlush=\(shouldForceFlush) blocks=\(blockSummary)",
-                            module: DeepTutorChatLog.module
+                        let isOperational = Self.containsOperationalEvent(mapped.events)
+                        let shouldLog = await partialLogTracker.shouldLog(
+                            isOperational: isOperational,
+                            forceFlush: shouldForceFlush,
+                            eventSummary: Self.eventSummary(mapped.events),
+                            toolName: partial.toolName,
+                            toolCallID: partial.toolCallID,
+                            answerLen: partial.answer.count,
+                            reasoningLen: partial.reasoning?.count ?? 0
                         )
+                        if shouldLog {
+                            DeepTutorChatLog.streamPartialMapped(
+                                conversationID: request.conversationID,
+                                assistantMessageID: request.assistantMessageID,
+                                tool: partial.toolName ?? "-",
+                                call: partial.toolCallID ?? "-",
+                                answerLen: partial.answer.count,
+                                reasoningLen: partial.reasoning?.count ?? 0,
+                                events: Self.eventSummary(mapped.events),
+                                forceFlush: shouldForceFlush,
+                                blocks: blockSummary
+                            )
+                        }
                     }
                     if let toolName = partial.toolName, let toolCallID = partial.toolCallID {
                         let argsLength = partial.toolArguments?.count
@@ -209,7 +296,7 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
                                         module: DeepTutorChatLog.module
                                     )
                                 }
-                            case .completed(let round, let durationMs, let resultLength):
+                            case .completed(let round, let durationMs, let resultLength, let toolContent):
                                 DeepTutorChatLog.toolCallCompleted(
                                     conversationID: request.conversationID,
                                     assistantMessageID: request.assistantMessageID,
@@ -222,6 +309,14 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
                                     sideEffectCount: 0,
                                     awaitingUserInput: Self.containsAskUserEvent(mapped.events)
                                 )
+                                if Self.isWebSearchTool(toolName) {
+                                    DeepTutorChatLog.searchToolResult(
+                                        conversationID: request.conversationID,
+                                        provider: capturedSearchProvider ?? "-",
+                                        resultCount: Self.estimatedSearchResultCount(from: toolContent),
+                                        elapsedMs: durationMs
+                                    )
+                                }
                             }
                         }
                     }
@@ -327,9 +422,13 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
             completionTokens: nil,
             finishReason: output.finishReason
         )
-        logger.info(
-            "deeptutor.stream.completion.mapped conversation=\(conversationShortID) assistant=\(DeepTutorChatLog.shortID(request.assistantMessageID)) finish=\(output.finishReason ?? "-") outputTool=\(output.toolName ?? "-") outputTextLen=\(output.text.count) events=\(Self.eventSummary(completionEvents))",
-            module: DeepTutorChatLog.module
+        DeepTutorChatLog.streamCompletionMapped(
+            conversationID: request.conversationID,
+            assistantMessageID: request.assistantMessageID,
+            finish: output.finishReason ?? "-",
+            outputTool: output.toolName ?? "-",
+            outputTextLen: output.text.count,
+            events: Self.eventSummary(completionEvents)
         )
         var assistant = await accumulator.applyCompletion(
             events: completionEvents,
@@ -426,6 +525,8 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
             conversationID: request.conversationID,
             conversationTitle: request.conversationTitle
         )
+        mountContext.hasLocationPermission = SparkLocationService.hasWhenInUsePermission()
+        mountContext.weatherToolEnabled = (try? await aiConfigCenter.currentSnapshot().weatherToolPreferences.useWeather) ?? true
         let toolPolicy = DeepTutorToolPolicyResolver.resolveForAskUserResume(
             context: mountContext,
             originalUserPrompt: request.resumeContext.originalUserPrompt,
@@ -790,6 +891,79 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
             .map { "\($0.key.rawValue)=\($0.value)" }
             .joined(separator: ",")
     }
+
+    nonisolated private static func isWebSearchTool(_ toolName: String) -> Bool {
+        let normalized = toolName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized == SparkToolName.searchOnline.rawValue
+            || normalized == SparkToolName.searchArxivPapers.rawValue
+    }
+
+    nonisolated private static func estimatedSearchResultCount(from text: String?) -> Int {
+        guard let text, text.isEmpty == false else { return 0 }
+        let pattern = #"\[\d+\]"#
+        return text
+            .components(separatedBy: .newlines)
+            .filter { $0.range(of: pattern, options: .regularExpression) != nil }
+            .count
+    }
+}
+
+private actor DeepTutorStreamPartialLogTracker {
+    private var lastLogTime = Date.distantPast
+    private var lastAnswerLen = 0
+    private var lastReasoningLen = 0
+    private var loggedOperationalSignatures = Set<String>()
+    private var loggedToolCallIDs = Set<String>()
+
+    private let minIntervalMs = 500
+    private let lengthThreshold = 80
+
+    func shouldLog(
+        isOperational: Bool,
+        forceFlush: Bool,
+        eventSummary: String,
+        toolName: String?,
+        toolCallID: String?,
+        answerLen: Int,
+        reasoningLen: Int
+    ) -> Bool {
+        if DeepTutorDebugFlags.verboseAIRuntimeStreamLogs { return true }
+
+        if isOperational || forceFlush {
+            let signature = "\(eventSummary)|\(toolCallID ?? "-")"
+            guard loggedOperationalSignatures.contains(signature) == false else { return false }
+            loggedOperationalSignatures.insert(signature)
+            recordProgress(answerLen: answerLen, reasoningLen: reasoningLen)
+            return true
+        }
+
+        if let toolCallID,
+           toolCallID != "-",
+           let toolName,
+           toolName != "-",
+           loggedToolCallIDs.contains(toolCallID) == false {
+            loggedToolCallIDs.insert(toolCallID)
+            recordProgress(answerLen: answerLen, reasoningLen: reasoningLen)
+            return true
+        }
+
+        let now = Date()
+        let elapsedMs = Int(now.timeIntervalSince(lastLogTime) * 1000)
+        guard elapsedMs >= minIntervalMs else { return false }
+
+        let answerDelta = answerLen - lastAnswerLen
+        let reasoningDelta = reasoningLen - lastReasoningLen
+        guard answerDelta >= lengthThreshold || reasoningDelta >= lengthThreshold else { return false }
+
+        recordProgress(answerLen: answerLen, reasoningLen: reasoningLen, time: now)
+        return true
+    }
+
+    private func recordProgress(answerLen: Int, reasoningLen: Int, time: Date = Date()) {
+        lastLogTime = time
+        lastAnswerLen = answerLen
+        lastReasoningLen = reasoningLen
+    }
 }
 
 private actor DeepTutorPartialFlushTracker {
@@ -812,7 +986,7 @@ private actor DeepTutorPartialFlushTracker {
 private actor DeepTutorToolCallLogTracker {
     enum Event: Sendable {
         case received(round: Int)
-        case completed(round: Int, durationMs: Int, resultLength: Int)
+        case completed(round: Int, durationMs: Int, resultLength: Int, toolContent: String?)
     }
 
     private var round = 0
@@ -839,7 +1013,8 @@ private actor DeepTutorToolCallLogTracker {
             return .completed(
                 round: round,
                 durationMs: durationMs,
-                resultLength: toolContent?.count ?? 0
+                resultLength: toolContent?.count ?? 0,
+                toolContent: toolContent
             )
         }
         return nil

@@ -46,11 +46,15 @@ nonisolated enum DeepTutorChatLog {
     }
 
     nonisolated static func listLoadStart(source: String) {
-        logInfo("deeptutor.list.load.start source=\(source)")
+        guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
+        logDebug("deeptutor.list.load.start source=\(source)")
     }
 
     nonisolated static func listLoadDone(count: Int, source: String) {
-        logInfo("deeptutor.list.load.done count=\(count) source=\(source)")
+        guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
+        let signature = "\(count)|\(source)"
+        guard LogState.shared.logIfChanged(scope: "list.load.done", signature: signature) else { return }
+        logDebug("deeptutor.list.load.done count=\(count) source=\(source)")
     }
 
     nonisolated static func keyboardDismiss(source: String) {
@@ -244,25 +248,87 @@ nonisolated enum DeepTutorChatLog {
         )
     }
 
+    nonisolated static func conversationOpenStart(conversationID: UUID) {
+        guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
+        logDebug("deeptutor.conversation.open.start conversation=\(shortID(conversationID))")
+    }
+
+    nonisolated static func conversationOpenDone(
+        conversationID: UUID,
+        messageCount: Int,
+        cachedCount: Int,
+        hasMore: Bool
+    ) {
+        let signature = "\(messageCount)|\(cachedCount)|\(hasMore)"
+        guard LogState.shared.logIfChanged(
+            scope: "conversation.open.done:\(conversationID.uuidString)",
+            signature: signature
+        ) else { return }
+        logInfo(
+            "deeptutor.conversation.open.done conversation=\(shortID(conversationID)) messages=\(messageCount) cached=\(cachedCount) hasMore=\(hasMore)"
+        )
+    }
+
     nonisolated static func conversationOpenJoin(conversationID: UUID, generation: UInt64) {
+        guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
+        let signature = "\(generation)"
+        guard LogState.shared.logIfChanged(
+            scope: "conversation.open.join:\(conversationID.uuidString)",
+            signature: signature
+        ) else { return }
         logDebug(
             "deeptutor.conversation.open.join conversation=\(shortID(conversationID)) generation=\(generation)"
         )
     }
 
     nonisolated static func conversationOpenStaleDrop(conversationID: UUID, generation: UInt64) {
+        guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
+        let signature = "\(generation)"
+        guard LogState.shared.logIfChanged(
+            scope: "conversation.open.stale_drop:\(conversationID.uuidString)",
+            signature: signature
+        ) else { return }
         logDebug(
             "deeptutor.conversation.open.stale_drop conversation=\(shortID(conversationID)) generation=\(generation)"
         )
     }
 
+    nonisolated static func messagesReloadStart(
+        conversationID: UUID,
+        lockBottom: Bool,
+        forceFullRediff: Bool,
+        source: String
+    ) {
+        guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
+        let signature = "\(lockBottom)|\(forceFullRediff)|\(source)"
+        guard LogState.shared.logIfChanged(
+            scope: "messages.reload.start:\(conversationID.uuidString)",
+            signature: signature
+        ) else { return }
+        logDebug(
+            "deeptutor.messages.reload.start conversation=\(shortID(conversationID)) lockBottom=\(lockBottom) forceFullRediff=\(forceFullRediff) source=\(source)"
+        )
+    }
+
     nonisolated static func messagesReloadJoin(conversationID: UUID, source: String, generation: UInt64) {
+        guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
+        let signature = "\(source)|\(generation)"
+        guard LogState.shared.logIfChanged(
+            scope: "messages.reload.join:\(conversationID.uuidString)",
+            signature: signature
+        ) else { return }
         logDebug(
             "deeptutor.messages.reload.join conversation=\(shortID(conversationID)) source=\(source) generation=\(generation)"
         )
     }
 
     nonisolated static func messagesReloadStaleDrop(conversationID: UUID, source: String, generation: UInt64) {
+        guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
+        let signature = "\(source)|\(generation)"
+        guard LogState.shared.logIfChanged(
+            scope: "messages.reload.stale_drop:\(conversationID.uuidString)",
+            signature: signature
+        ) else { return }
         logDebug(
             "deeptutor.messages.reload.stale_drop conversation=\(shortID(conversationID)) source=\(source) generation=\(generation)"
         )
@@ -273,15 +339,28 @@ nonisolated enum DeepTutorChatLog {
         itemCount: Int,
         signature: String
     ) {
+        guard DeepTutorDebugFlags.verboseChatRenderLogs else { return }
+        let snippet = contentSnippet(signature, limit: 120)
+        let dedupeSignature = "\(itemCount)|\(snippet)"
+        guard LogState.shared.logIfChanged(
+            scope: "list.snapshot.apply_start:\(conversationID.uuidString)",
+            signature: dedupeSignature
+        ) else { return }
         logDebug(
-            "deeptutor.list.snapshot.apply_start conversation=\(shortID(conversationID)) items=\(itemCount) signature=\(contentSnippet(signature, limit: 120))"
+            "deeptutor.list.snapshot.apply_start conversation=\(shortID(conversationID)) items=\(itemCount) signature=\(snippet)"
         )
     }
 
     nonisolated static func listSnapshotApplyQueued(conversationID: UUID, reason: String) {
+        guard DeepTutorDebugFlags.verboseChatRenderLogs else { return }
+        guard LogState.shared.logIfChanged(
+            scope: "list.snapshot.apply_queued:\(conversationID.uuidString)",
+            signature: reason
+        ) else { return }
         logDebug(
             "deeptutor.list.snapshot.apply_queued conversation=\(shortID(conversationID)) reason=\(reason)"
         )
+        LogState.shared.noteRefreshApplyQueued(conversationID: conversationID)
     }
 
     nonisolated static func listSnapshotApplyDone(
@@ -289,36 +368,63 @@ nonisolated enum DeepTutorChatLog {
         hasPending: Bool,
         durationMs: Int
     ) {
+        guard DeepTutorDebugFlags.verboseChatRenderLogs else { return }
+        let signature = "\(hasPending)|\(durationMs)"
+        guard LogState.shared.logIfChanged(
+            scope: "list.snapshot.apply_done:\(conversationID.uuidString)",
+            signature: signature
+        ) else { return }
         logDebug(
             "deeptutor.list.snapshot.apply_done conversation=\(shortID(conversationID)) pending=\(hasPending) durationMs=\(durationMs)"
         )
     }
 
     nonisolated static func listSnapshotApplySkipped(conversationID: UUID, reason: String) {
+        guard DeepTutorDebugFlags.verboseChatRenderLogs else { return }
+        guard LogState.shared.logIfChanged(
+            scope: "list.snapshot.apply_skipped:\(conversationID.uuidString)",
+            signature: reason
+        ) else { return }
         logDebug(
             "deeptutor.list.snapshot.apply_skipped conversation=\(shortID(conversationID)) reason=\(reason)"
         )
     }
 
     nonisolated static func renderTransactionBegin(conversationID: UUID, source: String) {
+        guard DeepTutorDebugFlags.verboseChatRenderLogs else { return }
+        guard LogState.shared.logIfChanged(
+            scope: "render.transaction.begin:\(conversationID.uuidString)",
+            signature: source
+        ) else { return }
         logDebug(
             "deeptutor.render.transaction.begin conversation=\(shortID(conversationID)) source=\(source)"
         )
     }
 
     nonisolated static func renderTransactionEnd(conversationID: UUID, durationMs: Int) {
+        guard DeepTutorDebugFlags.verboseChatRenderLogs else { return }
+        guard LogState.shared.logIfChanged(
+            scope: "render.transaction.end:\(conversationID.uuidString)",
+            signature: String(durationMs)
+        ) else { return }
         logDebug(
             "deeptutor.render.transaction.end conversation=\(shortID(conversationID)) durationMs=\(durationMs)"
         )
     }
 
     nonisolated static func publishGuardBlocked(mutation: String, reason: String, source: String) {
+        guard DeepTutorDebugFlags.verboseChatRenderLogs else { return }
+        let signature = "\(mutation)|\(reason)|\(source)"
+        guard LogState.shared.logIfChanged(scope: "publish.guard.blocked", signature: signature) else { return }
         logDebug(
             "deeptutor.publish.guard.blocked mutation=\(mutation) reason=\(reason) source=\(source)"
         )
     }
 
     nonisolated static func publishCommit(source: String, mutationCount: Int, durationMs: Int) {
+        guard DeepTutorDebugFlags.verboseChatRenderLogs else { return }
+        let signature = "\(source)|\(mutationCount)|\(durationMs)"
+        guard LogState.shared.logIfChanged(scope: "render.publish_commit", signature: signature) else { return }
         logDebug(
             "deeptutor.render.publish_commit source=\(source) mutations=\(mutationCount) durationMs=\(durationMs)"
         )
@@ -331,6 +437,12 @@ nonisolated enum DeepTutorChatLog {
         signature: Int,
         branch: String
     ) {
+        guard DeepTutorDebugFlags.verboseChatRenderLogs else { return }
+        let dedupeSignature = "\(shortID(messageID))|\(role)|\(signature)|\(branch)"
+        guard LogState.shared.logIfChanged(
+            scope: "message_row.model_built:\(conversationID.uuidString)",
+            signature: dedupeSignature
+        ) else { return }
         logDebug(
             "deeptutor.message_row.model_built conversation=\(shortID(conversationID)) message=\(shortID(messageID)) role=\(role) signature=\(signature) branch=\(branch) observedViewModel=false"
         )
@@ -341,6 +453,12 @@ nonisolated enum DeepTutorChatLog {
         messageID: UUID,
         signature: Int
     ) {
+        guard DeepTutorDebugFlags.verboseChatRenderLogs else { return }
+        let dedupeSignature = "\(shortID(messageID))|\(signature)"
+        guard LogState.shared.logIfChanged(
+            scope: "message_row.configure_cell:\(conversationID.uuidString)",
+            signature: dedupeSignature
+        ) else { return }
         logDebug(
             "deeptutor.message_row.configure_cell conversation=\(shortID(conversationID)) message=\(shortID(messageID)) signature=\(signature) observedViewModel=false"
         )
@@ -353,6 +471,12 @@ nonisolated enum DeepTutorChatLog {
         answerLen: Int,
         intervalMs: Int
     ) {
+        guard DeepTutorDebugFlags.verboseChatStreamLogs else { return }
+        let signature = "\(shortID(assistantMessageID))|\(reasoningLen)|\(answerLen)|\(intervalMs)"
+        guard LogState.shared.logIfChanged(
+            scope: "stream.reasoning.coalesced:\(conversationID.uuidString)",
+            signature: signature
+        ) else { return }
         logDebug(
             "deeptutor.stream.reasoning.coalesced conversation=\(shortID(conversationID)) assistant=\(shortID(assistantMessageID)) pendingChars=\(reasoningLen) answerLen=\(answerLen) intervalMs=\(intervalMs)"
         )
@@ -365,6 +489,12 @@ nonisolated enum DeepTutorChatLog {
         answerLen: Int,
         collapsed: Bool
     ) {
+        guard DeepTutorDebugFlags.verboseChatStreamLogs else { return }
+        let signature = "\(shortID(assistantMessageID))|\(reasoningLen)|\(answerLen)|\(collapsed)"
+        guard LogState.shared.logIfChanged(
+            scope: "stream.reasoning.commit:\(conversationID.uuidString)",
+            signature: signature
+        ) else { return }
         logDebug(
             "deeptutor.stream.reasoning.commit conversation=\(shortID(conversationID)) assistant=\(shortID(assistantMessageID)) reasoningLen=\(reasoningLen) answerLen=\(answerLen) collapsed=\(collapsed)"
         )
@@ -380,23 +510,67 @@ nonisolated enum DeepTutorChatLog {
         )
     }
 
+    nonisolated static func streamPartialMapped(
+        conversationID: UUID,
+        assistantMessageID: UUID,
+        tool: String,
+        call: String,
+        answerLen: Int,
+        reasoningLen: Int,
+        events: String,
+        forceFlush: Bool,
+        blocks: String
+    ) {
+        logDebug(
+            "deeptutor.stream.partial.mapped conversation=\(shortID(conversationID)) assistant=\(shortID(assistantMessageID)) tool=\(tool) call=\(call) answerLen=\(answerLen) reasoningLen=\(reasoningLen) events=\(events) forceFlush=\(forceFlush) blocks=\(blocks)"
+        )
+    }
+
+    nonisolated static func streamCompletionMapped(
+        conversationID: UUID,
+        assistantMessageID: UUID,
+        finish: String,
+        outputTool: String,
+        outputTextLen: Int,
+        events: String
+    ) {
+        let signature = "\(finish)|\(outputTool)|\(outputTextLen)|\(events)"
+        guard LogState.shared.logIfChanged(
+            scope: "stream.completion.mapped:\(conversationID.uuidString):\(assistantMessageID.uuidString)",
+            signature: signature
+        ) else { return }
+        logInfo(
+            "deeptutor.stream.completion.mapped conversation=\(shortID(conversationID)) assistant=\(shortID(assistantMessageID)) finish=\(finish) outputTool=\(outputTool) outputTextLen=\(outputTextLen) events=\(events)"
+        )
+    }
+
     nonisolated static func databaseChangeReceived(
         conversationID: UUID?,
         affectsList: Bool,
         affectsMessages: Bool
     ) {
+        guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
+        let scope = conversationID.map { "database_change.received:\($0.uuidString)" } ?? "database_change.received"
+        let signature = "\(affectsList)|\(affectsMessages)"
+        guard LogState.shared.logIfChanged(scope: scope, signature: signature) else { return }
         logDebug(
             "deeptutor.database_change.received conversation=\(shortID(conversationID)) affectsList=\(affectsList) affectsMessages=\(affectsMessages)"
         )
     }
 
     nonisolated static func databaseChangeDeferred(conversationID: UUID?, reason: String) {
+        guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
+        let scope = conversationID.map { "database_change.deferred:\($0.uuidString)" } ?? "database_change.deferred"
+        guard LogState.shared.logIfChanged(scope: scope, signature: reason) else { return }
         logDebug(
             "deeptutor.database_change.deferred conversation=\(shortID(conversationID)) reason=\(reason)"
         )
     }
 
     nonisolated static func databaseChangeCommit(conversationID: UUID?, delayMs: Int) {
+        guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
+        let scope = conversationID.map { "database_change.commit:\($0.uuidString)" } ?? "database_change.commit"
+        guard LogState.shared.logIfChanged(scope: scope, signature: String(delayMs)) else { return }
         logDebug(
             "deeptutor.database_change.commit conversation=\(shortID(conversationID)) source=database_change delayMs=\(delayMs)"
         )
@@ -424,6 +598,11 @@ nonisolated enum DeepTutorChatLog {
         phase: String,
         isStreaming: Bool
     ) {
+        let signature = "\(reason)|\(phase)|\(isStreaming)"
+        guard LogState.shared.logIfChanged(
+            scope: "reload.applied_after_stream:\(conversationID.uuidString)",
+            signature: signature
+        ) else { return }
         logInfo(
             "deeptutor.messages.reload.applied_after_stream conversation=\(shortID(conversationID)) reason=\(reason) phase=\(phase) isStreaming=\(isStreaming)"
         )
@@ -481,24 +660,90 @@ nonisolated enum DeepTutorChatLog {
         selected: String,
         previous: String
     ) {
+        guard selected != previous else { return }
+        guard LogState.shared.logIfChanged(
+            scope: "capability.selected:\(conversationID.uuidString)",
+            signature: "\(previous)|\(selected)"
+        ) else { return }
         logInfo(
             "deeptutor.capability.selected conversation=\(shortID(conversationID)) selected=\(selected) previous=\(previous)"
+        )
+    }
+
+    /// 能力判定收口：默认只输出一条 summary；变化或 mismatch 时保留 warning。
+    nonisolated static func capabilityResolved(
+        conversationID: UUID,
+        selected: String,
+        effective: String,
+        requestSnapshot: String?,
+        messageCapability: String?,
+        source: String
+    ) {
+        let snapshotLabel = requestSnapshot ?? messageCapability ?? effective
+        let selectedEffectiveMismatch = selected != effective
+        let snapshotMismatch = requestSnapshot != nil
+            && messageCapability != nil
+            && requestSnapshot != messageCapability
+
+        if selectedEffectiveMismatch {
+            let mismatchSignature = "\(selected)|\(effective)"
+            if LogState.shared.logIfChanged(
+                scope: "capability.unexpected_mutation:\(conversationID.uuidString)",
+                signature: mismatchSignature
+            ) {
+                logWarning(
+                    "deeptutor.capability.unexpected_mutation conversation=\(shortID(conversationID)) selected=\(selected) effective=\(effective) source=\(source)"
+                )
+            }
+        }
+
+        if snapshotMismatch {
+            let snapshotSignature = "\(requestSnapshot ?? "-")|\(messageCapability ?? "-")"
+            if LogState.shared.logIfChanged(
+                scope: "capability.snapshot_mismatch:\(conversationID.uuidString)",
+                signature: snapshotSignature
+            ) {
+                logWarning(
+                    "deeptutor.capability.snapshot_mismatch conversation=\(shortID(conversationID)) requestSnapshot=\(requestSnapshot ?? "-") message=\(messageCapability ?? "-") source=\(source)"
+                )
+            }
+        }
+
+        let changed = selectedEffectiveMismatch || snapshotMismatch
+        let summarySignature = "\(selected)|\(effective)|\(snapshotLabel)|\(source)|\(changed)"
+        if LogState.shared.logIfChanged(
+            scope: "capability.summary:\(conversationID.uuidString)",
+            signature: summarySignature
+        ) {
+            logInfo(
+                "deeptutor.capability.summary conversation=\(shortID(conversationID)) selected=\(selected) effective=\(effective) snapshot=\(snapshotLabel) source=\(source) changed=\(changed)"
+            )
+        }
+
+        logCapabilityVerboseDetails(
+            conversationID: conversationID,
+            selected: selected,
+            effective: effective,
+            requestSnapshot: requestSnapshot,
+            messageCapability: messageCapability,
+            source: source
         )
     }
 
     nonisolated static func capabilityEffective(
         conversationID: UUID,
         selected: String,
-        effective: String
+        effective: String,
+        source: String = "effective"
     ) {
-        logInfo(
-            "deeptutor.capability.effective conversation=\(shortID(conversationID)) selected=\(selected) effective=\(effective)"
+        capabilityResolved(
+            conversationID: conversationID,
+            selected: selected,
+            effective: effective,
+            requestSnapshot: effective,
+            messageCapability: effective,
+            source: source
         )
-        if selected != effective {
-            logWarning(
-                "deeptutor.capability.unexpected_mutation conversation=\(shortID(conversationID)) selected=\(selected) effective=\(effective)"
-            )
-        }
     }
 
     nonisolated static func capabilitySnapshot(
@@ -506,9 +751,45 @@ nonisolated enum DeepTutorChatLog {
         requestSnapshotCapability: String?,
         messageCapability: String?
     ) {
-        logDebug(
-            "deeptutor.capability.snapshot conversation=\(shortID(conversationID)) requestSnapshot=\(requestSnapshotCapability ?? "-") message=\(messageCapability ?? "-")"
+        capabilityResolved(
+            conversationID: conversationID,
+            selected: messageCapability ?? requestSnapshotCapability ?? "-",
+            effective: messageCapability ?? requestSnapshotCapability ?? "-",
+            requestSnapshot: requestSnapshotCapability,
+            messageCapability: messageCapability,
+            source: "snapshot"
         )
+    }
+
+    private nonisolated static func logCapabilityVerboseDetails(
+        conversationID: UUID,
+        selected: String,
+        effective: String,
+        requestSnapshot: String?,
+        messageCapability: String?,
+        source: String
+    ) {
+        if DeepTutorDebugFlags.verboseCapabilityLogs {
+            let signature = "\(selected)|\(effective)|\(source)"
+            guard LogState.shared.logIfChanged(
+                scope: "capability.effective.verbose:\(conversationID.uuidString)",
+                signature: signature
+            ) else { return }
+            logDebug(
+                "deeptutor.capability.effective conversation=\(shortID(conversationID)) selected=\(selected) effective=\(effective) source=\(source)"
+            )
+        }
+
+        if DeepTutorDebugFlags.verboseCapabilitySnapshots {
+            let snapshotSignature = "\(requestSnapshot ?? "-")|\(messageCapability ?? "-")|\(source)"
+            guard LogState.shared.logIfChanged(
+                scope: "capability.snapshot.verbose:\(conversationID.uuidString)",
+                signature: snapshotSignature
+            ) else { return }
+            logDebug(
+                "deeptutor.capability.snapshot conversation=\(shortID(conversationID)) requestSnapshot=\(requestSnapshot ?? "-") message=\(messageCapability ?? "-") source=\(source)"
+            )
+        }
     }
 
     nonisolated static func messageSendDone(
@@ -596,9 +877,9 @@ nonisolated enum DeepTutorChatLog {
         messageID: UUID,
         summary: DeepTutorContentRouter.RoutingSummary
     ) {
-//        logDebug(
-//            "deeptutor.content_router.segmented message=\(shortID(messageID)) contentSegments=\(summary.contentSegments) traceSegments=\(summary.traceSegments) askUserSegments=\(summary.askUserSegments) droppedNarrationLength=\(summary.droppedNarrationLength) finalAnswerLength=\(summary.finalAnswerLength) reason=\(summary.reason)"
-//        )
+        logDebug(
+            "deeptutor.content_router.segmented message=\(shortID(messageID)) contentSegments=\(summary.contentSegments) traceSegments=\(summary.traceSegments) askUserSegments=\(summary.askUserSegments) droppedNarrationLength=\(summary.droppedNarrationLength) finalAnswerLength=\(summary.finalAnswerLength) reason=\(summary.reason)"
+        )
     }
 
     nonisolated static func askUserPayloadValidated(
@@ -670,6 +951,63 @@ nonisolated enum DeepTutorChatLog {
         let messageLabel = messageID.map { shortID($0) } ?? "-"
         logDebug(
             "deeptutor.trace.row_deduped message=\(messageLabel) toolCallID=\(toolCallID) rowKind=\(rowKind) reason=\(reason)"
+        )
+    }
+
+    nonisolated static func searchConfigResolved(
+        conversationID: UUID,
+        provider: String,
+        keyID: UUID,
+        revision: Int,
+        count: Int,
+        bilingual: Bool
+    ) {
+        logInfo(
+            "deeptutor.search.config_resolved conversation=\(shortID(conversationID)) provider=\(provider) keyID=\(shortID(keyID)) revision=\(revision) count=\(count) bilingual=\(bilingual)"
+        )
+    }
+
+    nonisolated static func searchConfigFailed(
+        conversationID: UUID,
+        error: String,
+        provider: String? = nil
+    ) {
+        let providerLabel = provider ?? "-"
+        logWarning(
+            "deeptutor.search.config_failed conversation=\(shortID(conversationID)) error=\(error) provider=\(providerLabel)"
+        )
+    }
+
+    nonisolated static func weatherConfigResolved(
+        conversationID: UUID,
+        provider: String,
+        keyID: UUID,
+        revision: Int
+    ) {
+        logInfo(
+            "deeptutor.weather.config_resolved conversation=\(shortID(conversationID)) provider=\(provider) keyID=\(shortID(keyID)) revision=\(revision)"
+        )
+    }
+
+    nonisolated static func weatherConfigFailed(
+        conversationID: UUID,
+        error: String,
+        provider: String? = nil
+    ) {
+        let providerLabel = provider ?? "-"
+        logWarning(
+            "deeptutor.weather.config_failed conversation=\(shortID(conversationID)) error=\(error) provider=\(providerLabel)"
+        )
+    }
+
+    nonisolated static func searchToolResult(
+        conversationID: UUID,
+        provider: String,
+        resultCount: Int,
+        elapsedMs: Int
+    ) {
+        logInfo(
+            "deeptutor.search.tool_result conversation=\(shortID(conversationID)) provider=\(provider) resultCount=\(resultCount) elapsedMs=\(elapsedMs)"
         )
     }
 
@@ -874,9 +1212,99 @@ nonisolated enum DeepTutorChatLog {
         repairNeeded: Int,
         durationMs: Int
     ) {
-        logInfo(
+        guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
+        let signature = "\(total)|\(recovered)|\(dropped)|\(repairNeeded)|\(durationMs)"
+        guard LogState.shared.logIfChanged(
+            scope: "messages.reload.summary:\(conversationID.uuidString)",
+            signature: signature
+        ) else { return }
+        logDebug(
             "deeptutor.messages.reload.summary conversation=\(shortID(conversationID)) total=\(total) recovered=\(recovered) dropped=\(dropped) repairNeeded=\(repairNeeded) durationMs=\(durationMs)"
         )
+    }
+
+    nonisolated static func messagesLoadStart(
+        conversationID: UUID,
+        limit: String,
+        before: String
+    ) {
+        guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
+        let signature = "\(limit)|\(before)"
+        guard LogState.shared.logIfChanged(
+            scope: "messages.load.start:\(conversationID.uuidString)",
+            signature: signature
+        ) else { return }
+        logDebug(
+            "deeptutor.messages.load.start conversation=\(shortID(conversationID)) limit=\(limit) before=\(before)"
+        )
+    }
+
+    nonisolated static func messagesLoadDone(
+        conversationID: UUID,
+        count: Int,
+        limit: String,
+        durationMs: Int
+    ) {
+        guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
+        let signature = "\(count)|\(limit)|\(durationMs)"
+        guard LogState.shared.logIfChanged(
+            scope: "messages.load.done:\(conversationID.uuidString)",
+            signature: signature
+        ) else { return }
+        logDebug(
+            "deeptutor.messages.load.done conversation=\(shortID(conversationID)) count=\(count) limit=\(limit) durationMs=\(durationMs)"
+        )
+    }
+
+    /// reload 完成后登记上下文，等待 UI apply 收口或 fallback 后输出一条 summary。
+    nonisolated static func refreshReloadCompleted(
+        conversationID: UUID,
+        source: String,
+        totalCount: Int,
+        visible: Int,
+        messageCount: Int,
+        isStreaming: Bool,
+        durationMs: Int
+    ) {
+        LogState.shared.recordRefreshReload(
+            conversationID: conversationID,
+            source: source,
+            totalCount: totalCount,
+            visible: visible,
+            messageCount: messageCount,
+            isStreaming: isStreaming,
+            reloadDurationMs: durationMs
+        )
+        LogState.shared.scheduleRefreshSummaryFallback(conversationID: conversationID)
+    }
+
+    nonisolated static func cancelRefreshSummaryFallback(conversationID: UUID) {
+        LogState.shared.cancelRefreshSummaryFallback(conversationID: conversationID)
+    }
+
+    /// UI apply 完成后收口 summary；若仍有 pending chained apply 则只更新上下文。
+    nonisolated static func refreshApplyCompleted(
+        conversationID: UUID,
+        durationMs: Int,
+        hasMorePending: Bool
+    ) {
+        LogState.shared.recordRefreshApply(
+            conversationID: conversationID,
+            durationMs: durationMs,
+            hasMorePending: hasMorePending
+        )
+        if hasMorePending == false {
+            LogState.shared.emitRefreshSummary(conversationID: conversationID)
+        }
+    }
+
+    /// apply 因相同 signature 跳过时，若存在 pending reload 则收口 summary。
+    nonisolated static func refreshApplySkipped(conversationID: UUID, reason: String) {
+        LogState.shared.recordRefreshApplySkipped(conversationID: conversationID)
+        if DeepTutorDebugFlags.verboseChatRenderLogs {
+            listSnapshotApplySkipped(conversationID: conversationID, reason: reason)
+        }
+        LogState.shared.emitRefreshSummary(conversationID: conversationID)
     }
 
     nonisolated static func messagesLoadBlockRecovered(
@@ -1479,8 +1907,19 @@ nonisolated enum DeepTutorChatLog {
         optionCount: Int,
         reason: String
     ) {
+        let rawLabel = rawType ?? "-"
+        let signature = "\(resolvedType)|\(optionCount)|\(reason)|\(rawLabel)"
+        guard LogState.shared.logIfChanged(scope: "quiz.resolved:\(questionID)", signature: signature) else {
+            return
+        }
+
+        let isRoutinePromotion = reason == "options_present_promote_choice" || reason == "raw_type"
+        if isRoutinePromotion && DeepTutorDebugFlags.verboseQuizParseLogs == false {
+            return
+        }
+
         logDebug(
-            "deeptutor.quiz.question_type.resolved questionID=\(questionID) rawType=\(rawType ?? "-") resolvedType=\(resolvedType) optionCount=\(optionCount) reason=\(reason)"
+            "deeptutor.quiz.question_type.resolved questionID=\(questionID) rawType=\(rawLabel) resolvedType=\(resolvedType) optionCount=\(optionCount) reason=\(reason)"
         )
     }
 
@@ -1490,9 +1929,64 @@ nonisolated enum DeepTutorChatLog {
         fallbackType: String,
         reason: String
     ) {
-        logWarning(
-            "deeptutor.quiz.question_type.fallback questionID=\(questionID) rawType=\(rawType ?? "-") fallbackType=\(fallbackType) reason=\(reason)"
+        let rawLabel = rawType ?? "-"
+        let signature = "\(fallbackType)|\(reason)|\(rawLabel)"
+        guard LogState.shared.logIfChanged(scope: "quiz.fallback:\(questionID)", signature: signature) else {
+            return
+        }
+
+        switch reason {
+        case "missing_type_default_choice", "explicit_short_answer_no_options":
+            guard DeepTutorDebugFlags.verboseQuizParseLogs else { return }
+            logDebug(
+                "deeptutor.quiz.question_type.fallback questionID=\(questionID) rawType=\(rawLabel) fallbackType=\(fallbackType) reason=\(reason)"
+            )
+        default:
+            logWarning(
+                "deeptutor.quiz.question_type.fallback questionID=\(questionID) rawType=\(rawLabel) fallbackType=\(fallbackType) reason=\(reason)"
+            )
+        }
+    }
+
+    nonisolated static func conversationListLoaded(count: Int) {
+        guard LogState.shared.logOnce(key: "conversation.list.loaded") else { return }
+        logInfo(
+            "DeepTutor 会话列表已加载，count=\(count), scenario=\(DeepTutorScenarioConstants.scenario)"
         )
+    }
+
+    nonisolated static func conversationListRefreshed(
+        count: Int,
+        source: String,
+        changed: Bool,
+        containsCreated: Bool? = nil
+    ) {
+        if changed == false {
+            guard DeepTutorDebugFlags.verboseConversationListRefreshLogs else { return }
+            logDebug(
+                "DeepTutor 会话列表刷新跳过，count=\(count), source=\(source), changed=false, scenario=\(DeepTutorScenarioConstants.scenario)"
+            )
+            return
+        }
+
+        let signature = [
+            String(count),
+            source,
+            containsCreated.map { $0 ? "created" : "missing" } ?? "-",
+        ].joined(separator: "|")
+        guard LogState.shared.logIfChanged(scope: "conversation.list.refreshed", signature: signature) else {
+            return
+        }
+
+        if let containsCreated {
+            logDebug(
+                "DeepTutor 会话列表已刷新，count=\(count), source=\(source), changed=true, containsCreated=\(containsCreated), scenario=\(DeepTutorScenarioConstants.scenario)"
+            )
+        } else {
+            logDebug(
+                "DeepTutor 会话列表已刷新，count=\(count), source=\(source), changed=true, scenario=\(DeepTutorScenarioConstants.scenario)"
+            )
+        }
     }
 
     nonisolated static func quizInlineInputFocusChanged(
@@ -1571,18 +2065,37 @@ nonisolated enum DeepTutorChatLog {
     }
 
     nonisolated static func titleLLMRaw(conversationID: UUID, rawTitle: String) {
-        logInfo(
+        guard DeepTutorDebugFlags.verboseAIRuntimeRequestLogs else { return }
+        logDebug(
             "deeptutor.title.llm.raw conversation=\(shortID(conversationID)) rawTitle=\(contentSnippet(rawTitle, limit: 120))"
         )
     }
 
     nonisolated static func titleSanitized(conversationID: UUID, sanitizedTitle: String) {
-        logInfo(
+        guard DeepTutorDebugFlags.verboseAIRuntimeRequestLogs else { return }
+        logDebug(
             "deeptutor.title.sanitized conversation=\(shortID(conversationID)) sanitizedTitle=\(contentSnippet(sanitizedTitle, limit: 120))"
         )
     }
 
+    nonisolated static func titleLLMResolved(
+        conversationID: UUID,
+        sanitizedTitle: String,
+        usedFallback: Bool,
+        durationMs: Int
+    ) {
+        let signature = "\(contentSnippet(sanitizedTitle, limit: 80))|\(usedFallback)"
+        guard LogState.shared.logIfChanged(
+            scope: "title.llm.resolved:\(conversationID.uuidString)",
+            signature: signature
+        ) else { return }
+        logInfo(
+            "deeptutor.title.llm.resolved conversation=\(shortID(conversationID)) title=\(contentSnippet(sanitizedTitle, limit: 120)) usedFallback=\(usedFallback) durationMs=\(durationMs)"
+        )
+    }
+
     nonisolated static func titleFallback(conversationID: UUID, fallbackTitle: String) {
+        guard LogState.shared.logOnce(key: "title.fallback:\(conversationID.uuidString)") else { return }
         logInfo(
             "deeptutor.title.fallback conversation=\(shortID(conversationID)) fallbackTitle=\(contentSnippet(fallbackTitle, limit: 120))"
         )
@@ -1644,14 +2157,66 @@ nonisolated enum DeepTutorChatLog {
             "deeptutor.title.ui.ignored_stale conversation=\(shortID(conversationID)) expectedGeneration=\(expectedGeneration)"
         )
     }
+
+    // MARK: - Attachment
+
+    nonisolated static func attachmentPickStart(source: String) {
+        logInfo("deeptutor.attachment.pick.start source=\(source)")
+    }
+
+    nonisolated static func attachmentPickDone(count: Int, imageCount: Int, pdfCount: Int, totalBytes: Int) {
+        logInfo("deeptutor.attachment.pick.done count=\(count) image=\(imageCount) pdf=\(pdfCount) totalBytes=\(totalBytes)")
+    }
+
+    nonisolated static func attachmentPreviewAdded(draftID: UUID, kind: String, filename: String, bytes: Int) {
+        logInfo("deeptutor.attachment.preview.added draft=\(shortID(draftID)) kind=\(kind) filename=\(filename) bytes=\(bytes)")
+    }
+
+    nonisolated static func attachmentUploadStart(draftID: UUID, filename: String) {
+        logInfo("deeptutor.attachment.upload.start draft=\(shortID(draftID)) filename=\(filename)")
+    }
+
+    nonisolated static func attachmentUploadProgress(draftID: UUID, progress: Double) {
+        logInfo("deeptutor.attachment.upload.progress draft=\(shortID(draftID)) progress=\(String(format: "%.2f", progress))")
+    }
+
+    nonisolated static func attachmentUploadDone(draftID: UUID, attachmentID: String, url: String?, durationMs: Int) {
+        logInfo("deeptutor.attachment.upload.done draft=\(shortID(draftID)) attachment=\(attachmentID) url=\(url ?? "-") durationMs=\(durationMs)")
+    }
+
+    nonisolated static func attachmentUploadFailed(draftID: UUID, error: String) {
+        logWarning("deeptutor.attachment.upload.failed draft=\(shortID(draftID)) error=\(error)")
+    }
+
+    nonisolated static func attachmentSendBuild(count: Int, imageCount: Int, fileCount: Int, hasText: Bool) {
+        logInfo("deeptutor.attachment.send.build count=\(count) image=\(imageCount) file=\(fileCount) hasText=\(hasText)")
+    }
+
+    nonisolated static func attachmentSnapshotSaved(messageID: UUID, attachmentCount: Int) {
+        logInfo("deeptutor.attachment.snapshot.saved message=\(shortID(messageID)) attachments=\(attachmentCount)")
+    }
 }
 
 private final class DeepTutorChatLogState: @unchecked Sendable {
     nonisolated(unsafe) static let shared = DeepTutorChatLogState()
 
+    private struct PendingRefreshContext {
+        let source: String
+        let totalCount: Int
+        let visible: Int
+        let messageCount: Int
+        let isStreaming: Bool
+        let reloadDurationMs: Int
+        var applyDurationMs: Int?
+        var applySkipped: Bool = false
+        var applyQueued: Bool = false
+    }
+
     private nonisolated(unsafe) let lock = NSLock()
     private nonisolated(unsafe) var onceKeys = Set<String>()
     private nonisolated(unsafe) var lastSignatures: [String: String] = [:]
+    private nonisolated(unsafe) var pendingRefresh: [UUID: PendingRefreshContext] = [:]
+    private nonisolated(unsafe) var refreshFallbackTokens: [UUID: UUID] = [:]
 
     nonisolated func logOnce(key: String) -> Bool {
         lock.lock()
@@ -1667,6 +2232,142 @@ private final class DeepTutorChatLogState: @unchecked Sendable {
         if lastSignatures[scope] == signature { return false }
         lastSignatures[scope] = signature
         return true
+    }
+
+    nonisolated func recordRefreshReload(
+        conversationID: UUID,
+        source: String,
+        totalCount: Int,
+        visible: Int,
+        messageCount: Int,
+        isStreaming: Bool,
+        reloadDurationMs: Int
+    ) {
+        lock.lock()
+        pendingRefresh[conversationID] = PendingRefreshContext(
+            source: source,
+            totalCount: totalCount,
+            visible: visible,
+            messageCount: messageCount,
+            isStreaming: isStreaming,
+            reloadDurationMs: reloadDurationMs
+        )
+        lock.unlock()
+    }
+
+    nonisolated func noteRefreshApplyQueued(conversationID: UUID) {
+        lock.lock()
+        if var ctx = pendingRefresh[conversationID] {
+            ctx.applyQueued = true
+            pendingRefresh[conversationID] = ctx
+        }
+        lock.unlock()
+    }
+
+    nonisolated func recordRefreshApply(
+        conversationID: UUID,
+        durationMs: Int,
+        hasMorePending: Bool
+    ) {
+        lock.lock()
+        if var ctx = pendingRefresh[conversationID] {
+            ctx.applyDurationMs = durationMs
+            if hasMorePending {
+                pendingRefresh[conversationID] = ctx
+            }
+        }
+        lock.unlock()
+    }
+
+    nonisolated func recordRefreshApplySkipped(conversationID: UUID) {
+        lock.lock()
+        if var ctx = pendingRefresh[conversationID] {
+            ctx.applySkipped = true
+            pendingRefresh[conversationID] = ctx
+        }
+        lock.unlock()
+    }
+
+    nonisolated func scheduleRefreshSummaryFallback(conversationID: UUID) {
+        let token = UUID()
+        lock.lock()
+        refreshFallbackTokens[conversationID] = token
+        lock.unlock()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [self] in
+            lock.lock()
+            let isCurrent = refreshFallbackTokens[conversationID] == token
+            lock.unlock()
+            guard isCurrent else { return }
+            emitRefreshSummary(conversationID: conversationID, fromFallback: true)
+        }
+    }
+
+    nonisolated func cancelRefreshSummaryFallback(conversationID: UUID) {
+        lock.lock()
+        refreshFallbackTokens.removeValue(forKey: conversationID)
+        lock.unlock()
+    }
+
+    nonisolated func emitRefreshSummary(conversationID: UUID, fromFallback: Bool = false) {
+        lock.lock()
+        refreshFallbackTokens.removeValue(forKey: conversationID)
+        guard let ctx = pendingRefresh.removeValue(forKey: conversationID) else {
+            lock.unlock()
+            return
+        }
+        lock.unlock()
+
+        let applyMs = ctx.applyDurationMs ?? -1
+        let skipped = ctx.applySkipped || (fromFallback && ctx.applyDurationMs == nil)
+        let signature = [
+            ctx.source,
+            String(ctx.messageCount),
+            String(ctx.visible),
+            String(ctx.totalCount),
+            String(ctx.isStreaming),
+            String(skipped),
+            String(ctx.applyQueued),
+            String(applyMs),
+            String(ctx.reloadDurationMs),
+        ].joined(separator: "|")
+
+        guard logIfChanged(scope: "refresh.summary:\(conversationID.uuidString)", signature: signature) else {
+            return
+        }
+
+        DeepTutorChatLog.emitRefreshSummary(
+            conversationID: conversationID,
+            source: ctx.source,
+            messages: ctx.messageCount,
+            visible: ctx.visible,
+            totalCount: ctx.totalCount,
+            isStreaming: ctx.isStreaming,
+            reloadDurationMs: ctx.reloadDurationMs,
+            applyDurationMs: ctx.applyDurationMs,
+            skipped: skipped,
+            queued: ctx.applyQueued
+        )
+    }
+}
+
+private extension DeepTutorChatLog {
+    nonisolated static func emitRefreshSummary(
+        conversationID: UUID,
+        source: String,
+        messages: Int,
+        visible: Int,
+        totalCount: Int,
+        isStreaming: Bool,
+        reloadDurationMs: Int,
+        applyDurationMs: Int?,
+        skipped: Bool,
+        queued: Bool
+    ) {
+        let applyMsText = applyDurationMs.map(String.init) ?? "-"
+        logInfo(
+            "deeptutor.refresh.summary conversation=\(shortID(conversationID)) source=\(source) messages=\(messages) visible=\(visible) total=\(totalCount) isStreaming=\(isStreaming) reloadMs=\(reloadDurationMs) applyMs=\(applyMsText) skipped=\(skipped) queued=\(queued)"
+        )
     }
 }
 

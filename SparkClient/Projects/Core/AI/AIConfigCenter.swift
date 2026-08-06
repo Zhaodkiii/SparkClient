@@ -181,6 +181,11 @@ final class AIConfigCenter {
         try await runtimeConfigStore.effectiveSearchConfig()
     }
 
+    /// 获取天气运行时配置
+    func effectiveWeatherConfig() async throws -> WeatherRuntimeConfig {
+        try await runtimeConfigStore.effectiveWeatherConfig()
+    }
+
     // MARK: - 用户偏好设置
     /// 更新场景的默认模型
     func updateScenarioDefaultModel(_ modelName: String, for scenario: AIScenario) async {

@@ -204,9 +204,12 @@ actor DeepTutorLocalChatStore {
 
     func loadMessages(conversationID: UUID, limit: Int? = nil, before: Date? = nil) async -> [DeepTutorMessage] {
         let start = Date()
-        logger.debug(
-            "deeptutor.messages.load.start conversation=\(DeepTutorChatLog.shortID(conversationID)) limit=\(limit.map(String.init) ?? "all") before=\(before.map { String($0.timeIntervalSince1970) } ?? "-")",
-            module: DeepTutorChatLog.module
+        let limitLabel = limit.map(String.init) ?? "all"
+        let beforeLabel = before.map { String($0.timeIntervalSince1970) } ?? "-"
+        DeepTutorChatLog.messagesLoadStart(
+            conversationID: conversationID,
+            limit: limitLabel,
+            before: beforeLabel
         )
         do {
             var loadSummary = MessageLoadSummary(conversationID: conversationID)
@@ -312,9 +315,11 @@ actor DeepTutorLocalChatStore {
                 repairNeeded: loadSummary.repairCount,
                 durationMs: Int(cost * 1000)
             )
-            logger.info(
-                "deeptutor.messages.load.done conversation=\(DeepTutorChatLog.shortID(conversationID)) count=\(messages.count) limit=\(limit.map(String.init) ?? "all") durationMs=\(Int(cost * 1000))",
-                module: DeepTutorChatLog.module
+            DeepTutorChatLog.messagesLoadDone(
+                conversationID: conversationID,
+                count: messages.count,
+                limit: limitLabel,
+                durationMs: Int(cost * 1000)
             )
             return messages
         } catch {

@@ -9,8 +9,12 @@ nonisolated struct AISettingsSnapshot: Codable, Equatable, Sendable {
     var smallTasks: [SmallTask]
     /// 检索与知识相关本地偏好。
     var searchToolPreferences: AISearchToolPreferences
+    /// 天气工具相关本地偏好。
+    var weatherToolPreferences: AIWeatherToolPreferences
     /// 本地搜索配置版本；仅用于客户端内缓存失效、审计与工具消费，不参与服务端同步。
     var searchConfigRevision: SearchRuntimeConfigRevision
+    /// 本地天气配置版本；仅用于客户端内缓存失效、审计与工具消费，不参与服务端同步。
+    var weatherConfigRevision: WeatherRuntimeConfigRevision
     /// 场景级模型来源选择（`AIScenario.rawValue` -> `AIModelSelectionSource.rawValue`）。
     var scenarioModelSources: [String: AIModelSelectionSource]
     /// 输入栏中隐藏的试用模型名（仅本地偏好）。
@@ -30,7 +34,9 @@ nonisolated struct AISettingsSnapshot: Codable, Equatable, Sendable {
         apiKeys: [APIKeys],
         smallTasks: [SmallTask] = [],
         searchToolPreferences: AISearchToolPreferences = AISettingsDefaults.searchToolPreferences,
+        weatherToolPreferences: AIWeatherToolPreferences = AISettingsDefaults.weatherToolPreferences,
         searchConfigRevision: SearchRuntimeConfigRevision = SearchRuntimeConfigRevision(),
+        weatherConfigRevision: WeatherRuntimeConfigRevision = WeatherRuntimeConfigRevision(),
         scenarioModelSources: [String: AIModelSelectionSource] = [:],
         trialChatPickerDisabledModelNames: [String] = [],
         trial: AITrialState = .inactive,
@@ -46,7 +52,9 @@ nonisolated struct AISettingsSnapshot: Codable, Equatable, Sendable {
         self.apiKeys = apiKeys
         self.smallTasks = smallTasks
         self.searchToolPreferences = searchToolPreferences
+        self.weatherToolPreferences = weatherToolPreferences
         self.searchConfigRevision = searchConfigRevision
+        self.weatherConfigRevision = weatherConfigRevision
         self.scenarioModelSources = scenarioModelSources
         self.trialChatPickerDisabledModelNames = trialChatPickerDisabledModelNames
         self.trial = trial
@@ -65,7 +73,9 @@ nonisolated struct AISettingsSnapshot: Codable, Equatable, Sendable {
         apiKeys: [],
         smallTasks: [],
         searchToolPreferences: AISettingsDefaults.searchToolPreferences,
+        weatherToolPreferences: AISettingsDefaults.weatherToolPreferences,
         searchConfigRevision: SearchRuntimeConfigRevision(),
+        weatherConfigRevision: WeatherRuntimeConfigRevision(),
         scenarioModelSources: [:],
         trialChatPickerDisabledModelNames: [],
         trial: .inactive,
@@ -135,6 +145,41 @@ nonisolated struct AISettingsSnapshot: Codable, Equatable, Sendable {
         )
     }
 
+    mutating func refreshWeatherConfigRevision(previous: AISettingsSnapshot?) {
+        normalizeWeatherProviderSelection()
+        let hash = WeatherRuntimeConfigResolver.normalizedHash(
+            preferences: weatherToolPreferences,
+            toolKeys: toolKeys
+        )
+        let previousRevision = previous?.weatherConfigRevision ?? weatherConfigRevision
+        guard hash != previousRevision.preferencesHash else {
+            weatherConfigRevision = previousRevision
+            return
+        }
+
+        let activeID = toolKeys.first(where: { $0.toolClass.lowercased() == "weather" && $0.isUsing })?.id
+        weatherConfigRevision = WeatherRuntimeConfigRevision(
+            schemaVersion: WeatherRuntimeConfigRevision.schemaVersion,
+            localRevision: max(1, previousRevision.localRevision + 1),
+            updatedAt: Date(),
+            activeWeatherKeyID: activeID,
+            preferencesHash: hash
+        )
+    }
+
+    mutating func normalizeWeatherProviderSelection() {
+        let activeIndices = toolKeys.enumerated()
+            .filter { $0.element.toolClass.lowercased() == "weather" && $0.element.isUsing }
+            .map(\.offset)
+        guard activeIndices.count > 1 else { return }
+        let keep = activeIndices.max { toolKeys[$0].timestamp < toolKeys[$1].timestamp }
+        for index in toolKeys.indices where index != keep {
+            if toolKeys[index].toolClass.lowercased() == "weather" {
+                toolKeys[index].isUsing = false
+            }
+        }
+    }
+
     mutating func normalizeSearchProviderSelection() {
         let activeIDs = searchKeys
             .enumerated()
@@ -163,7 +208,9 @@ nonisolated extension AISettingsSnapshot {
     /// 仓储层只对该类型做 `JSONEncoder` / `JSONDecoder`，避免重复结构体与手写映射。
     nonisolated struct PreferencesPayload: Codable, Equatable, Sendable {
         var searchToolPreferences: AISearchToolPreferences
+        var weatherToolPreferences: AIWeatherToolPreferences
         var searchConfigRevision: SearchRuntimeConfigRevision
+        var weatherConfigRevision: WeatherRuntimeConfigRevision
         var scenarioModelSources: [String: AIModelSelectionSource]
         var trialChatPickerDisabledModelNames: [String]
         var trial: AITrialState
@@ -175,7 +222,9 @@ nonisolated extension AISettingsSnapshot {
 
         static let `default` = PreferencesPayload(
             searchToolPreferences: AISettingsDefaults.searchToolPreferences,
+            weatherToolPreferences: AISettingsDefaults.weatherToolPreferences,
             searchConfigRevision: SearchRuntimeConfigRevision(),
+            weatherConfigRevision: WeatherRuntimeConfigRevision(),
             scenarioModelSources: [:],
             trialChatPickerDisabledModelNames: [],
             trial: .inactive,
@@ -188,7 +237,9 @@ nonisolated extension AISettingsSnapshot {
 
         init(
             searchToolPreferences: AISearchToolPreferences,
+            weatherToolPreferences: AIWeatherToolPreferences,
             searchConfigRevision: SearchRuntimeConfigRevision,
+            weatherConfigRevision: WeatherRuntimeConfigRevision,
             scenarioModelSources: [String: AIModelSelectionSource],
             trialChatPickerDisabledModelNames: [String],
             trial: AITrialState,
@@ -199,7 +250,9 @@ nonisolated extension AISettingsSnapshot {
             translationDic: [TranslationDic]
         ) {
             self.searchToolPreferences = searchToolPreferences
+            self.weatherToolPreferences = weatherToolPreferences
             self.searchConfigRevision = searchConfigRevision
+            self.weatherConfigRevision = weatherConfigRevision
             self.scenarioModelSources = scenarioModelSources
             self.trialChatPickerDisabledModelNames = trialChatPickerDisabledModelNames
             self.trial = trial
@@ -239,8 +292,12 @@ nonisolated extension AISettingsSnapshot {
             } else {
                 searchToolPreferences = AISettingsDefaults.searchToolPreferences
             }
+            weatherToolPreferences = try container.decodeIfPresent(AIWeatherToolPreferences.self, forKey: .key("weatherToolPreferences"))
+                ?? AISettingsDefaults.weatherToolPreferences
             searchConfigRevision = try container.decodeIfPresent(SearchRuntimeConfigRevision.self, forKey: .key("searchConfigRevision"))
                 ?? SearchRuntimeConfigRevision()
+            weatherConfigRevision = try container.decodeIfPresent(WeatherRuntimeConfigRevision.self, forKey: .key("weatherConfigRevision"))
+                ?? WeatherRuntimeConfigRevision()
 
             scenarioModelSources = try container.decodeIfPresent([String: AIModelSelectionSource].self, forKey: .key("scenarioModelSources")) ?? [:]
             trialChatPickerDisabledModelNames = try container.decodeIfPresent([String].self, forKey: .key("trialChatPickerDisabledModelNames")) ?? []
@@ -255,7 +312,9 @@ nonisolated extension AISettingsSnapshot {
         func encode(to encoder: Encoder) throws {
             var container = encoder.container(keyedBy: CodableKey.self)
             try container.encode(searchToolPreferences, forKey: .key("searchToolPreferences"))
+            try container.encode(weatherToolPreferences, forKey: .key("weatherToolPreferences"))
             try container.encode(searchConfigRevision, forKey: .key("searchConfigRevision"))
+            try container.encode(weatherConfigRevision, forKey: .key("weatherConfigRevision"))
             try container.encode(scenarioModelSources, forKey: .key("scenarioModelSources"))
             try container.encode(trialChatPickerDisabledModelNames, forKey: .key("trialChatPickerDisabledModelNames"))
             try container.encode(trial, forKey: .key("trial"))
@@ -271,7 +330,9 @@ nonisolated extension AISettingsSnapshot {
     var preferencesPayload: PreferencesPayload {
         PreferencesPayload(
             searchToolPreferences: searchToolPreferences,
+            weatherToolPreferences: weatherToolPreferences,
             searchConfigRevision: searchConfigRevision,
+            weatherConfigRevision: weatherConfigRevision,
             scenarioModelSources: scenarioModelSources,
             trialChatPickerDisabledModelNames: trialChatPickerDisabledModelNames,
             trial: trial,
@@ -298,7 +359,9 @@ nonisolated extension AISettingsSnapshot {
             apiKeys: apiKeys,
             smallTasks: smallTasks,
             searchToolPreferences: preferences.searchToolPreferences,
+            weatherToolPreferences: preferences.weatherToolPreferences,
             searchConfigRevision: preferences.searchConfigRevision,
+            weatherConfigRevision: preferences.weatherConfigRevision,
             scenarioModelSources: preferences.scenarioModelSources,
             trialChatPickerDisabledModelNames: preferences.trialChatPickerDisabledModelNames,
             trial: preferences.trial,

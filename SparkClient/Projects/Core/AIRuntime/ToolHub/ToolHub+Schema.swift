@@ -183,7 +183,8 @@ extension ToolHub {
             return [
                 "latitude": AIRuntimeToolProperty(type: "number", description: td("tool.param.latitude")),
                 "longitude": AIRuntimeToolProperty(type: "number", description: td("tool.param.longitude")),
-                "timeRange": AIRuntimeToolProperty(type: "string", description: td("tool.param.weather_time_range"))
+                "timeRange": AIRuntimeToolProperty(type: "string", description: td("tool.param.weather_time_range")),
+                "locationName": AIRuntimeToolProperty(type: "string", description: td("tool.param.place_keyword"))
             ]
         case .saveMemory:
             return ["content": AIRuntimeToolProperty(type: "string", description: td("tool.param.memory_content"))]

@@ -602,6 +602,7 @@ final class AppContainer {
             aiConfigCenter: ai.aiConfigCenter,
             toolInteractionCoordinator: chat.toolInteractionCoordinator,
             memberContextStore: notification.memberContextStore,
+            fileTransferService: fileTransferService,
             logger: logger
         )
         logger.info("AppContainer 组合完成：容器仅持有 Assembly facade 与共享运行时", module: .general)

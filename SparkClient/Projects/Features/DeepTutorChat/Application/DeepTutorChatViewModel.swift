@@ -11,6 +11,9 @@ final class DeepTutorChatViewModel: ObservableObject {
     @Published private(set) var conversationCreationError: String?
     @Published var selectedConversationID: UUID?
     @Published private(set) var isQuizInlineInputFocused = false
+    @Published private(set) var composerAttachmentDrafts: [DeepTutorComposerAttachmentDraft] = []
+
+    var composerFileTransferService: FileTransferService { fileTransferService }
 
     private let repository: any DeepTutorLocalChatRepository
     private let loadMessagesUseCase: LoadDeepTutorMessagesUseCase
@@ -20,6 +23,8 @@ final class DeepTutorChatViewModel: ObservableObject {
     private let quizJudgeUseCase: DeepTutorQuizJudgeUseCase
     private let sendMessageUseCase: SendDeepTutorAIMessageUseCase
     private let localSendMessageUseCase: SendLocalDeepTutorMessageUseCase
+    private let attachmentUploadUseCase: DeepTutorAttachmentUploadUseCase
+    private let fileTransferService: FileTransferService
     private let toolInteractionCoordinatorStorage: ToolInteractionCoordinator
     private let memberContextStore: MemberContextStore
     private let logger: Logger
@@ -56,10 +61,12 @@ final class DeepTutorChatViewModel: ObservableObject {
         aiConfigCenter: AIConfigCenter,
         toolInteractionCoordinator: ToolInteractionCoordinator,
         memberContextStore: MemberContextStore,
+        fileTransferService: FileTransferService,
         logger: Logger = ConsoleLogger()
     ) {
         self.repository = repository
         self.logger = logger
+        self.fileTransferService = fileTransferService
         self.toolInteractionCoordinatorStorage = toolInteractionCoordinator
         self.memberContextStore = memberContextStore
         self.loadMessagesUseCase = LoadDeepTutorMessagesUseCase(repository: repository)
@@ -86,6 +93,7 @@ final class DeepTutorChatViewModel: ObservableObject {
             toolInteractionCoordinator: toolInteractionCoordinator,
             logger: logger
         )
+        self.attachmentUploadUseCase = DeepTutorAttachmentUploadUseCase(fileTransferService: fileTransferService)
 
         NotificationCenter.default.publisher(for: .deepTutorChatDatabaseDidChange)
             .receive(on: DispatchQueue.main)
@@ -101,10 +109,7 @@ final class DeepTutorChatViewModel: ObservableObject {
         let loaded = await loadConversationsUseCase()
         assignConversations(loaded, source: "initial")
         DeepTutorChatLog.listLoadDone(count: conversations.count, source: "initial")
-        logger.debug(
-            "DeepTutor 会话列表已加载，count=\(conversations.count), scenario=\(DeepTutorScenarioConstants.scenario)",
-            module: DeepTutorChatLog.module
-        )
+        DeepTutorChatLog.conversationListLoaded(count: conversations.count)
     }
 
     func refreshConversations(source: String = "manual", expectedCreatedID: UUID? = nil) async {
@@ -128,10 +133,13 @@ final class DeepTutorChatViewModel: ObservableObject {
                     nextConversations = loaded
                 }
             }
+            let changed = previous != nextConversations
             assignConversations(nextConversations, source: source)
-            logger.debug(
-                "DeepTutor 会话列表已刷新，count=\(conversations.count), source=\(source), containsCreated=\(containsCreated), scenario=\(DeepTutorScenarioConstants.scenario)",
-                module: DeepTutorChatLog.module
+            DeepTutorChatLog.conversationListRefreshed(
+                count: conversations.count,
+                source: source,
+                changed: changed,
+                containsCreated: containsCreated
             )
         } else {
             if loaded.isEmpty, previous.isEmpty == false {
@@ -139,13 +147,21 @@ final class DeepTutorChatViewModel: ObservableObject {
                     "refresh_unexpected_empty_list source=\(source), previousCount=\(previous.count), scenario=\(DeepTutorScenarioConstants.scenario)",
                     module: DeepTutorChatLog.module
                 )
-            } else {
                 assignConversations(loaded, source: source)
+                DeepTutorChatLog.conversationListRefreshed(
+                    count: conversations.count,
+                    source: source,
+                    changed: true
+                )
+            } else {
+                let changed = previous != loaded
+                assignConversations(loaded, source: source)
+                DeepTutorChatLog.conversationListRefreshed(
+                    count: conversations.count,
+                    source: source,
+                    changed: changed
+                )
             }
-            logger.debug(
-                "DeepTutor 会话列表已刷新，count=\(conversations.count), source=\(source), scenario=\(DeepTutorScenarioConstants.scenario)",
-                module: DeepTutorChatLog.module
-            )
         }
         DeepTutorChatLog.listLoadDone(count: conversations.count, source: source)
     }
@@ -260,10 +276,7 @@ final class DeepTutorChatViewModel: ObservableObject {
     }
 
     private func performOpenConversation(_ conversationID: UUID, generation: UInt64) async {
-        logger.info(
-            "deeptutor.conversation.open.start conversation=\(DeepTutorChatLog.shortID(conversationID))",
-            module: DeepTutorChatLog.module
-        )
+        DeepTutorChatLog.conversationOpenStart(conversationID: conversationID)
         activeConversationID = conversationID
         guard let loadedConversation = await repository.loadConversation(id: conversationID) else {
             guard isCurrentOpenGeneration(conversationID, generation) else {
@@ -301,9 +314,11 @@ final class DeepTutorChatViewModel: ObservableObject {
         guard activeConversationID == conversationID else { return }
 
         state.phase = .ready
-        logger.info(
-            "deeptutor.conversation.open.done conversation=\(DeepTutorChatLog.shortID(conversationID)), messages=\(state.messages.count), cached=\(allMessagesCache.count), hasMore=\(state.hasMoreMessages)",
-            module: DeepTutorChatLog.module
+        DeepTutorChatLog.conversationOpenDone(
+            conversationID: conversationID,
+            messageCount: state.messages.count,
+            cachedCount: allMessagesCache.count,
+            hasMore: state.hasMoreMessages
         )
     }
 
@@ -445,9 +460,11 @@ final class DeepTutorChatViewModel: ObservableObject {
         generation: UInt64
     ) async {
         let start = Date()
-        logger.debug(
-            "deeptutor.messages.reload.start conversation=\(DeepTutorChatLog.shortID(conversationID)) lockBottom=\(lockBottom) forceFullRediff=\(forceFullRediff) source=\(source)",
-            module: DeepTutorChatLog.module
+        DeepTutorChatLog.messagesReloadStart(
+            conversationID: conversationID,
+            lockBottom: lockBottom,
+            forceFullRediff: forceFullRediff,
+            source: source
         )
         let totalCount = await repository.countMessages(conversationID: conversationID)
         let loaded = await loadMessagesUseCase(conversationID: conversationID, limit: messagePageSize, before: nil)
@@ -512,9 +529,14 @@ final class DeepTutorChatViewModel: ObservableObject {
         }
 
         let cost = Date().timeIntervalSince(start)
-        logger.info(
-            "deeptutor.messages.reload.done conversation=\(DeepTutorChatLog.shortID(conversationID)) totalCount=\(totalCount) pageLoaded=\(loaded.count) allLoaded=\(allMessagesCache.count) visible=\(visible.count) visibleAll=\(visibleAll.count) isStreaming=\(state.isStreaming) durationMs=\(Int(cost * 1000))",
-            module: DeepTutorChatLog.module
+        DeepTutorChatLog.refreshReloadCompleted(
+            conversationID: conversationID,
+            source: source,
+            totalCount: totalCount,
+            visible: visible.count,
+            messageCount: visible.count,
+            isStreaming: state.isStreaming,
+            durationMs: Int(cost * 1000)
         )
     }
 
@@ -546,6 +568,83 @@ final class DeepTutorChatViewModel: ObservableObject {
         if let activeConversationID {
             DeepTutorDraftStore.saveDraft(text, for: activeConversationID)
         }
+    }
+
+    func handleAttachmentsPicked(_ files: [MedicalUploadLocalFile]) {
+        guard state.isStreaming == false else { return }
+        DeepTutorAttachmentDiagnostics.pickStart(source: "paperclip")
+        Task {
+            let remainingSlots = max(0, DeepTutorAttachmentMapper.maxComposerAttachments - composerAttachmentDrafts.count)
+            guard remainingSlots > 0 else { return }
+            let drafts = await DeepTutorAttachmentMapper.makeDrafts(from: Array(files.prefix(remainingSlots)))
+            await MainActor.run {
+                composerAttachmentDrafts.append(contentsOf: drafts)
+                DeepTutorAttachmentDiagnostics.pickDone(drafts)
+            }
+        }
+    }
+
+    func uploadComposerAttachment(id: UUID) {
+        guard let index = composerAttachmentDrafts.firstIndex(where: { $0.id == id }) else { return }
+        composerAttachmentDrafts[index].phase = .uploading
+        composerAttachmentDrafts[index].uploadProgress = 0
+        composerAttachmentDrafts[index].errorMessage = nil
+        let draft = composerAttachmentDrafts[index]
+        DeepTutorAttachmentDiagnostics.uploadStart(draftID: id, filename: draft.displayName)
+        let start = Date()
+
+        Task {
+            do {
+                let uploaded = try await attachmentUploadUseCase.upload(draft: draft) { [weak self] progress in
+                    Task { @MainActor in
+                        guard let self,
+                              let currentIndex = self.composerAttachmentDrafts.firstIndex(where: { $0.id == id }) else { return }
+                        self.composerAttachmentDrafts[currentIndex].uploadProgress = progress
+                        DeepTutorAttachmentDiagnostics.uploadProgress(draftID: id, progress: progress)
+                    }
+                }
+                await MainActor.run {
+                    guard let currentIndex = composerAttachmentDrafts.firstIndex(where: { $0.id == id }) else { return }
+                    composerAttachmentDrafts[currentIndex].phase = .uploaded
+                    composerAttachmentDrafts[currentIndex].uploadProgress = 1
+                    composerAttachmentDrafts[currentIndex].uploaded = uploaded
+                    let durationMs = Int(Date().timeIntervalSince(start) * 1000)
+                    DeepTutorAttachmentDiagnostics.uploadDone(draftID: id, uploaded: uploaded, durationMs: durationMs)
+                }
+            } catch {
+                await MainActor.run {
+                    guard let currentIndex = composerAttachmentDrafts.firstIndex(where: { $0.id == id }) else { return }
+                    composerAttachmentDrafts[currentIndex].phase = .failed
+                    composerAttachmentDrafts[currentIndex].errorMessage = error.localizedDescription
+                    DeepTutorAttachmentDiagnostics.uploadFailed(draftID: id, error: error.localizedDescription)
+                }
+            }
+        }
+    }
+
+    func retryComposerAttachmentUpload(id: UUID) {
+        uploadComposerAttachment(id: id)
+    }
+
+    func removeComposerAttachment(id: UUID) {
+        composerAttachmentDrafts.removeAll { $0.id == id }
+    }
+
+    private func clearComposerAttachments() {
+        composerAttachmentDrafts = []
+    }
+
+    private var uploadedComposerAttachments: [DeepTutorAttachment] {
+        composerAttachmentDrafts.compactMap { $0.uploaded?.persistedAttachment() }
+    }
+
+    private var canSendComposerMessage: Bool {
+        let hasText = state.draftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        let hasUploadedAttachment = composerAttachmentDrafts.contains { $0.phase == .uploaded }
+        let hasBlockingAttachment = composerAttachmentDrafts.contains(where: \.isBlockingSend)
+        return state.isStreaming == false
+            && hasBlockingAttachment == false
+            && (hasText || hasUploadedAttachment)
     }
 
     func updateCapability(_ capability: DeepTutorCapability) {
@@ -613,18 +712,34 @@ final class DeepTutorChatViewModel: ObservableObject {
             return
         }
         let text = state.draftText
-        guard text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
-            logger.warning("发送 DeepTutor 对话跳过：输入内容为空", module: DeepTutorChatLog.module)
+        let attachments = uploadedComposerAttachments
+        guard canSendComposerMessage else {
+            logger.warning("发送 DeepTutor 对话跳过：输入内容为空或附件未就绪", module: DeepTutorChatLog.module)
             return
         }
+
+        let effectiveText = DeepTutorAttachmentSendTextBuilder.effectiveSendText(
+            userText: text,
+            attachments: attachments
+        )
+        let hasUserText = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        DeepTutorAttachmentDiagnostics.sendBuild(
+            count: attachments.count,
+            imageCount: attachments.filter { $0.type == "image" }.count,
+            fileCount: attachments.filter { $0.type == "pdf" || $0.type == "file" }.count,
+            hasText: hasUserText
+        )
 
         setQuizInlineInputFocused(false)
 
         let effectiveCapability = state.activeCapability
-        DeepTutorChatLog.capabilityEffective(
+        DeepTutorChatLog.capabilityResolved(
             conversationID: conversationID,
             selected: state.activeCapability.rawValue,
-            effective: effectiveCapability.rawValue
+            effective: effectiveCapability.rawValue,
+            requestSnapshot: effectiveCapability.rawValue,
+            messageCapability: effectiveCapability.rawValue,
+            source: "send"
         )
 
         logger.info(
@@ -633,6 +748,7 @@ final class DeepTutorChatViewModel: ObservableObject {
         )
 
         state.draftText = ""
+        clearComposerAttachments()
         DeepTutorDraftStore.saveDraft("", for: conversationID)
         state.phase = .streaming
         state.isStreaming = true
@@ -664,7 +780,7 @@ final class DeepTutorChatViewModel: ObservableObject {
                 let requestedTools = state.enabledOptionalTools
                 result = try await sendMessageUseCase(
                     conversationID: conversationID,
-                    text: text,
+                    text: effectiveText,
                     capability: effectiveCapability,
                     conversationTitle: title,
                     settings: settings,
@@ -672,6 +788,7 @@ final class DeepTutorChatViewModel: ObservableObject {
                     session: session,
                     boundMemberID: conversation?.memberID,
                     requestedCanonicalTools: requestedTools,
+                    attachments: attachments,
                     onStreamingUpdate: onStreamingUpdate
                 )
             }
@@ -725,10 +842,13 @@ final class DeepTutorChatViewModel: ObservableObject {
         }
 
         do {
-            DeepTutorChatLog.capabilityEffective(
+            DeepTutorChatLog.capabilityResolved(
                 conversationID: conversationID,
                 selected: state.activeCapability.rawValue,
-                effective: message.capability.rawValue
+                effective: message.capability.rawValue,
+                requestSnapshot: userMessage.requestSnapshot?.capability?.rawValue,
+                messageCapability: message.capability.rawValue,
+                source: "retry"
             )
             _ = try await sendMessageUseCase.retryAssistant(
                 conversationID: conversationID,
@@ -767,10 +887,13 @@ final class DeepTutorChatViewModel: ObservableObject {
         }
 
         do {
-            DeepTutorChatLog.capabilityEffective(
+            DeepTutorChatLog.capabilityResolved(
                 conversationID: conversationID,
                 selected: state.activeCapability.rawValue,
-                effective: message.capability.rawValue
+                effective: message.capability.rawValue,
+                requestSnapshot: userMessage.requestSnapshot?.capability?.rawValue,
+                messageCapability: message.capability.rawValue,
+                source: "regenerate"
             )
             _ = try await sendMessageUseCase.regenerateAssistant(
                 conversationID: conversationID,
@@ -1379,7 +1502,7 @@ final class DeepTutorChatViewModel: ObservableObject {
         pendingConversationListRefreshTask?.cancel()
         let start = Date()
         pendingConversationListRefreshTask = Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(250))
+            try? await Task.sleep(for: .milliseconds(400))
             guard !Task.isCancelled else { return }
             await refreshConversations(source: source)
             let delayMs = Int(Date().timeIntervalSince(start) * 1000)
@@ -1393,13 +1516,19 @@ final class DeepTutorChatViewModel: ObservableObject {
 
 extension DeepTutorChatViewModel: DeepTutorMessageListRenderStateObserving {
     func messageListWillApplySnapshot(conversationID: UUID) {
+        DeepTutorChatLog.cancelRefreshSummaryFallback(conversationID: conversationID)
         publishGate.isMessageListApplying = true
         DeepTutorChatLog.renderTransactionBegin(conversationID: conversationID, source: "diffable_apply")
     }
 
-    func messageListDidApplySnapshot(conversationID: UUID, durationMs: Int) {
+    func messageListDidApplySnapshot(conversationID: UUID, durationMs: Int, hasMorePending: Bool) {
         publishGate.isMessageListApplying = false
         DeepTutorChatLog.renderTransactionEnd(conversationID: conversationID, durationMs: durationMs)
+        DeepTutorChatLog.refreshApplyCompleted(
+            conversationID: conversationID,
+            durationMs: durationMs,
+            hasMorePending: hasMorePending
+        )
         publishGate.flushAfterSnapshotApply()
     }
 }

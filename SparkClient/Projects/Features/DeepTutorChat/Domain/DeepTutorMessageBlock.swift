@@ -495,6 +495,100 @@ nonisolated struct DeepTutorAttachment: Codable, Equatable, Sendable, Identifiab
     var localPath: String?
     var previewURL: String?
     var generated: Bool
+    var fileId: Int64?
+    var fileUuid: String?
+    var objectKey: String?
+    var fullCacheKey: String?
+    var fileMd5: String?
+    var byteCount: Int?
+    var aiByteCount: Int?
+
+    init(
+        id: String,
+        type: String,
+        filename: String? = nil,
+        mimeType: String? = nil,
+        localPath: String? = nil,
+        previewURL: String? = nil,
+        generated: Bool = false,
+        fileId: Int64? = nil,
+        fileUuid: String? = nil,
+        objectKey: String? = nil,
+        fullCacheKey: String? = nil,
+        fileMd5: String? = nil,
+        byteCount: Int? = nil,
+        aiByteCount: Int? = nil
+    ) {
+        self.id = id
+        self.type = type
+        self.filename = filename
+        self.mimeType = mimeType
+        self.localPath = localPath
+        self.previewURL = previewURL
+        self.generated = generated
+        self.fileId = fileId
+        self.fileUuid = fileUuid
+        self.objectKey = objectKey
+        self.fullCacheKey = fullCacheKey
+        self.fileMd5 = fileMd5
+        self.byteCount = byteCount
+        self.aiByteCount = aiByteCount
+    }
+
+    var resolvedRemoteURL: URL? {
+        previewURL.flatMap(URL.init(string:))
+    }
+
+    func sparkClientOSSFileUUIDAndFileName() -> (fileUUID: String, fileName: String)? {
+        if let fullCacheKey {
+            let parts = fullCacheKey.split(separator: "/", maxSplits: 1).map(String.init)
+            if parts.count == 2 {
+                return (parts[0], parts[1])
+            }
+        }
+        if let fileUuid, let filename {
+            return (fileUuid.lowercased(), filename)
+        }
+        return nil
+    }
+
+    func managedFileRecord(downloadURL: URL?) -> ManagedFileRecord? {
+        guard let fileUuid, let filename else { return nil }
+        let resolvedURL = downloadURL ?? resolvedRemoteURL
+        return ManagedFileRecord(
+            id: Int(fileId ?? 0),
+            fileUuid: fileUuid,
+            filePath: resolvedURL?.absoluteString,
+            originalName: filename,
+            fileSize: byteCount ?? 0,
+            mimeType: mimeType ?? "application/octet-stream",
+            fileMd5: fileMd5,
+            isPublic: false,
+            businessType: DeepTutorSendAttachmentAssembly.businessType,
+            businessId: id,
+            createdAt: "",
+            objectKey: objectKey,
+            storageType: "oss"
+        )
+    }
+
+    func toChatAttachment() -> ChatAttachment? {
+        let attachmentID = UUID(uuidString: id) ?? UUID()
+        let attachmentType: ChatAttachmentType = switch type {
+        case "image": .image
+        case "pdf": .pdf
+        default: .file
+        }
+        return ChatAttachment(
+            id: attachmentID,
+            type: attachmentType,
+            url: resolvedRemoteURL,
+            text: nil,
+            fileId: fileId.map(Int.init),
+            fullCacheKey: fullCacheKey,
+            fileMd5: fileMd5
+        )
+    }
 }
 
 nonisolated struct DeepTutorRequestSnapshot: Codable, Equatable, Sendable {
@@ -502,17 +596,47 @@ nonisolated struct DeepTutorRequestSnapshot: Codable, Equatable, Sendable {
     var capability: DeepTutorCapability?
     var enabledTools: [String]?
     var toolSnapshot: DeepTutorPerTurnToolSnapshot?
+    var attachments: [DeepTutorAttachment]
+    var searchConfigRevision: SearchRuntimeConfigRevision?
 
     init(
         references: [DeepTutorContextReference] = [],
         capability: DeepTutorCapability? = nil,
         enabledTools: [String]? = nil,
-        toolSnapshot: DeepTutorPerTurnToolSnapshot? = nil
+        toolSnapshot: DeepTutorPerTurnToolSnapshot? = nil,
+        attachments: [DeepTutorAttachment] = [],
+        searchConfigRevision: SearchRuntimeConfigRevision? = nil
     ) {
         self.references = references
         self.capability = capability
         self.enabledTools = enabledTools
         self.toolSnapshot = toolSnapshot
+        self.attachments = attachments
+        self.searchConfigRevision = searchConfigRevision
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case references, capability, enabledTools, toolSnapshot, attachments, searchConfigRevision
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        references = try container.decodeIfPresent([DeepTutorContextReference].self, forKey: .references) ?? []
+        capability = try container.decodeIfPresent(DeepTutorCapability.self, forKey: .capability)
+        enabledTools = try container.decodeIfPresent([String].self, forKey: .enabledTools)
+        toolSnapshot = try container.decodeIfPresent(DeepTutorPerTurnToolSnapshot.self, forKey: .toolSnapshot)
+        attachments = try container.decodeIfPresent([DeepTutorAttachment].self, forKey: .attachments) ?? []
+        searchConfigRevision = try container.decodeIfPresent(SearchRuntimeConfigRevision.self, forKey: .searchConfigRevision)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(references, forKey: .references)
+        try container.encodeIfPresent(capability, forKey: .capability)
+        try container.encodeIfPresent(enabledTools, forKey: .enabledTools)
+        try container.encodeIfPresent(toolSnapshot, forKey: .toolSnapshot)
+        try container.encode(attachments, forKey: .attachments)
+        try container.encodeIfPresent(searchConfigRevision, forKey: .searchConfigRevision)
     }
 }
 

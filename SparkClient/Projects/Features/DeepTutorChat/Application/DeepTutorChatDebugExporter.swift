@@ -132,6 +132,7 @@ enum DeepTutorChatDebugExporter {
         - latestSuppressedHealthToolsWithReasons: \(toolPolicy.domainExtensionResults.flatMap(\.gateResults).filter { $0.allowed == false }.map { "\($0.toolName):\($0.reason)" }.joined(separator: ","))
         - sessionEnabledOptionalTools: \(state.enabledOptionalTools.joined(separator: ","))
         - latestAllowedTools: \(toolPolicy.allowedToolNames.sorted().joined(separator: ","))
+        - latestUseWebSearch: \(toolPolicy.useWebSearch)
         - latestToolSchemaNames: \(schemaNames.sorted().joined(separator: ","))
         - activePresentationID: \(activePresentation?.id.uuidString ?? "-")
         - activePresentationSnapshot: \(presentationSummary.snapshotLabel)

@@ -80,11 +80,15 @@ enum DeepTutorRuntimeRequestBuilder: Sendable {
         let healthPromptMode = DeepTutorPromptBuilder.healthPromptMode(
             allowedToolNames: toolPolicy.allowedToolNames
         )
+        let weatherPromptMode = DeepTutorPromptBuilder.weatherPromptMode(
+            allowedToolNames: toolPolicy.allowedToolNames
+        )
         let prompt = DeepTutorPromptBuilder.build(
             capability: capability,
             conversationTitle: conversationTitle,
             rolePrompt: nil,
-            healthPromptMode: healthPromptMode
+            healthPromptMode: healthPromptMode,
+            weatherPromptMode: weatherPromptMode
         )
         let promptSchemaMismatches = DeepTutorPromptSchemaConsistencyChecker.mismatchedTools(
             prompt: prompt.systemPrompt,
@@ -144,6 +148,27 @@ enum DeepTutorRuntimeRequestBuilder: Sendable {
                 )
             )
         }
+
+        let chatAttachments = message.attachments.compactMap { $0.toChatAttachment() }
+        let imageAttachments = chatAttachments.filter { $0.type == .image }
+        let fileAttachments = chatAttachments.filter { $0.type == .pdf || $0.type == .file }
+        if imageAttachments.isEmpty == false {
+            blocks.append(
+                ChatMessageBlock(
+                    kind: .imageGallery,
+                    attachments: imageAttachments
+                )
+            )
+        }
+        if fileAttachments.isEmpty == false {
+            blocks.append(
+                ChatMessageBlock(
+                    kind: .fileAttachments,
+                    attachments: fileAttachments
+                )
+            )
+        }
+
         return ChatMessage(
             threadID: message.conversationID,
             role: message.role == .user ? .user : .assistant,

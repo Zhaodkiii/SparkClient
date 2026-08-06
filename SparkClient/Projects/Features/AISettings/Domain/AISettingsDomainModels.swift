@@ -538,6 +538,19 @@ nonisolated extension AIScenarioModelBinding {
     }
 }
 
+nonisolated struct AIWeatherToolPreferences: Codable, Equatable, Sendable {
+    var useWeather: Bool
+
+    init(useWeather: Bool = true) {
+        self.useWeather = useWeather
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodableKey.self)
+        useWeather = try container.decodeIfPresent(Bool.self, forKey: .key("useWeather")) ?? true
+    }
+}
+
 nonisolated struct AISearchToolPreferences: Codable, Equatable, Sendable {
     var useKnowledge: Bool
     var knowledgeCount: Int
@@ -868,13 +881,35 @@ nonisolated enum AISettingsDefaults {
                 timestamp: timestamp
             ),
             ToolKeys(
-                name: "OpenWeatherMap",
+                name: "OPENWEATHER_KEY",
                 company: "OPENWEATHER",
                 key: "",
-                requestURL: "https://api.openweathermap.org/data/2.5/weather",
+                requestURL: "api.openweathermap.org",
                 isUsing: false,
                 toolClass: "weather",
-                help: "Weather query tool",
+                help: "https://home.openweathermap.org/api_keys",
+                source: .system,
+                timestamp: timestamp
+            ),
+            ToolKeys(
+                name: "QWEATHER_KEY",
+                company: "QWEATHER",
+                key: "",
+                requestURL: "",
+                isUsing: false,
+                toolClass: "weather",
+                help: "https://console.qweather.com/project?lang=zh",
+                source: .system,
+                timestamp: timestamp
+            ),
+            ToolKeys(
+                name: "APPLEWEATHER_KEY",
+                company: "APPLEWEATHER",
+                key: "",
+                requestURL: "",
+                isUsing: false,
+                toolClass: "weather",
+                help: "https://developer.apple.com/documentation/weatherkit",
                 source: .system,
                 timestamp: timestamp
             ),
@@ -1265,6 +1300,10 @@ nonisolated enum AISettingsDefaults {
             bilingualSearch: true,
             searchCount: 8
         )
+    }
+
+    nonisolated static var weatherToolPreferences: AIWeatherToolPreferences {
+        AIWeatherToolPreferences(useWeather: true)
     }
 
     nonisolated static var promptRepo: [PromptRepo] {

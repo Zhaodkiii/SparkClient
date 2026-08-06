@@ -9,7 +9,7 @@ enum DeepTutorPublishPriority: Sendable {
 @MainActor
 protocol DeepTutorMessageListRenderStateObserving: AnyObject {
     func messageListWillApplySnapshot(conversationID: UUID)
-    func messageListDidApplySnapshot(conversationID: UUID, durationMs: Int)
+    func messageListDidApplySnapshot(conversationID: UUID, durationMs: Int, hasMorePending: Bool)
 }
 
 @MainActor

@@ -422,7 +422,16 @@ nonisolated final class DefaultAISettingsRepository: AISettingsRepository, @unch
             return (apiKeys, searchKeys, allModels, scenarioBindings, smallTasks, promptRepo)
         }
         let hasStoredPreferencesPayload = defaults.data(forKey: UserDefaultsKey.aiPreferences(ownerAccountID)) != nil
-        let preferences = loadDecodedPreferencesPayload(ownerAccountID: ownerAccountID)
+        var preferences = loadDecodedPreferencesPayload(ownerAccountID: ownerAccountID)
+        let reconciledToolKeys = WeatherToolKeysMigration.reconcile(toolKeys: preferences.toolKeys)
+        if reconciledToolKeys != preferences.toolKeys {
+            preferences.toolKeys = reconciledToolKeys
+            savePreferencesPayload(preferences, ownerAccountID: ownerAccountID)
+            logger.info(
+                "AI 天气厂商迁移完成 ownerAccountID=\(ownerAccountID) 已补齐/归一化 weather ToolKeys",
+                module: .aiConfig
+            )
+        }
         let searchKeys = try await searchKeysFromStoreOrMigratedPreferences(
             storedSearchKeys: stored.1,
             preferences: preferences,
@@ -443,6 +452,9 @@ nonisolated final class DefaultAISettingsRepository: AISettingsRepository, @unch
             preferences: preferences
         )
         snapshot.searchKeys = searchKeys
+        snapshot.toolKeys = WeatherToolKeysMigration.reconcile(toolKeys: snapshot.toolKeys)
+        snapshot.normalizeWeatherProviderSelection()
+        snapshot.refreshWeatherConfigRevision(previous: nil)
         snapshot.refreshSearchConfigRevision(previous: nil)
         return snapshot
     }

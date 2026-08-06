@@ -854,7 +854,7 @@ extension ToolHub {
         return out
     }
 
-    /// 联网/网页读取优先走本地搜索网关；地图/天气/日历等外部工具暂按 `toolKeys` 返回路由说明。
+    /// 联网/网页读取走本地搜索网关；天气/定位走 WeatherGateway；其余外部工具仍可按 `toolKeys` 返回路由说明。
 
     func mergedBilingualSearchIfNeeded(
         primary: WebSearchResponse,
@@ -963,5 +963,29 @@ extension ToolHub {
     func normalizedToolCallID(from context: ToolExecutionContext) -> String? {
         let trimmed = context.pendingToolCallID?.trimmingCharacters(in: .whitespacesAndNewlines)
         return (trimmed?.isEmpty == false) ? trimmed : nil
+    }
+
+    func makeWeatherRichBlocks(result: WeatherResult, toolCallID: String?) -> [ChatMessageBlock] {
+        [
+            ChatMessageBlock(
+                anchor: toolCallID.map(ChatBlockAnchor.toolCall),
+                kind: .html,
+                text: result.markdown,
+                toolCallID: toolCallID
+            ),
+            ChatMessageBlock(
+                anchor: toolCallID.map(ChatBlockAnchor.toolCall),
+                kind: .mapRoute,
+                toolCallID: toolCallID,
+                locations: [
+                    ChatMapLocationPayload(
+                        name: result.locationName,
+                        latitude: result.latitude,
+                        longitude: result.longitude
+                    )
+                ],
+                routes: []
+            )
+        ]
     }
 }

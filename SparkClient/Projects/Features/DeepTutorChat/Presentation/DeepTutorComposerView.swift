@@ -7,8 +7,13 @@ struct DeepTutorComposerView: View {
     let modelName: String?
     let hasMessages: Bool
     let isStreaming: Bool
-    let attachments: [DeepTutorAttachment]
     let references: [DeepTutorContextReference]
+    let attachmentDrafts: [DeepTutorComposerAttachmentDraft]
+    let onAttachmentsPicked: ([MedicalUploadLocalFile]) -> Void
+    let onUploadAttachment: (UUID) -> Void
+    let onRetryAttachmentUpload: (UUID) -> Void
+    let onRemoveAttachment: (UUID) -> Void
+    let onPreviewAttachment: (UUID) -> Void
     let onSend: () -> Void
     let onStop: () -> Void
 
@@ -28,8 +33,13 @@ struct DeepTutorComposerView: View {
                 modelName: modelName,
                 hasMessages: hasMessages,
                 isStreaming: isStreaming,
-                attachments: attachments,
                 references: references,
+                attachmentDrafts: attachmentDrafts,
+                onAttachmentsPicked: onAttachmentsPicked,
+                onUploadAttachment: onUploadAttachment,
+                onRetryAttachmentUpload: onRetryAttachmentUpload,
+                onRemoveAttachment: onRemoveAttachment,
+                onPreviewAttachment: onPreviewAttachment,
                 onSend: onSend,
                 onStop: onStop
             )

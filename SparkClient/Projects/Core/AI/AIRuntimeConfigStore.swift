@@ -8,6 +8,7 @@ actor AIRuntimeConfigStore {
     private var proSmallTasks: [SmallTask] = []
     private(set) var proRevision: String?
     private var cachedSearchConfig: Result<SearchRuntimeConfig, SearchRuntimeError>?
+    private var cachedWeatherConfig: Result<WeatherRuntimeConfig, WeatherRuntimeError>?
 
     /// 与 `localBundles` 同源的上次快照；供设置页与推理侧避免重复读库。
     private var cachedSnapshot: AISettingsSnapshot?
@@ -30,6 +31,10 @@ actor AIRuntimeConfigStore {
         cachedSearchConfig = Result { try SearchRuntimeConfigResolver.resolve(from: snapshot) }
             .mapError { error in
                 error as? SearchRuntimeError ?? .invalidResponse(error.localizedDescription)
+            }
+        cachedWeatherConfig = Result { try WeatherRuntimeConfigResolver.resolve(from: snapshot) }
+            .mapError { error in
+                error as? WeatherRuntimeError ?? .invalidResponse(error.localizedDescription)
             }
     }
 
@@ -66,6 +71,7 @@ actor AIRuntimeConfigStore {
         localSmallTasks = []
         proSmallTasks = []
         cachedSearchConfig = nil
+        cachedWeatherConfig = nil
     }
 
     func localScenarioBundles() -> AIScenarioRemoteBundlesCollection? {
@@ -92,6 +98,13 @@ actor AIRuntimeConfigStore {
             throw AIConfigError.runtimeNotBootstrapped
         }
         return try cachedSearchConfig.get()
+    }
+
+    func effectiveWeatherConfig() throws -> WeatherRuntimeConfig {
+        guard let cachedWeatherConfig else {
+            throw AIConfigError.runtimeNotBootstrapped
+        }
+        return try cachedWeatherConfig.get()
     }
 
     /// 场景默认模型变更后，同步更新运行时缓存快照与已缓存 bundle。

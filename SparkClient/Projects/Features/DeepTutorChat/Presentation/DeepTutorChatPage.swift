@@ -5,6 +5,9 @@ struct DeepTutorChatPage: View {
     @ObservedObject var viewModel: DeepTutorChatViewModel
     @StateObject private var refreshCoordinator: DeepTutorRefreshCoordinator
     @State private var isComposerFocused = false
+    @State private var showAttachmentPreview = false
+    @State private var previewInputs: [FilePreviewInput] = []
+    @State private var previewStartIndex = 0
 
     init(conversationID: UUID, viewModel: DeepTutorChatViewModel) {
         self.conversationID = conversationID
@@ -29,8 +32,13 @@ struct DeepTutorChatPage: View {
                     modelName: viewModel.conversation?.currentModelName,
                     hasMessages: viewModel.state.messages.isEmpty == false,
                     isStreaming: viewModel.state.isStreaming,
-                    attachments: [],
                     references: [],
+                    attachmentDrafts: viewModel.composerAttachmentDrafts,
+                    onAttachmentsPicked: { viewModel.handleAttachmentsPicked($0) },
+                    onUploadAttachment: { viewModel.uploadComposerAttachment(id: $0) },
+                    onRetryAttachmentUpload: { viewModel.retryComposerAttachmentUpload(id: $0) },
+                    onRemoveAttachment: { viewModel.removeComposerAttachment(id: $0) },
+                    onPreviewAttachment: { previewComposerAttachment(id: $0) },
                     onSend: {
                         Task { await viewModel.sendMessage() }
                     },
@@ -62,9 +70,22 @@ struct DeepTutorChatPage: View {
                 }
             }
         }
+        .unifiedFilePreview(
+            isPresented: $showAttachmentPreview,
+            inputs: previewInputs,
+            startIndex: previewStartIndex
+        )
         .task(id: conversationID) {
             await viewModel.openConversation(conversationID)
         }
+    }
+
+    private func previewComposerAttachment(id: UUID) {
+        let drafts = viewModel.composerAttachmentDrafts
+        guard let index = drafts.firstIndex(where: { $0.id == id }) else { return }
+        previewInputs = DeepTutorAttachmentPreviewInputBuilder.previewInputs(for: drafts)
+        previewStartIndex = index
+        showAttachmentPreview = true
     }
 
     @ViewBuilder
@@ -77,7 +98,8 @@ struct DeepTutorChatPage: View {
             DeepTutorMessageListRepresentable(
                 conversationID: conversationID,
                 viewModel: viewModel,
-                refreshCoordinator: refreshCoordinator
+                refreshCoordinator: refreshCoordinator,
+                fileTransferService: viewModel.composerFileTransferService
             )
         case .error(let message):
             VStack(spacing: 12) {

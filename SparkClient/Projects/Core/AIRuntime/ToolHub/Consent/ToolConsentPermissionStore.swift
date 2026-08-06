@@ -78,7 +78,7 @@ struct AppleHealthToolConsentPolicy: Sendable {
         // 条件1：工具数据不敏感 → 无需授权
         guard result.sensitive else { return false }
         // 条件2：不是苹果健康读取工具 → 无需授权
-        guard Self.appleHealthReadToolNames.contains(Self.normalize(result.toolName)) else { return false }
+        guard Self.modelConsentToolNames.contains(Self.normalize(result.toolName)) else { return false }
         // 条件3：本地服务（LOCAL）→ 无需授权
         guard (providerCompany ?? "").uppercased() != "LOCAL" else { return false }
         // 条件4：未获得用户授权 → 需要请求授权
@@ -91,13 +91,17 @@ struct AppleHealthToolConsentPolicy: Sendable {
         permissionStore.rememberAllowed(toolName: toolName)
     }
 
-    /// 苹果健康数据读取工具名称集合（已标准化）
-    private static let appleHealthReadToolNames: Set<String> = Set([
+    /// 苹果健康与位置/天气等敏感工具授权策略
+    /// 统一管控敏感工具结果离开设备用于模型上下文的授权策略
+    private static let modelConsentToolNames: Set<String> = Set([
         SparkToolName.fetchStepDetails.rawValue,
         SparkToolName.fetchEnergyDetails.rawValue,
         SparkToolName.fetchNutritionDetails.rawValue,
         SparkToolName.fetchSleepDetails.rawValue,
-        SparkToolName.fetchWorkoutDetails.rawValue
+        SparkToolName.fetchWorkoutDetails.rawValue,
+        SparkToolName.queryWeather.rawValue,
+        SparkToolName.queryLocation.rawValue,
+        SparkToolName.getCurrentLocation.rawValue,
     ].map { normalize($0) })
 
     /// 工具名称标准化（与权限存储类保持一致）

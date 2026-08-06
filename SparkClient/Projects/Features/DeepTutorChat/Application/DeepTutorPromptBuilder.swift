@@ -9,6 +9,12 @@ nonisolated enum DeepTutorHealthPromptMode: Equatable, Sendable {
     case unavailable
 }
 
+nonisolated enum DeepTutorWeatherPromptMode: Equatable, Sendable {
+    case cityPromptRequired
+    case weatherFetchAvailable
+    case unavailable
+}
+
 /// 按 DeepTutor capability 构造 system prompt（工具策略由 `DeepTutorToolPolicyResolver` 负责）。
 enum DeepTutorPromptBuilder: Sendable {
     struct BuiltPrompt: Equatable, Sendable {
@@ -33,11 +39,28 @@ enum DeepTutorPromptBuilder: Sendable {
         return .unavailable
     }
 
+    nonisolated static func weatherPromptMode(allowedToolNames: Set<String>) -> DeepTutorWeatherPromptMode {
+        if allowedToolNames.contains(SparkToolName.askUserQuestion.rawValue),
+           allowedToolNames.contains(SparkToolName.queryWeather.rawValue) {
+            return .cityPromptRequired
+        }
+        let weatherTools: Set<String> = [
+            SparkToolName.queryWeather.rawValue,
+            SparkToolName.queryLocation.rawValue,
+            SparkToolName.getCurrentLocation.rawValue,
+        ]
+        if allowedToolNames.isDisjoint(with: weatherTools) == false {
+            return .weatherFetchAvailable
+        }
+        return .unavailable
+    }
+
     nonisolated static func build(
         capability: DeepTutorCapability,
         conversationTitle: String,
         rolePrompt: String?,
-        healthPromptMode: DeepTutorHealthPromptMode = .unavailable
+        healthPromptMode: DeepTutorHealthPromptMode = .unavailable,
+        weatherPromptMode: DeepTutorWeatherPromptMode = .unavailable
     ) -> BuiltPrompt {
         let titleContext: String
         if DeepTutorSessionTitle.isPlaceholder(conversationTitle) {
@@ -84,11 +107,35 @@ enum DeepTutorPromptBuilder: Sendable {
                 If the user asks about their personal health data, explain that this capability is unavailable right now instead of claiming to call a tool.
                 """
             }
+            let weatherInstructions: String
+            switch weatherPromptMode {
+            case .cityPromptRequired:
+                weatherInstructions = """
+                Weather tools are available, but the user's city is unclear and location permission is unavailable.
+                1. Call `ask_user_question` first to ask which city they want weather for.
+                2. Do not invent coordinates or real-time weather.
+                3. After the user answers, call `query_location` then `query_weather`.
+                """
+            case .weatherFetchAvailable:
+                weatherInstructions = """
+                Weather tools are available for this turn.
+                1. If the user already named a city, call `query_location` first, then `query_weather` with returned coordinates.
+                2. If the user asks for current-location weather and `get_current_location` is available, call it first, then `query_weather`.
+                3. Never fabricate real-time weather. If tools fail or weather provider is unavailable, explain the failure clearly.
+                4. References like "Apple Weather" or "苹果天气" are user context, not a signal to skip weather tools.
+                """
+            case .unavailable:
+                weatherInstructions = """
+                You do not currently have weather query tools for this turn.
+                Do not claim to have checked live weather unless tool results are available.
+                """
+            }
             capabilityPrompt = """
             Mode: general tutoring chat.
             Explain clearly, cite reasoning steps, and ask clarifying questions when needed.
             You may call `ask_user_question` when you need structured user input.
             \(healthDataInstructions)
+            \(weatherInstructions)
             """
         case .deepResearch:
             capabilityPrompt = """

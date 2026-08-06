@@ -30,6 +30,8 @@ nonisolated struct DeepTutorToolMountContext: Equatable, Sendable {
     var toolPhase: DeepTutorToolPipelinePhase
     var forcedSuppressedSparkTools: Set<String>
     var forcedAddedSparkTools: Set<String>
+    /// 天气工具总开关（来自 AI 设置 `weatherToolPreferences.useWeather`）。
+    var weatherToolEnabled: Bool
 
     nonisolated static func `default`(
         capability: DeepTutorCapability,
@@ -62,7 +64,8 @@ nonisolated struct DeepTutorToolMountContext: Equatable, Sendable {
             forcedDomainIntents: [],
             toolPhase: .answerLoop,
             forcedSuppressedSparkTools: [],
-            forcedAddedSparkTools: []
+            forcedAddedSparkTools: [],
+            weatherToolEnabled: true
         )
     }
 
@@ -222,6 +225,11 @@ enum DeepTutorToolPolicyResolver: Sendable {
         if let priorSnapshot {
             resumeContext.snapshotRequestedTools = priorSnapshot.requestedCanonicalTools
             resumeContext.toolPhase = priorSnapshot.toolPhase.flatMap(DeepTutorToolPipelinePhase.init(rawValue:)) ?? .answerLoop
+            if priorSnapshot.domainExtensionSources.contains("weather_location")
+                || priorSnapshot.structuredIntents.contains(where: { $0.domain == .weatherLocation })
+                || priorSnapshot.toolPhase == "weather_city_prompt" {
+                resumeContext.forcedDomainIntents.insert("weather_location")
+            }
         }
         var result = resolve(resumeContext)
         var allowed = result.allowedToolNames
@@ -302,13 +310,17 @@ enum DeepTutorToolPolicyResolver: Sendable {
 
     nonisolated static func makePerTurnSnapshot(
         for context: DeepTutorToolMountContext,
-        policy: DeepTutorToolPolicyResult
+        policy: DeepTutorToolPolicyResult,
+        attachments: [DeepTutorAttachment] = [],
+        searchConfigRevision: SearchRuntimeConfigRevision? = nil
     ) -> DeepTutorRequestSnapshot {
         DeepTutorRequestSnapshot(
             references: [],
             capability: context.capability,
             enabledTools: policy.requestedCanonicalTools,
-            toolSnapshot: policy.perTurnSnapshot
+            toolSnapshot: policy.perTurnSnapshot,
+            attachments: attachments,
+            searchConfigRevision: searchConfigRevision
         )
     }
 

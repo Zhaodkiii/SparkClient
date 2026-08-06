@@ -8,8 +8,13 @@ struct DeepTutorComposerCardView: View {
     let modelName: String?
     let hasMessages: Bool
     let isStreaming: Bool
-    let attachments: [DeepTutorAttachment]
     let references: [DeepTutorContextReference]
+    let attachmentDrafts: [DeepTutorComposerAttachmentDraft]
+    let onAttachmentsPicked: ([MedicalUploadLocalFile]) -> Void
+    let onUploadAttachment: (UUID) -> Void
+    let onRetryAttachmentUpload: (UUID) -> Void
+    let onRemoveAttachment: (UUID) -> Void
+    let onPreviewAttachment: (UUID) -> Void
     let onSend: () -> Void
     let onStop: () -> Void
 
@@ -20,7 +25,16 @@ struct DeepTutorComposerCardView: View {
     }
 
     private var canSend: Bool {
-        text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        let hasText = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        let hasUploadedAttachment = attachmentDrafts.contains { $0.phase == .uploaded }
+        let hasBlockingAttachment = attachmentDrafts.contains(where: \.isBlockingSend)
+        return isStreaming == false
+            && hasBlockingAttachment == false
+            && (hasText || hasUploadedAttachment)
+    }
+
+    private var canPickAttachments: Bool {
+        isStreaming == false && attachmentDrafts.count < DeepTutorAttachmentMapper.maxComposerAttachments
     }
 
     private func sendWithKeyboardDismiss() {
@@ -33,8 +47,16 @@ struct DeepTutorComposerCardView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            DeepTutorComposerAttachmentPreviewBandView(
+                drafts: attachmentDrafts,
+                onUpload: onUploadAttachment,
+                onRetry: onRetryAttachmentUpload,
+                onRemove: onRemoveAttachment,
+                onPreview: onPreviewAttachment
+            )
+
             DeepTutorComposerReferenceBandView(
-                attachments: attachments,
+                attachments: [],
                 references: references
             )
 
@@ -55,6 +77,8 @@ struct DeepTutorComposerCardView: View {
                 modelName: modelName,
                 isStreaming: isStreaming,
                 canSend: canSend,
+                canPickAttachments: canPickAttachments,
+                onAttachmentsPicked: onAttachmentsPicked,
                 onSend: sendWithKeyboardDismiss,
                 onStop: onStop
             )

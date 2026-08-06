@@ -1,28 +1,28 @@
 import Foundation
 
 nonisolated enum SearchRuntimeConfigResolver {
+    nonisolated static func activeWebSearchKey(from snapshot: AISettingsSnapshot) -> SearchKeys? {
+        rankedWebSearchCandidates(from: snapshot.searchKeys).first
+    }
+
     nonisolated static func resolve(from snapshot: AISettingsSnapshot) throws -> SearchRuntimeConfig {
         guard snapshot.searchToolPreferences.useSearch else {
             throw SearchRuntimeError.disabled
         }
 
-        let candidates = snapshot.searchKeys
-            .filter { $0.searchClass.lowercased() == "web" && $0.isUsing }
-            .sorted {
-                if $0.priority == $1.priority {
-                    return $0.timestamp > $1.timestamp
-                }
-                return $0.priority > $1.priority
-            }
-
-        guard let active = candidates.first else {
+        guard let active = activeWebSearchKey(from: snapshot) else {
             throw SearchRuntimeError.missingActiveProvider
         }
         guard let url = URL(string: active.requestURL), url.scheme != nil else {
             throw SearchRuntimeError.invalidEndpoint(active.requestURL)
         }
 
-        let provider = SearchProviderID(company: active.company)
+        guard let provider = SearchProviderID.parse(company: active.company) else {
+            throw SearchRuntimeError.unsupportedProvider(active.company)
+        }
+        guard provider.hasLocalAdapter else {
+            throw SearchRuntimeError.unsupportedProvider(provider.rawValue)
+        }
         let key = active.key.trimmingCharacters(in: .whitespacesAndNewlines)
         if provider != .spark && key.isEmpty {
             throw SearchRuntimeError.missingAPIKey(active.name)
@@ -66,6 +66,17 @@ nonisolated enum SearchRuntimeConfigResolver {
             keyRows
         ].joined(separator: "\n")
         return stableHash(source)
+    }
+
+    nonisolated private static func rankedWebSearchCandidates(from searchKeys: [SearchKeys]) -> [SearchKeys] {
+        searchKeys
+            .filter { $0.searchClass.lowercased() == "web" && $0.isUsing }
+            .sorted {
+                if $0.priority == $1.priority {
+                    return $0.timestamp > $1.timestamp
+                }
+                return $0.priority > $1.priority
+            }
     }
 
     nonisolated private static func stableHash(_ text: String) -> String {

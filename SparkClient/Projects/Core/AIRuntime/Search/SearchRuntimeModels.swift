@@ -1,6 +1,6 @@
 import Foundation
 
-enum SearchProviderID: String, Codable, Sendable {
+enum SearchProviderID: String, Codable, Sendable, CaseIterable {
     case spark = "SPARK"
     case tavily = "TAVILY"
     case serpAPI = "SERPAPI"
@@ -11,9 +11,23 @@ enum SearchProviderID: String, Codable, Sendable {
     case langSearch = "LANGSEARCH"
     case perplexity = "PERPLEXITY"
 
-    nonisolated init(company: String) {
+    /// 已在 `WebSearchGateway` 注册本地适配器的供应商。
+    nonisolated static let locallyAdapted: Set<SearchProviderID> = [
+        .tavily, .serpAPI, .zhipu, .bocha, .exa, .brave, .langSearch, .perplexity
+    ]
+
+    nonisolated static func parse(company: String) -> SearchProviderID? {
         let normalized = company.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-        self = SearchProviderID(rawValue: normalized) ?? .spark
+        guard normalized.isEmpty == false else { return nil }
+        return SearchProviderID(rawValue: normalized)
+    }
+
+    nonisolated init(company: String) {
+        self = Self.parse(company: company) ?? .spark
+    }
+
+    nonisolated var hasLocalAdapter: Bool {
+        Self.locallyAdapted.contains(self)
     }
 }
 

@@ -5,6 +5,8 @@ struct DeepTutorComposerToolbarView: View {
     let modelName: String?
     let isStreaming: Bool
     let canSend: Bool
+    let canPickAttachments: Bool
+    let onAttachmentsPicked: ([MedicalUploadLocalFile]) -> Void
     let onSend: () -> Void
     let onStop: () -> Void
 
@@ -13,13 +15,28 @@ struct DeepTutorComposerToolbarView: View {
             capabilityMenu
             modelChip
             Spacer(minLength: 0)
-            placeholderButton(systemName: "paperclip")
+            attachmentButton
             placeholderButton(systemName: "mic")
             sendStopButton
         }
         .padding(.horizontal, 12)
         .padding(.bottom, 10)
         .padding(.top, 4)
+    }
+
+    private var attachmentButton: some View {
+        MedicalDocumentFilePickerMenu(
+            maxPhotoSelectionCount: DeepTutorAttachmentMapper.maxComposerAttachments,
+            buttonContent: {
+                Image(systemName: "paperclip")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(canPickAttachments ? Color.secondary : Color.secondary.opacity(0.45))
+                    .frame(width: 32, height: 32)
+            },
+            onFilesSelected: onAttachmentsPicked
+        )
+        .disabled(isStreaming || canPickAttachments == false)
+        .opacity(isStreaming || canPickAttachments == false ? 0.55 : 1)
     }
 
     private var capabilityMenu: some View {

@@ -22,6 +22,25 @@ private struct SearchHelpPage: Identifiable {
     let title: String
 }
 
+private func searchProviderValidationError(
+    for key: SearchKeys,
+    displayName: String,
+    requireAPIKey: Bool
+) -> String? {
+    guard let provider = SearchProviderID.parse(company: key.company) else {
+        return L10n.format("ai_settings.search.error.unsupported_provider_format", displayName)
+    }
+    guard provider.hasLocalAdapter else {
+        return L10n.format("ai_settings.search.error.unsupported_provider_format", displayName)
+    }
+    if requireAPIKey,
+       provider != .spark,
+       key.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        return L10n.format("ai_settings.search.error.need_api_key_format", displayName)
+    }
+    return nil
+}
+
 /// AI 搜索工具设置页面
 /// 管理搜索开关、结果数量、双语搜索、服务商配置等功能
 struct AISearchToolSettingsView: View {
@@ -50,6 +69,11 @@ struct AISearchToolSettingsView: View {
             let rhs = displayName(for: $1)
             return lhs.localizedStandardCompare(rhs) == .orderedAscending
         }
+    }
+
+    /// 与运行时 resolver 一致：当前生效的 web 搜索供应商 ID。
+    private var activeSearchKeyID: UUID? {
+        SearchRuntimeConfigResolver.activeWebSearchKey(from: viewModel.snapshot)?.id
     }
 
     // MARK: - 页面主体
@@ -168,6 +192,15 @@ struct AISearchToolSettingsView: View {
                         HStack(spacing: 6) {
                             Text(displayName(for: key))
                                 .foregroundStyle(.primary)
+                            if key.id == activeSearchKeyID {
+                                Text(L10n.text("ai_settings.search.provider.active"))
+                                    .font(.caption2.weight(.semibold))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Color.blue.opacity(0.12))
+                                    .foregroundStyle(.blue)
+                                    .clipShape(Capsule())
+                            }
                             if key.source == .custom {
                                 Image(systemName: "pencil")
                                     .font(.caption2)
@@ -227,9 +260,12 @@ struct AISearchToolSettingsView: View {
     /// 设置搜索服务商启用状态（启用前校验 API Key）
     private func setActiveSearchProvider(id: UUID, enabled: Bool) {
         guard let selected = searchKeys.first(where: { $0.id == id }) else { return }
-        // 非 Spark 服务商启用时必须配置 API Key
-        if enabled, SearchProviderID(company: selected.company) != .spark, hasAPIKey(selected) == false {
-            errorMessage = L10n.format("ai_settings.search.error.need_api_key_format", displayName(for: selected))
+        if enabled, let validationError = searchProviderValidationError(
+            for: selected,
+            displayName: displayName(for: selected),
+            requireAPIKey: true
+        ) {
+            errorMessage = validationError
             return
         }
 
@@ -291,6 +327,15 @@ struct AISearchToolSettingsView: View {
     /// 判断是否已配置 API Key
     private func hasAPIKey(_ key: SearchKeys) -> Bool {
         key.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
+    /// 校验供应商是否可被运行时消费。
+    private func providerValidationError(for key: SearchKeys, requireAPIKey: Bool) -> String? {
+        searchProviderValidationError(
+            for: key,
+            displayName: displayName(for: key),
+            requireAPIKey: requireAPIKey
+        )
     }
 
     /// 根据服务商返回价格提示文本
@@ -537,11 +582,13 @@ private struct SearchKeyEditorView: View {
             errorMessage = L10n.text("ai_settings.search.error.endpoint_scheme")
             return false
         }
-        // 启用状态下，非Spark服务商必须填写API密钥
-        if key.isUsing,
-           SearchProviderID(company: key.company) != .spark,
-           key.key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            errorMessage = L10n.format("ai_settings.search.error.need_api_key_format", displayName)
+        // 启用状态下校验供应商与 API Key
+        if key.isUsing, let validationError = searchProviderValidationError(
+            for: key,
+            displayName: displayName,
+            requireAPIKey: true
+        ) {
+            errorMessage = validationError
             return false
         }
         // 校验通过，清空错误
@@ -552,13 +599,23 @@ private struct SearchKeyEditorView: View {
     /// 测试API连通性
     private func testAPI() {
         // 基础校验
-        guard validateForSave(), let url = URL(string: key.requestURL) else { return }
+        guard validateForSave() else { return }
+        if let validationError = searchProviderValidationError(
+            for: key,
+            displayName: displayName,
+            requireAPIKey: true
+        ) {
+            errorMessage = validationError
+            return
+        }
+        guard let provider = SearchProviderID.parse(company: key.company),
+              let url = URL(string: key.requestURL) else { return }
         isTesting = true
         testResult = nil
 
         // 构造测试用配置
         let config = SearchRuntimeConfig(
-            provider: SearchProviderID(company: key.company),
+            provider: provider,
             displayName: displayName,
             apiKey: key.key.trimmingCharacters(in: .whitespacesAndNewlines),
             requestURL: url,

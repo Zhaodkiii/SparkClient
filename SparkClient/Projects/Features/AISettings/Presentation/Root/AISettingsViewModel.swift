@@ -603,6 +603,75 @@ final class AISettingsViewModel: ObservableObject {
         return await deleteSearchKeysNowReturningBool(ids: ids)
     }
 
+    // MARK: - 天气工具持久化
+    @discardableResult
+    func updateWeatherToolPreferencesAndPersist(_ preferences: AIWeatherToolPreferences) async -> Bool {
+        snapshot.weatherToolPreferences = preferences
+        snapshot.refreshWeatherConfigRevision(previous: lastPersistedSnapshot)
+        return await persistSnapshotNowReturningBool()
+    }
+
+    @discardableResult
+    func upsertWeatherToolKeyAndPersist(_ toolKey: ToolKeys) async -> Bool {
+        var changed = toolKey
+        changed.toolClass = "weather"
+        if changed.isUsing {
+            for index in snapshot.toolKeys.indices where snapshot.toolKeys[index].id != changed.id
+                && snapshot.toolKeys[index].toolClass.lowercased() == "weather"
+                && snapshot.toolKeys[index].isUsing {
+                snapshot.toolKeys[index].isUsing = false
+                snapshot.toolKeys[index].timestamp = Date()
+            }
+        }
+
+        if let index = snapshot.toolKeys.firstIndex(where: { $0.id == changed.id }) {
+            snapshot.toolKeys[index] = changed
+        } else {
+            snapshot.toolKeys.append(changed)
+        }
+        snapshot.refreshWeatherConfigRevision(previous: lastPersistedSnapshot)
+        return await persistSnapshotNowReturningBool()
+    }
+
+    @discardableResult
+    func setWeatherProviderEnabledAndPersist(id: UUID, enabled: Bool) async -> Bool {
+        guard let selectedIndex = snapshot.toolKeys.firstIndex(where: { $0.id == id }) else { return false }
+        guard snapshot.toolKeys[selectedIndex].toolClass.lowercased() == "weather" else { return false }
+
+        if enabled {
+            let selected = snapshot.toolKeys[selectedIndex]
+            if let provider = WeatherProviderID.parse(company: selected.company), provider.isReserved || provider.hasLocalAdapter == false {
+                errorMessage = "\(selected.name) 暂未接入，当前版本不可启用。"
+                return false
+            }
+            if let provider = WeatherProviderID.parse(company: selected.company), provider.usesAPIKey {
+                let trimmedKey = selected.key.trimmingCharacters(in: .whitespacesAndNewlines)
+                if trimmedKey.isEmpty {
+                    errorMessage = "\(selected.name) 需要配置 API Key 才能启用。"
+                    return false
+                }
+                if WeatherEndpointNormalizer.isValidEndpoint(requestURL: selected.requestURL, provider: provider) == false {
+                    errorMessage = "\(selected.name) 需要配置有效请求 URL 才能启用。"
+                    return false
+                }
+            }
+        }
+
+        for index in snapshot.toolKeys.indices {
+            if index == selectedIndex {
+                snapshot.toolKeys[index].isUsing = enabled
+                snapshot.toolKeys[index].timestamp = Date()
+            } else if enabled,
+                      snapshot.toolKeys[index].toolClass.lowercased() == "weather",
+                      snapshot.toolKeys[index].isUsing {
+                snapshot.toolKeys[index].isUsing = false
+                snapshot.toolKeys[index].timestamp = Date()
+            }
+        }
+        snapshot.refreshWeatherConfigRevision(previous: lastPersistedSnapshot)
+        return await persistSnapshotNowReturningBool()
+    }
+
     // MARK: - 模型单条持久化
     /// 保存按钮触发：先改缓存，再单条落库（模型）
     @discardableResult
@@ -1104,6 +1173,7 @@ final class AISettingsViewModel: ObservableObject {
         
         do {
             snapshot.refreshSearchConfigRevision(previous: lastPersistedSnapshot)
+            snapshot.refreshWeatherConfigRevision(previous: lastPersistedSnapshot)
             try await performPersistToRepository()
             lastPersistedSnapshot = snapshot
             hasUnsavedChanges = false

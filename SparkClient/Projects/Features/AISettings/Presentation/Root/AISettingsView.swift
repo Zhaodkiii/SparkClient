@@ -50,17 +50,26 @@ struct AISettingsView: View {
                     )
                 }
 
-                // 当前版本 功能不完善 展示关闭入口
-//                NavigationLink {
-//                    AISearchToolSettingsView(viewModel: viewModel)
-//                    .hidesMainTabBarWhenPushed()
-//                } label: {
-//                    SettingNavRow(
-//                        title: L10n.text("ai_settings.row.search_tools"),
-//                        subtitle: L10n.text("ai_settings.row.search_tools.subtitle"),
-//                        icon: "wrench.and.screwdriver"
-//                    )
-//                }
+                MainNavigationLink {
+                    AISearchToolSettingsView(viewModel: viewModel)
+                        .hidesMainTabBarWhenPushed()
+                } label: {
+                    SettingNavRow(
+                        title: L10n.text("ai_settings.row.search_tools"),
+                        subtitle: L10n.text("ai_settings.row.search_tools.subtitle"),
+                        icon: "magnifyingglass"
+                    )
+                }
+
+                MainNavigationLink {
+                    AIWeatherToolSettingsView(viewModel: viewModel)
+                } label: {
+                    SettingNavRow(
+                        title: L10n.text("ai_settings.weather.nav_title", fallback: "天气查询"),
+                        subtitle: L10n.text("ai_settings.row.weather_tools.subtitle", fallback: "配置 QWeather、OpenWeather 与 Apple Weather"),
+                        icon: "cloud.sun.fill"
+                    )
+                }
             }
 
             // 当前版本 功能不完善 ，暂时关闭
