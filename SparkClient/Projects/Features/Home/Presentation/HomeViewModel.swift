@@ -19,6 +19,8 @@ final class HomeViewModel: ObservableObject {
     @Published var selectedMemberID: Int?
     /// 当前弹出的首页浮窗路由
     @Published var activeSheet: HomeSheet?
+    /// 待打开的成员详情全屏页（由外层家庭档案入口触发）。
+    @Published var pendingMemberDetailMemberID: Int?
     /// 待处理家属邀请数量
     @Published private(set) var pendingInviteCount: Int = 0
     /// 需要高亮提示的邀请ID，用于红点/弹窗引导
@@ -394,6 +396,15 @@ final class HomeViewModel: ObservableObject {
             "首页医疗卡片跳转 kind=\(kind) selectedMemberID=\(selectedMemberID.map(String.init) ?? "nil")",
             module: logModule
         )
+    }
+
+    /// 打开家庭档案入口：有成员则进入成员详情，无成员则进入创建流程。
+    func openFamilyArchiveEntry() {
+        if let memberID = selectedMemberID {
+            pendingMemberDetailMemberID = memberID
+        } else {
+            activeSheet = .addMember(.create())
+        }
     }
 
     /// 列表页按需懒加载明细后，回写首页持有的 `completeData`，避免再次进入列表重复请求。

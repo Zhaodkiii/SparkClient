@@ -10,6 +10,28 @@ struct HomeView: View {
     @ObservedObject var externalMedicalDocumentImportCoordinator: ExternalMedicalDocumentImportCoordinator
     @ObservedObject var launchIntentCoordinator: LaunchIntentCoordinator
     let session: UserSession
+    var ios26DashboardActionHandler: IOS26HomeDashboardActionHandler?
+    var deepTutorChatViewModel: DeepTutorChatViewModel?
+
+    init(
+        dependencies: HomeFeatureDependencies,
+        viewModel: HomeViewModel,
+        medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel,
+        externalMedicalDocumentImportCoordinator: ExternalMedicalDocumentImportCoordinator,
+        launchIntentCoordinator: LaunchIntentCoordinator,
+        session: UserSession,
+        ios26DashboardActionHandler: IOS26HomeDashboardActionHandler? = nil,
+        deepTutorChatViewModel: DeepTutorChatViewModel? = nil
+    ) {
+        self.dependencies = dependencies
+        self.viewModel = viewModel
+        self.medicalDocumentUploadViewModel = medicalDocumentUploadViewModel
+        self.externalMedicalDocumentImportCoordinator = externalMedicalDocumentImportCoordinator
+        self.launchIntentCoordinator = launchIntentCoordinator
+        self.session = session
+        self.ios26DashboardActionHandler = ios26DashboardActionHandler
+        self.deepTutorChatViewModel = deepTutorChatViewModel
+    }
 
     private var launchIntentConsumer: HomeLaunchIntentConsumer {
         dependencies.homeLaunchIntentConsumer
@@ -25,7 +47,29 @@ struct HomeView: View {
         homeContent
     }
 
+    @ViewBuilder
     private var homeScrollBody: some View {
+        if #available(iOS 26.0, *),
+           let actionHandler = ios26DashboardActionHandler,
+           let deepTutorChatViewModel {
+            IOS26HomeDashboardView(
+                viewModel: viewModel,
+                taskManager: dependencies.taskManager,
+                session: session,
+                actionHandler: actionHandler,
+                deepTutorChatViewModel: deepTutorChatViewModel
+            )
+            .refreshable {
+                await viewModel.refresh()
+                await dependencies.taskManager.syncIncremental(memberID: viewModel.selectedMemberID)
+            }
+            .navigationBarHidden(true)
+        } else {
+            legacyHomeScrollBody
+        }
+    }
+
+    private var legacyHomeScrollBody: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
 //                headerCard
@@ -102,6 +146,11 @@ struct HomeView: View {
             .onChange(of: viewModel.activeSheet?.id) { _ in
                 syncLaunchIntentHostState()
                 requestLaunchIntentDrain(reason: "home_sheet_changed")
+            }
+            .onChange(of: viewModel.pendingMemberDetailMemberID) { memberID in
+                guard let memberID else { return }
+                activeFullScreenCover = .memberDetail(memberID: memberID)
+                viewModel.pendingMemberDetailMemberID = nil
             }
             // 用药提醒偏好变更通知：已登录则立即重建本地提醒
             .onReceive(NotificationCenter.default.publisher(for: .medicationReminderPreferencesChanged)) { _ in

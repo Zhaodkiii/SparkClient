@@ -124,6 +124,49 @@ struct TaskService {
         return try decodeWrapped(TaskStatusSyncItem.self, from: response)
     }
 
+    func fetchExecutions(taskID: Int) async throws -> [TaskExecutionRecord] {
+        let operation = CacheableSparkNetworkOperation(
+            name: "Task.FetchExecutions",
+            apiName: "TaskService",
+            request: SparkNetworkRequest(
+                method: .get,
+                path: "/api/v1/tasks/\(taskID)/executions/",
+                strategy: NetworkStrategy(
+                    requiresAuth: true,
+                    allowETag: false,
+                    serialKey: "task.executions.\(taskID)",
+                    retryConfig: .default,
+                    isIdempotent: true,
+                    queuePriority: .high
+                )
+            )
+        )
+        let response = try await configuration.execute(operation)
+        return try decodeWrapped([TaskExecutionRecord].self, from: response)
+    }
+
+    func submitExecution(taskID: Int, payload: TaskExecutionSubmitPayload) async throws -> TaskExecutionRecord {
+        let operation = CacheableSparkNetworkOperation(
+            name: "Task.SubmitExecution",
+            apiName: "TaskService",
+            request: SparkNetworkRequest(
+                method: .post,
+                path: "/api/v1/tasks/\(taskID)/executions/",
+                body: .json(AnyEncodable(payload)),
+                strategy: NetworkStrategy(
+                    requiresAuth: true,
+                    allowETag: false,
+                    serialKey: "task.execution.submit.\(taskID)",
+                    retryConfig: .default,
+                    isIdempotent: false,
+                    queuePriority: .veryHigh
+                )
+            )
+        )
+        let response = try await configuration.execute(operation)
+        return try decodeWrapped(TaskExecutionRecord.self, from: response)
+    }
+
     func cancelTask(taskID: Int) async throws -> TaskStatusSyncItem {
         let operation = CacheableSparkNetworkOperation(
             name: "Task.Cancel",
@@ -268,6 +311,15 @@ nonisolated struct TaskDietPayload: Encodable, Sendable {
 
 }
 
+nonisolated struct TaskExecutionSubmitPayload: Encodable, Sendable {
+    let status: String
+    let executedAt: String
+    let value: [String: String]
+    let notes: String?
+    let businessType: String
+    let businessID: String
+}
+
 nonisolated struct TaskExecutionPayload: Encodable, Sendable {
     let executedAt: String?
     let value: [String: String]?
@@ -292,11 +344,3 @@ nonisolated struct TaskExecutionPayload: Encodable, Sendable {
 }
 
 nonisolated private struct EmptyPayload: Encodable, Sendable {}
-
-private extension ISO8601DateFormatter {
-    static let taskFormatter: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
-}

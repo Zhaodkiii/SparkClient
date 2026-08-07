@@ -59,6 +59,8 @@ final class AppRouteStore: ObservableObject {
         case popularScience = 5
         /// DeepTutor Tab 使用新 raw value，避免影响历史 Tab 选中态。
         case deepTutor = 6
+        /// iOS 26 专用搜索 Tab。
+        case search = 7
     }
 
     @Published var selectedTab: RootTab = .home

@@ -27,6 +27,22 @@ struct MainTabCoordinatorView: View {
 
     @State private var showsDeviceAccountUpgradeSheet = false
 
+    private var destinationBuilder: MainTabRouteDestinationBuilder {
+        MainTabRouteDestinationBuilder(
+            session: session,
+            homeDependencies: homeDependencies,
+            popularScienceDependencies: popularScienceDependencies,
+            homeViewModel: homeViewModel,
+            taskManager: taskManager,
+            chatStateStore: chatStateStore,
+            chatListViewModel: chatListViewModel,
+            chatDetailViewModel: chatDetailViewModel,
+            deepTutorChatViewModel: deepTutorChatViewModel,
+            accountManagementViewModel: accountManagementViewModel,
+            aiSettingsViewModel: aiSettingsViewModel
+        )
+    }
+
     var body: some View {
         TabView(selection: $routeStore.selectedTab) {
             CompatibleRouteNavigationContainer(path: routePath(.home)) {
@@ -39,7 +55,7 @@ struct MainTabCoordinatorView: View {
                     session: session
                 )
             } destination: { route in
-                routeDestination(route)
+                destinationBuilder.destination(route)
             }
             .tabItem {
                 Label(L10n.text("tab.home"), systemImage: "house.fill")
@@ -57,7 +73,7 @@ struct MainTabCoordinatorView: View {
                     pushAdapter: pushAdapter
                 )
             } destination: { route in
-                routeDestination(route)
+                destinationBuilder.destination(route)
             }
             .tabItem {
                 Label(L10n.text("tab.chat"), systemImage: "bubble.left.and.bubble.right.fill")
@@ -67,7 +83,7 @@ struct MainTabCoordinatorView: View {
             CompatibleRouteNavigationContainer(path: routePath(.deepTutor)) {
                 DeepTutorConversationListPage(viewModel: deepTutorChatViewModel)
             } destination: { route in
-                routeDestination(route)
+                destinationBuilder.destination(route)
             }
             .tabItem {
                 Label(L10n.text("tab.deep_tutor"), systemImage: "graduationcap.fill")
@@ -77,7 +93,7 @@ struct MainTabCoordinatorView: View {
             CompatibleRouteNavigationContainer(path: routePath(.popularScience)) {
                 PopularScienceHomeView(viewModel: popularScienceViewModel)
             } destination: { route in
-                routeDestination(route)
+                destinationBuilder.destination(route)
             }
             .tabItem {
                 Label(L10n.text("tab.popular_science"), systemImage: "book.pages.fill")
@@ -93,7 +109,7 @@ struct MainTabCoordinatorView: View {
                     onAccountEntryTap: handleAccountEntryTap
                 )
             } destination: { route in
-                routeDestination(route)
+                destinationBuilder.destination(route)
             }
             .tabItem {
                 Label(L10n.text("tab.settings"), systemImage: "gearshape.fill")
@@ -101,22 +117,7 @@ struct MainTabCoordinatorView: View {
             .tag(AppRouteStore.RootTab.settings)
         }
         .sheet(isPresented: $showsDeviceAccountUpgradeSheet) {
-//            NavigationView {
-//                LoginView(viewModel: upgradeLoginViewModel, mode: .upgradeDeviceAccount)
-//                    .toolbar {
-//                        ToolbarItem(placement: .cancellationAction) {
-//                            Button(L10n.text("common.cancel")) {
-//                                guard upgradeLoginViewModel.isLoading == false else { return }
-//                                showsDeviceAccountUpgradeSheet = false
-//                            }
-//                            .disabled(upgradeLoginViewModel.isLoading)
-//                        }
-//                    }
-//            }
-//            .interactiveDismissDisabled(upgradeLoginViewModel.isLoading)
-            
             LoginView(viewModel: upgradeLoginViewModel, mode: .upgradeDeviceAccount)
-
         }
         .onChange(of: session.isDeviceAccount) { isDeviceAccount in
             if isDeviceAccount == false {
@@ -153,51 +154,5 @@ struct MainTabCoordinatorView: View {
                 routeStore.replaceStack(routes, for: tab)
             }
         )
-    }
-
-    @ViewBuilder
-    private func routeDestination(_ route: AppRoute) -> some View {
-        switch route {
-        case .chatThread(let threadID):
-            ChatView(
-                threadID: threadID,
-                stateStore: chatStateStore,
-                listViewModel: chatListViewModel,
-                detailViewModel: chatDetailViewModel,
-                taskManager: taskManager,
-                homeViewModel: homeViewModel,
-                aiSettingsViewModel: aiSettingsViewModel
-            )
-            .task(id: threadID) {
-                await chatListViewModel.selectAndPrepare(threadID: threadID)
-                await chatDetailViewModel.loadMessagesIfNeeded(for: threadID, lockBottomViewport: true)
-            }
-        case .deepTutorThread(let conversationID):
-            DeepTutorChatPage(conversationID: conversationID, viewModel: deepTutorChatViewModel)
-        case .aiSettings:
-            AISettingsView(viewModel: aiSettingsViewModel)
-        case .accountManagement:
-            AccountManagementView(viewModel: accountManagementViewModel, session: session)
-        case .homeMedicalList(let listRoute, let medicationFocus):
-            HomeMedicalRouteSupport.medicalListView(
-                route: listRoute,
-                medicationFocus: medicationFocus,
-                homeViewModel: homeViewModel,
-                dependencies: homeDependencies,
-                session: session
-            )
-        case .homeFamilyMedicineCabinet(let memberID):
-            HomeMedicalRouteSupport.familyMedicineCabinetView(
-                memberID: memberID,
-                homeViewModel: homeViewModel,
-                dependencies: homeDependencies
-            )
-        case .popularScienceArticle(let articleID):
-            PopularScienceArticleDetailView(
-                viewModel: popularScienceDependencies.makeDetailViewModel(articleID)
-            )
-        case .home, .knowledge, .chatList, .popularScience, .settings, .deepTutorList:
-            EmptyView()
-        }
     }
 }

@@ -7,10 +7,18 @@ final class TaskManager: ObservableObject {
 
     @Published private(set) var tasks: [HealthTask] = []
     @Published private(set) var lastSyncTime: Date?
+    @Published private(set) var lastSyncError: String?
+    @Published private(set) var isSyncing = false
+    @Published private(set) var executions: [TaskExecutionRecord] = []
+    @Published private(set) var isSubmittingExecution = false
+
+    let statisticsStore = TaskStatisticsStore()
+    lazy var executionRecorder: TaskExecutionRecorder = TaskExecutionRecorder(taskManager: self)
 
     private var taskService: TaskService?
     private let notificationManager: TaskNotificationManager
     private var logger: Logger
+    private var executionsByTaskID: [Int: [TaskExecutionRecord]] = [:]
 
     init(
         taskService: TaskService? = nil,
@@ -28,6 +36,23 @@ final class TaskManager: ObservableObject {
         self.lastSyncTime = taskService.lastSyncTime
     }
 
+    func task(for id: Int) -> HealthTask? {
+        tasks.first { $0.id == id }
+    }
+
+    func executions(for taskID: Int) -> [TaskExecutionRecord] {
+        executionsByTaskID[taskID] ?? []
+    }
+
+    func visibleTasks(filters: TaskFilterSelection, memberID: Int?) -> [HealthTask] {
+        let scoped = scopedTasks(memberID: memberID)
+        return TaskSorters.makeVisibleTasks(tasks: scoped, filters: filters)
+    }
+
+    func listOverview(memberID: Int?) -> TaskListOverview {
+        TaskListOverview.build(from: scopedTasks(memberID: memberID))
+    }
+
     func loadInitial(memberID: Int?) async {
         guard let taskService else {
             logger.warning("TaskManager 未配置 TaskService", module: .general)
@@ -36,12 +61,12 @@ final class TaskManager: ObservableObject {
 
         do {
             let tasks = try await taskService.fetchTasks(memberID: memberID, since: nil)
-
-            self.tasks = tasks.sorted(by: sortTask)
+            self.tasks = tasks.sorted { TaskSorters.compare($0, $1, now: Date()) }
 
             for task in tasks where task.status == .pending {
                 await notificationManager.registerTaskNotification(for: task)
             }
+            refreshStatisticsStore(memberID: memberID)
             logger.info("任务初始加载完成 tasks=\(tasks.count)", module: .general)
         } catch {
             logger.error("任务初始加载失败: \(error.localizedDescription)", module: .general)
@@ -51,12 +76,15 @@ final class TaskManager: ObservableObject {
     func syncIncremental(memberID: Int?) async {
         guard let taskService else { return }
 
+        isSyncing = true
+        defer { isSyncing = false }
+
         do {
             let payload = try await taskService.sync(memberID: memberID, since: lastSyncTime ?? taskService.lastSyncTime)
             merge(tasks: payload.tasks)
             lastSyncTime = payload.serverTime
+            lastSyncError = nil
 
-            // 同步后执行通知对齐：新增/更新任务重建提醒；完成/取消任务移除提醒。
             for task in payload.tasks {
                 switch task.status {
                 case .pending:
@@ -65,8 +93,21 @@ final class TaskManager: ObservableObject {
                     await notificationManager.removeNotification(for: task)
                 }
             }
+            refreshStatisticsStore(memberID: memberID)
         } catch {
+            lastSyncError = error.localizedDescription
             logger.error("任务增量同步失败: \(error.localizedDescription)", module: .general)
+        }
+    }
+
+    func loadExecutions(taskID: Int) async {
+        guard let taskService else { return }
+        do {
+            let records = try await taskService.fetchExecutions(taskID: taskID)
+            executionsByTaskID[taskID] = records
+            mergeExecutionRecords(records)
+        } catch {
+            logger.error("加载执行记录失败 task_id=\(taskID): \(error.localizedDescription)", module: .general)
         }
     }
 
@@ -77,11 +118,28 @@ final class TaskManager: ObservableObject {
         if task.status == .pending {
             await notificationManager.registerTaskNotification(for: task)
         }
+        refreshStatisticsStore(memberID: task.member)
     }
 
-    func updateTask(taskID: Int, payload: TaskUpdatePayload) async throws {
+    func updateTask(taskID: Int, payload: TaskUpdatePayload, scope: TaskRepeatEditScope = .instance) async throws {
         guard let taskService else { return }
-        let task = try await taskService.updateTask(taskID: taskID, payload: payload)
+        var finalPayload = payload
+        if scope == .plan, payload.repeatType == nil {
+            finalPayload = TaskUpdatePayload(
+                title: payload.title,
+                description: payload.description,
+                status: payload.status,
+                startTime: payload.startTime,
+                dueTime: payload.dueTime,
+                repeatType: tasks.first(where: { $0.id == taskID })?.repeatType,
+                priority: payload.priority,
+                extra: payload.extra,
+                taskMedical: payload.taskMedical,
+                taskExercise: payload.taskExercise,
+                taskDiet: payload.taskDiet
+            )
+        }
+        let task = try await taskService.updateTask(taskID: taskID, payload: finalPayload)
         merge(tasks: [task])
 
         if task.status == .pending {
@@ -89,16 +147,35 @@ final class TaskManager: ObservableObject {
         } else {
             await notificationManager.removeNotification(for: task)
         }
+        refreshStatisticsStore(memberID: task.member)
     }
 
-    func completeTask(taskID: Int) async throws {
+    func completeTask(taskID: Int, payload: TaskExecutionPayload? = nil) async throws {
         guard let taskService else { return }
-        _ = try await taskService.completeTask(taskID: taskID)
+        _ = try await taskService.completeTask(taskID: taskID, payload: payload)
         if let index = tasks.firstIndex(where: { $0.id == taskID }) {
             tasks[index].status = .completed
             tasks[index].updatedAt = Date()
             await notificationManager.removeNotification(for: tasks[index])
+            refreshStatisticsStore(memberID: tasks[index].member)
         }
+        await loadExecutions(taskID: taskID)
+    }
+
+    func submitExecution(taskID: Int, draft: TaskExecutionDraft) async throws {
+        guard let taskService else { return }
+        isSubmittingExecution = true
+        defer { isSubmittingExecution = false }
+
+        let record = try await taskService.submitExecution(taskID: taskID, payload: draft.makePayload())
+        mergeExecutionRecords([record])
+
+        if draft.status == .done, let index = tasks.firstIndex(where: { $0.id == taskID }) {
+            tasks[index].status = .completed
+            tasks[index].updatedAt = Date()
+            await notificationManager.removeNotification(for: tasks[index])
+        }
+        refreshStatisticsStore(memberID: tasks.first(where: { $0.id == taskID })?.member)
     }
 
     func cancelTask(taskID: Int) async throws {
@@ -108,7 +185,13 @@ final class TaskManager: ObservableObject {
             tasks[index].status = .canceled
             tasks[index].updatedAt = Date()
             await notificationManager.removeNotification(for: tasks[index])
+            refreshStatisticsStore(memberID: tasks[index].member)
         }
+    }
+
+    private func scopedTasks(memberID: Int?) -> [HealthTask] {
+        guard let memberID else { return tasks }
+        return tasks.filter { $0.member == memberID }
     }
 
     private func merge(tasks incoming: [HealthTask]) {
@@ -117,15 +200,34 @@ final class TaskManager: ObservableObject {
         for task in incoming {
             map[task.id] = task
         }
-        self.tasks = Array(map.values).sorted(by: sortTask)
+        self.tasks = Array(map.values).sorted { TaskSorters.compare($0, $1, now: Date()) }
     }
 
-    private func sortTask(_ lhs: HealthTask, _ rhs: HealthTask) -> Bool {
-        let lhsDate = lhs.dueTime ?? lhs.startTime ?? lhs.updatedAt
-        let rhsDate = rhs.dueTime ?? rhs.startTime ?? rhs.updatedAt
-        if lhsDate == rhsDate {
-            return lhs.updatedAt > rhs.updatedAt
+    private func mergeExecutionRecords(_ incoming: [TaskExecutionRecord]) {
+        guard incoming.isEmpty == false else { return }
+        var map = Dictionary(uniqueKeysWithValues: executions.map { ($0.id, $0) })
+        for record in incoming {
+            map[record.id] = record
+            var taskRecords = executionsByTaskID[record.task] ?? []
+            if let index = taskRecords.firstIndex(where: { $0.id == record.id }) {
+                taskRecords[index] = record
+            } else {
+                taskRecords.append(record)
+            }
+            executionsByTaskID[record.task] = taskRecords.sorted { $0.executedAt > $1.executedAt }
         }
-        return lhsDate < rhsDate
+        executions = Array(map.values).sorted { $0.executedAt > $1.executedAt }
     }
+
+    private func refreshStatisticsStore(memberID: Int?) {
+        statisticsStore.update(
+            tasks: scopedTasks(memberID: memberID),
+            executions: memberID.map { member in executions.filter { $0.member == member } } ?? executions
+        )
+    }
+}
+
+enum TaskRepeatEditScope: Sendable {
+    case instance
+    case plan
 }

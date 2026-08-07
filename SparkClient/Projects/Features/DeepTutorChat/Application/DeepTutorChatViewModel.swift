@@ -186,6 +186,66 @@ final class DeepTutorChatViewModel: ObservableObject {
         return created
     }
 
+    @discardableResult
+    func createQuickStartConversation(
+        mode: DeepTutorQuickStartMode,
+        source: String
+    ) async -> UUID? {
+        let start = Date()
+        logger.info(
+            "DeepTutor 快捷建会话开始 mode=\(mode.rawValue) source=\(DeepTutorChatLog.createSourceLabel(source))",
+            module: DeepTutorChatLog.module
+        )
+
+        isCreatingConversation = true
+        conversationCreationError = nil
+        defer { isCreatingConversation = false }
+
+        do {
+            let created = try await createConversation(title: mode.title, refreshList: false)
+            DeepTutorChatLog.titlePlaceholderCreated(
+                conversationID: created.id,
+                rawTitle: created.title,
+                displayTitle: DeepTutorSessionTitle.displayTitle(created.title)
+            )
+            DeepTutorDraftStore.saveDraft(mode.initialDraft, for: created.id)
+            optimisticallyInsertConversation(created)
+
+            if let verified = await repository.loadConversation(id: created.id) {
+                logger.info(
+                    "DeepTutor 快捷建会话写库校验通过 conversation=\(DeepTutorChatLog.shortID(created.id)) title=\(verified.title)",
+                    module: DeepTutorChatLog.module
+                )
+            } else {
+                logger.error(
+                    "quick_start_verify_missing_conversation id=\(DeepTutorChatLog.shortID(created.id))",
+                    module: DeepTutorChatLog.module
+                )
+                conversationCreationError = "对话已创建但本地数据库校验失败，请下拉刷新后重试"
+                return nil
+            }
+
+            selectedConversationID = created.id
+            await refreshConversations(source: source, expectedCreatedID: created.id)
+            await openConversation(created.id)
+
+            let cost = Date().timeIntervalSince(start)
+            logger.info(
+                "DeepTutor 快捷建会话完成 mode=\(mode.rawValue) conversation=\(DeepTutorChatLog.shortID(created.id)) cost=\(DeepTutorChatLog.format(cost))s",
+                module: DeepTutorChatLog.module
+            )
+            return created.id
+        } catch {
+            let cost = Date().timeIntervalSince(start)
+            logger.error(
+                "DeepTutor 快捷建会话失败 mode=\(mode.rawValue) cost=\(DeepTutorChatLog.format(cost))s error=\(error.localizedDescription)",
+                module: DeepTutorChatLog.module
+            )
+            conversationCreationError = error.localizedDescription
+            return nil
+        }
+    }
+
     func createAndOpenConversation(source: String = "toolbar") async {
         let start = Date()
         logger.info(
