@@ -16,6 +16,7 @@ final class ChatDetailViewModel: ObservableObject {
     private let ocrDocumentExtractor: OCRDocumentExtractor
     private let retryFailedMessageUseCase: RetryFailedMessageUseCase
     private let updateChatMessageBlocksUseCase: UpdateChatMessageBlocksUseCase
+    private let generateTitleUseCase: GenerateChatConversationTitleUseCase
     private let chatSyncSupervisor: ChatSyncSupervisor
     let toolInteractionCoordinator: ToolInteractionCoordinator
     private let notificationClient: any NotificationClient
@@ -31,6 +32,8 @@ final class ChatDetailViewModel: ObservableObject {
     private var currentGenerationCancellationToken: AIRuntimeCancellationToken?
     private var currentGenerationAssistantClientMessageID: UUID?
     private var finalizedInterruptedAssistantMessageIDs: Set<UUID> = []
+    private var titleGenerationTasks: [UUID: Task<Void, Never>] = [:]
+    private var titleGenerationGenerationByThreadID: [UUID: UInt64] = [:]
     private var cancellables = Set<AnyCancellable>()
     private let chatLoadCoordinator = ChatLoadCoordinator()
 
@@ -71,6 +74,7 @@ final class ChatDetailViewModel: ObservableObject {
         ocrDocumentExtractor: OCRDocumentExtractor,
         retryFailedMessageUseCase: RetryFailedMessageUseCase,
         updateChatMessageBlocksUseCase: UpdateChatMessageBlocksUseCase,
+        chatOrchestrator: ChatOrchestrator,
         chatSyncSupervisor: ChatSyncSupervisor,
         toolInteractionCoordinator: ToolInteractionCoordinator,
         notificationClient: any NotificationClient,
@@ -94,6 +98,12 @@ final class ChatDetailViewModel: ObservableObject {
         self.ocrDocumentExtractor = ocrDocumentExtractor
         self.retryFailedMessageUseCase = retryFailedMessageUseCase
         self.updateChatMessageBlocksUseCase = updateChatMessageBlocksUseCase
+        self.generateTitleUseCase = GenerateChatConversationTitleUseCase(
+            repository: chatRepository,
+            orchestrator: chatOrchestrator,
+            aiConfigCenter: aiConfigCenter,
+            logger: logger
+        )
         self.chatSyncSupervisor = chatSyncSupervisor
         self.toolInteractionCoordinator = toolInteractionCoordinator
         self.notificationClient = notificationClient
@@ -829,6 +839,7 @@ final class ChatDetailViewModel: ObservableObject {
             // 加载最终完整消息
             let finalMessages = await loadChatMessagesUseCase.execute(threadID: snapshot.thread.id)
             stateStore.setMessages(finalMessages, for: snapshot.thread.id)
+            maybeGenerateConversationTitle(threadID: snapshot.thread.id, isRegenerate: false)
             // 清空已发送的文本/附件
             stateStore.clearComposerTextAndAttachments(for: snapshot.thread.id)
             stateStore.setError(nil, for: snapshot.thread.id)
@@ -982,6 +993,7 @@ final class ChatDetailViewModel: ObservableObject {
             }
             let finalMessages = await loadChatMessagesUseCase.execute(threadID: snapshot.thread.id)
             stateStore.setMessages(finalMessages, for: snapshot.thread.id)
+            maybeGenerateConversationTitle(threadID: snapshot.thread.id, isRegenerate: true)
             stateStore.setError(nil, for: snapshot.thread.id)
             logger.info(
                 "重新生成回答完成，thread=\(shortID(snapshot.thread.id)), messages=\(snapshot.messages.count)",
@@ -1770,6 +1782,49 @@ final class ChatDetailViewModel: ObservableObject {
             message: message,
             block: updatedBlock
         )
+    }
+
+    private func maybeGenerateConversationTitle(threadID: UUID, isRegenerate: Bool) {
+        titleGenerationTasks[threadID]?.cancel()
+        let generation = (titleGenerationGenerationByThreadID[threadID] ?? 0) + 1
+        titleGenerationGenerationByThreadID[threadID] = generation
+
+        let cachedThread = stateStore.threadItems.first(where: { $0.id == threadID })?.thread
+        let cachedMessages = stateStore.persistedMessages(for: threadID)
+        let selectedModelName = stateStore.composerDraft(for: threadID).runtimeFlags.selectedChatModelName
+
+        titleGenerationTasks[threadID] = Task { @MainActor in
+            defer { titleGenerationTasks.removeValue(forKey: threadID) }
+            do {
+                let thread = await chatRepository.loadThread(id: threadID) ?? cachedThread
+                let currentTitle = thread?.title ?? ChatSessionTitle.defaultSentinel
+                let preferredModel = selectedModelName ?? thread?.currentModelName
+                let request = GenerateChatConversationTitleUseCase.Request(
+                    threadID: threadID,
+                    messages: cachedMessages,
+                    currentTitle: currentTitle,
+                    isRegenerate: isRegenerate,
+                    preferredModelName: preferredModel,
+                    languageCode: Locale.current.language.languageCode?.identifier
+                )
+                guard let result = try await generateTitleUseCase(request) else { return }
+                guard titleGenerationGenerationByThreadID[threadID] == generation else {
+                    logger.debug(
+                        "Chat 会话标题忽略过期结果，thread=\(shortID(threadID)), generation=\(generation)",
+                        module: .general
+                    )
+                    return
+                }
+                if let listItem = await loadChatThreadsUseCase.execute(threadID: result.thread.id) {
+                    stateStore.upsertThreadListItem(listItem)
+                }
+            } catch {
+                logger.warning(
+                    "Chat 会话标题生成失败，thread=\(shortID(threadID)), error=\(error.localizedDescription)",
+                    module: .general
+                )
+            }
+        }
     }
 
     // MARK: - Blocks 持久化与同步

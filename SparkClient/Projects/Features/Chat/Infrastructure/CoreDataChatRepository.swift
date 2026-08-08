@@ -117,6 +117,10 @@ actor CoreDataChatRepository: ChatRepository {
         await store.updateThreadCurrentModelName(threadID: threadID, currentModelName: currentModelName)
     }
 
+    func updateThreadTitle(threadID: UUID, title: String) async {
+        await store.updateThreadTitle(threadID: threadID, title: title)
+    }
+
     func updateThreadGenerationConfig(
         threadID: UUID,
         currentModelName: String?,

@@ -1,0 +1,125 @@
+import Foundation
+
+/// Sentinel and presentation helpers for Chat conversation titles.
+/// Mirrors DeepTutorChat title generation semantics while keeping Chat's domain independent.
+nonisolated enum ChatSessionTitle {
+    static let defaultSentinel = "New conversation"
+
+    nonisolated static func isPlaceholder(_ title: String?) -> Bool {
+        let value = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        if value.isEmpty || value == defaultSentinel {
+            return true
+        }
+        let localizedDefault = L10n.text("chat.default_thread_title")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return value == localizedDefault || value == "新对话" || value == "New chat" || value == "New Chat"
+    }
+
+    /// Localized label for navigation and conversation list rows.
+    nonisolated static func displayTitle(_ title: String?, languageCode: String? = nil) -> String {
+        if isPlaceholder(title) {
+            return isChinese(languageCode: languageCode) ? "新对话" : "New chat"
+        }
+        return (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Value injected into model prompts; placeholders are omitted.
+    nonisolated static func titleForPrompt(_ title: String?) -> String? {
+        guard isPlaceholder(title) == false else { return nil }
+        let trimmed = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    nonisolated static func clipText(_ text: String, limit: Int) -> String {
+        guard text.count > limit else { return text }
+        return String(text.prefix(limit))
+    }
+
+    nonisolated static func sanitizeSessionTitle(_ raw: String) -> String {
+        var text = removeThinkingTags(raw).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.isEmpty == false else { return "" }
+        text = text.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: true)
+            .first
+            .map(String.init) ?? text
+
+        let prefixes = [
+            "Title:",
+            "title:",
+            "TITLE:",
+            "Title-",
+            "标题：",
+            "标题:",
+            "对话标题：",
+            "对话标题:",
+        ]
+        let quotePairs: [(String, String)] = [
+            ("\"", "\""),
+            ("'", "'"),
+            ("“", "”"),
+            ("‘", "’"),
+            ("「", "」"),
+            ("『", "』"),
+            ("`", "`"),
+        ]
+        let trailingPunctuation = CharacterSet(charactersIn: ".。!！?？,，;；、 \t")
+
+        for _ in 0..<8 {
+            let previous = text
+            text = text.trimmingCharacters(in: CharacterSet(charactersIn: "*_#- \t"))
+            for prefix in prefixes where text.hasPrefix(prefix) {
+                text = String(text.dropFirst(prefix.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+                break
+            }
+            for (open, close) in quotePairs where text.count >= 2 && text.hasPrefix(open) && text.hasSuffix(close) {
+                text = String(text.dropFirst(open.count).dropLast(close.count))
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                break
+            }
+            text = text.trimmingCharacters(in: trailingPunctuation)
+            if text == previous { break }
+        }
+
+        if text.count > 80 {
+            text = String(text.prefix(80)).trimmingCharacters(in: trailingPunctuation)
+        }
+        return text
+    }
+
+    nonisolated static func fallbackTitle(from firstUserMessage: String) -> String {
+        let trimmed = firstUserMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else { return "" }
+        if trimmed.count > 50 {
+            return String(trimmed.prefix(50)) + "..."
+        }
+        return trimmed
+    }
+
+    nonisolated static func isChinese(languageCode: String?) -> Bool {
+        let code = (languageCode ?? Locale.current.language.languageCode?.identifier ?? "en").lowercased()
+        return code.hasPrefix("zh")
+    }
+
+    nonisolated private static func removeThinkingTags(_ raw: String) -> String {
+        var text = raw
+        let redactedThinking = "redacted_thinking"
+        let tagPairs: [(String, String)] = [
+            ("<" + "think" + ">", "</" + "think" + ">"),
+            ("<" + redactedThinking + ">", "</" + redactedThinking + ">"),
+            ("<thinking>", "</thinking>"),
+        ]
+        for (open, close) in tagPairs {
+            while let start = text.range(of: open, options: .caseInsensitive),
+                  let end = text.range(of: close, options: .caseInsensitive, range: start.upperBound..<text.endIndex) {
+                text.removeSubrange(start.lowerBound...end.upperBound)
+            }
+        }
+        return text
+    }
+}
+
+nonisolated enum ChatConversationTitleSource: String, Codable, Sendable {
+    case autoGenerated
+    case fallbackFromUserMessage
+    case manual
+    case repair
+}

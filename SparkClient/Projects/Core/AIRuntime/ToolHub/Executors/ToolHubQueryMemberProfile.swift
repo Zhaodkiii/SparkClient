@@ -2,7 +2,6 @@ import Foundation
 
 extension ToolHub {
     func runQueryMemberProfile(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
-        let queryType = (invocation.arguments["query_type"] ?? "summary").trimmingCharacters(in: .whitespacesAndNewlines)
         let targetMemberID: Int? = {
             if let value = invocation.arguments["member_id"], let id = Int(value) {
                 return id
@@ -12,6 +11,14 @@ extension ToolHub {
             }
             return context.memberID
         }()
+        let requestedFocus = [
+            invocation.arguments["focus"],
+            invocation.arguments["query_type"],
+            invocation.arguments["intent"],
+            invocation.arguments["purpose"],
+        ]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { $0.isEmpty == false }
 
         let memberID: Int
         if let targetMemberID {
@@ -38,50 +45,57 @@ extension ToolHub {
             )
         }
 
-        let member = data.member
-        let cases = data.medicalCases ?? []
-        let caseCount = cases.count
-        let symptomCount = (data.symptoms ?? []).count
-        let visitCount = (data.visits ?? []).count
-        let surgeryCount = (data.surgeries ?? []).count
-        let followUpCount = (data.followUps ?? []).count
-        let healthExamCount = (data.healthExamReports ?? []).count
-        let examCount = (data.examinationReports ?? []).count
-        let examDetailCount = 0
-        let reportCount = 0
-        let medicineBoxCount = (data.medicineBoxes ?? []).count
-        let prescriptionCount = (data.prescriptions ?? []).count
-        let medicationPlanCount = (data.medicationPlans ?? []).count
-        let medicationRecordCount = (data.todayMedicationRecords ?? []).count
-        let daysNote = invocation.arguments["days"] ?? "3"
-        let limitNote = invocation.arguments["limit"] ?? "3"
-
-        let output = """
-        query_type: \(queryType)
-        参数提示：days=\(daysNote)（用药窗口）, limit=\(limitNote)（病例条数上限，Spark 当前汇总为全量计数）
-        成员：\(member.name)
-        关系：\(member.relationship)
-        病例数：\(caseCount)
-        症状数：\(symptomCount)
-        就诊数：\(visitCount)
-        手术数：\(surgeryCount)
-        随访数：\(followUpCount)
-        检查报告数：\(examCount)
-        体检主表数：\(healthExamCount)
-        医技明细数：\(examDetailCount)
-        医疗报告数：\(reportCount)
-        药箱药品数：\(medicineBoxCount)
-        处方数：\(prescriptionCount)
-        服药计划数：\(medicationPlanCount)
-        今日服药记录数：\(medicationRecordCount)
-        """
+        let result = await MainActor.run {
+            DeepTutorQueryMemberProfileFormatter.makeAIResult(
+                data: data,
+                requestedFocus: requestedFocus
+            )
+        }
+        let output = result.content
 
         return ToolExecutionResult(
             toolName: SparkToolName.queryMemberProfile,
             outputText: output,
             sensitive: true,
-            shouldBypassModel: true
+            shouldBypassModel: true,
+            resolvedMemberID: memberID,
+            arguments: normalizedQueryMemberProfileArguments(
+                invocation: invocation,
+                memberID: memberID,
+                requestedFocus: requestedFocus,
+                metadata: result.metadata
+            )
         )
     }
 
+    private func normalizedQueryMemberProfileArguments(
+        invocation: ToolInvocation,
+        memberID: Int,
+        requestedFocus: String?,
+        metadata: [String: String]
+    ) -> [String: String] {
+        var arguments = invocation.arguments
+        arguments["member_id"] = String(memberID)
+        if let requestedFocus, requestedFocus.isEmpty == false {
+            arguments["focus"] = requestedFocus
+        }
+        for key in [
+            "member_name",
+            "relationship",
+            "gender",
+            "age",
+            "medical_case_count",
+            "symptom_count",
+            "surgery_count",
+            "follow_up_count",
+            "health_exam_report_count",
+            "examination_report_count",
+            "medication_plan_count",
+        ] {
+            if let value = metadata[key] {
+                arguments[key] = value
+            }
+        }
+        return arguments
+    }
 }

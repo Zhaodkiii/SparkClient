@@ -582,6 +582,7 @@ final class AppContainer {
             ocrDocumentExtractor: OCRDocumentExtractor(config: ocrConfiguration),
             retryFailedMessageUseCase: chat.retryFailedMessageUseCase,
             updateChatMessageBlocksUseCase: chat.updateChatMessageBlocksUseCase,
+            chatOrchestrator: chat.chatOrchestrator,
             chatSyncSupervisor: chat.chatSyncSupervisor,
             toolInteractionCoordinator: chat.toolInteractionCoordinator,
             notificationClient: notification.notificationClient,

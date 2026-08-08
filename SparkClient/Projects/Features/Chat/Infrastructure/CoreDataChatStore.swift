@@ -297,6 +297,24 @@ actor CoreDataChatStore {
         )
     }
 
+    func updateThreadTitle(threadID: UUID, title: String) async {
+        _ = try? await kernel.writeWithoutNotification { context, accountID in
+            guard let object = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: threadID) else {
+                return
+            }
+            object.setValue(title, forKey: "title")
+            object.setValue(Date(), forKey: "updatedAt")
+        }
+        await kernel.postChangeNotification(
+            ChatConversationChangeEvent(
+                threadID: threadID,
+                kind: .threadsChanged,
+                affectedClientMessageIDs: [],
+                affectsThreadList: true
+            )
+        )
+    }
+
     func updateThreadPinState(threadID: UUID, isPinned: Bool, pinnedAt: Date?) async {
         _ = try? await kernel.writeWithoutNotification { context, accountID in
             guard let object = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: threadID) else {
