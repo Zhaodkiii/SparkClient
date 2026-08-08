@@ -17,6 +17,8 @@ enum DeepTutorChatDebugExporter {
         viewModel: DeepTutorChatViewModel,
         conversationID: UUID,
         pageContext: DeepTutorChatDebugPageContext,
+        turnPlan: DeepTutorTurnPlan?,
+        turnEventReplay: [DeepTutorStreamEvent],
         logger: Logger
     ) {
         let state = viewModel.state
@@ -87,6 +89,10 @@ enum DeepTutorChatDebugExporter {
         let activePresentation = viewModel.toolInteractionCoordinator.activePresentation
         let presentationSummary = activePresentationSummary(activePresentation)
         let lastError = lastErrorMessage(from: state.phase)
+        let turnPlanSummary = turnPlanDebugSummary(turnPlan: turnPlan)
+        let consolidatedTurnEvents = consolidatedEvents(from: turnEventReplay)
+        let turnEventTypeCounts = Dictionary(grouping: consolidatedTurnEvents, by: \.type).mapValues(\.count)
+        let planFinalTools = turnPlan?.snapshot.finalAllowedToolNames?.joined(separator: ",") ?? "-"
 
         let summary = """
         DeepTutorChat 对话调试信息:
@@ -94,7 +100,14 @@ enum DeepTutorChatDebugExporter {
         - conversationTitle: \(conversation?.title ?? "-")
         - selectedConversationID: \(viewModel.selectedConversationID?.uuidString ?? "-")
         - currentModelName: \(conversation?.currentModelName ?? "未设置")
+        - composerSelectedModelName: \(viewModel.composerSelectedModelName ?? "default")
+        - selectedModelIdentity: \(viewModel.selectedModelIdentity?.rawValue ?? "-")
+        - selectedModelDisplayTitle: \(viewModel.selectedModelDisplayTitle ?? "-")
         - activeCapability: \(state.activeCapability.rawValue)
+        - turnPlan: \(turnPlanSummary)
+        - turnEventReplayCount: \(turnEventReplay.count)
+        - turnEventTypes: \(formatCountMap(turnEventTypeCounts))
+        - turnFinalAllowedTools: \(planFinalTools)
         - phase: \(state.phase.logLabel)
         - isStreaming: \(state.isStreaming)
         - draftLength: \(state.draftText.count)
@@ -835,5 +848,21 @@ enum DeepTutorChatDebugExporter {
         case .apiKeysSettings:
             return ActivePresentationSummary(snapshotLabel: "apiKeysSettings", questionCount: 0)
         }
+    }
+
+    private static func turnPlanDebugSummary(turnPlan: DeepTutorTurnPlan?) -> String {
+        guard let turnPlan else { return "none" }
+        let snapshot = turnPlan.snapshot
+        return [
+            "turn=\(turnPlan.turnID.uuidString.prefix(8))",
+            "capability=\(turnPlan.capability.rawValue)",
+            "stage=\(turnPlan.capabilityStage.rawValue)",
+            "resume=\(turnPlan.resumeMode.rawValue)",
+            "model=\(turnPlan.modelContext.selectedModelName)",
+            "identity=\(turnPlan.modelContext.identity.rawValue)",
+            "promptSource=\(snapshot.promptSource ?? turnPlan.modelContext.promptSource.rawValue)",
+            "resolution=\(turnPlan.modelResolutionMode == .replaySnapshot ? "replay_snapshot" : "live_send")",
+            "finalTools=\(snapshot.finalAllowedToolNames?.count ?? 0)",
+        ].joined(separator: ", ")
     }
 }

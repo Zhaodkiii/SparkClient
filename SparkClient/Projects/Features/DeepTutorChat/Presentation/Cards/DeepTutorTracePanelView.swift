@@ -41,7 +41,7 @@ struct DeepTutorTracePanelView: View {
             }
         }
         .padding(.bottom, 12)
-        .onChange(of: messageID) { _, _ in
+        .onChange(of: messageID) { _ in
             userPinnedExpansion = nil
         }
         .onChange(of: payload.isFinalAnswerPhase) { oldValue, newValue in

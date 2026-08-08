@@ -97,6 +97,7 @@ nonisolated struct DeepTutorConversation: Identifiable, Codable, Equatable, Send
     var temperature: Double?
     var topP: Double
     var maxMessages: Int
+    var rolePrompt: String?
     var memberID: Int?
 
     nonisolated var generationSettings: DeepTutorConversationGenerationSettings {
@@ -118,6 +119,7 @@ nonisolated struct DeepTutorConversation: Identifiable, Codable, Equatable, Send
         temperature: Double? = nil,
         topP: Double = 1.0,
         maxMessages: Int = 20,
+        rolePrompt: String? = nil,
         memberID: Int? = nil
     ) {
         self.id = id
@@ -129,6 +131,7 @@ nonisolated struct DeepTutorConversation: Identifiable, Codable, Equatable, Send
         self.temperature = temperature
         self.topP = topP
         self.maxMessages = maxMessages
+        self.rolePrompt = rolePrompt
         self.memberID = memberID
     }
 }

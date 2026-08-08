@@ -21,10 +21,105 @@ enum DeepTutorRuntimeRequestBuilder: Sendable {
         let systemPrompt: String
         let inference: ChatOrchestratorInferenceOptions
         let toolPolicy: DeepTutorToolPolicyResult
-        let preferredModelName: String?
+        let preferredModelName: String
         let temperature: Double?
         let topP: Double?
+        let maxTokens: Int?
         let maxMessages: Int?
+        let modelContext: DeepTutorResolvedModelContext
+        let promptSource: DeepTutorPromptSource
+        let finalAllowedToolNames: Set<String>
+        let toolMergeReason: String
+    }
+
+    struct FinalizedInferencePrompt: Sendable {
+        let toolPolicy: DeepTutorToolPolicyResult
+        let finalAllowedToolNames: Set<String>
+        let systemPrompt: String
+        let inference: ChatOrchestratorInferenceOptions
+        let promptSource: DeepTutorPromptSource
+        let temperature: Double?
+        let maxTokens: Int?
+        let maxMessages: Int?
+        let toolMergeReason: String
+    }
+
+    nonisolated static func finalize(
+        baseToolPolicy: DeepTutorToolPolicyResult,
+        modelContext: DeepTutorResolvedModelContext,
+        capability: DeepTutorCapability,
+        conversationID: UUID,
+        conversationTitle: String,
+        conversation: DeepTutorConversation?,
+        settings: DeepTutorConversationGenerationSettings,
+        resolvedConfigMaxTokens: Int?
+    ) -> FinalizedInferencePrompt {
+        let modelRestriction = DeepTutorModelToolRestrictionResolver.restriction(
+            from: modelContext.aiToolScenarios
+        )
+        let merged = DeepTutorModelToolMerger.merge(
+            deepTutorPolicy: baseToolPolicy,
+            modelRestriction: modelRestriction
+        )
+        let toolPolicy = merged.policy
+        let finalAllowedToolNames = merged.finalAllowedToolNames
+
+        DeepTutorChatLog.modelToolPolicyMerged(
+            conversationID: conversationID,
+            deepTutorTools: baseToolPolicy.allowedToolNames.sorted(),
+            modelTools: modelContext.modelAllowedToolNames?.sorted() ?? [],
+            finalTools: finalAllowedToolNames.sorted(),
+            reason: merged.mergeReason
+        )
+
+        let healthPromptMode = DeepTutorPromptBuilder.healthPromptMode(
+            allowedToolNames: finalAllowedToolNames
+        )
+        let weatherPromptMode = DeepTutorPromptBuilder.weatherPromptMode(
+            allowedToolNames: finalAllowedToolNames
+        )
+        let promptBuilt = DeepTutorPromptMerger.buildSystemPrompt(
+            context: modelContext,
+            capability: capability,
+            conversationTitle: conversationTitle,
+            sessionPrompt: conversation?.rolePrompt,
+            healthPromptMode: healthPromptMode,
+            weatherPromptMode: weatherPromptMode
+        )
+        DeepTutorChatLog.promptResolved(
+            conversationID: conversationID,
+            source: promptBuilt.promptSource.rawValue,
+            identity: modelContext.identity.rawValue,
+            capability: capability.rawValue,
+            finalLength: promptBuilt.systemPrompt.count
+        )
+
+        let inference = ChatOrchestratorInferenceOptions(
+            useTools: toolPolicy.useTools,
+            useKnowledgeBag: toolPolicy.useKnowledgeBag,
+            useWebSearch: toolPolicy.useWebSearch,
+            reasoningEnabled: true,
+            reasoningEffortTier: 1,
+            allowedToolNames: finalAllowedToolNames
+        )
+
+        let generation = DeepTutorModelContextResolver.generationParameters(
+            context: modelContext,
+            conversation: conversation,
+            resolvedConfigMaxTokens: resolvedConfigMaxTokens
+        )
+
+        return FinalizedInferencePrompt(
+            toolPolicy: toolPolicy,
+            finalAllowedToolNames: finalAllowedToolNames,
+            systemPrompt: promptBuilt.systemPrompt,
+            inference: inference,
+            promptSource: promptBuilt.promptSource,
+            temperature: generation.temperature,
+            maxTokens: generation.maxTokens,
+            maxMessages: generation.maxMessages,
+            toolMergeReason: merged.mergeReason
+        )
     }
 
     nonisolated static func build(
@@ -32,9 +127,11 @@ enum DeepTutorRuntimeRequestBuilder: Sendable {
         capability: DeepTutorCapability,
         conversationID: UUID,
         conversationTitle: String,
+        conversation: DeepTutorConversation?,
         settings: DeepTutorConversationGenerationSettings,
+        modelContext: DeepTutorResolvedModelContext,
         visibleHistory: [DeepTutorMessage],
-        preferredModelName: String? = nil,
+        resolvedConfigMaxTokens: Int? = nil,
         mountContext: DeepTutorToolMountContext? = nil
     ) -> BuiltRequest {
         var resolvedMountContext = mountContext ?? DeepTutorToolMountContext.default(
@@ -48,7 +145,20 @@ enum DeepTutorRuntimeRequestBuilder: Sendable {
         resolvedMountContext.conversationID = conversationID
         resolvedMountContext.conversationTitle = conversationTitle
 
-        let toolPolicy = DeepTutorToolPolicyResolver.resolve(resolvedMountContext)
+        let baseToolPolicy = DeepTutorToolPolicyResolver.resolve(resolvedMountContext)
+        let finalized = finalize(
+            baseToolPolicy: baseToolPolicy,
+            modelContext: modelContext,
+            capability: capability,
+            conversationID: conversationID,
+            conversationTitle: conversationTitle,
+            conversation: conversation,
+            settings: settings,
+            resolvedConfigMaxTokens: resolvedConfigMaxTokens
+        )
+        let toolPolicy = finalized.toolPolicy
+        let finalAllowedToolNames = finalized.finalAllowedToolNames
+
         DeepTutorChatLog.toolPolicyCompose(
             conversationID: conversationID,
             requestedTools: toolPolicy.requestedCanonicalTools,
@@ -77,31 +187,9 @@ enum DeepTutorRuntimeRequestBuilder: Sendable {
             policy: toolPolicy
         )
 
-        let healthPromptMode = DeepTutorPromptBuilder.healthPromptMode(
-            allowedToolNames: toolPolicy.allowedToolNames
-        )
-        let weatherPromptMode = DeepTutorPromptBuilder.weatherPromptMode(
-            allowedToolNames: toolPolicy.allowedToolNames
-        )
-        let prompt = DeepTutorPromptBuilder.build(
-            capability: capability,
-            conversationTitle: conversationTitle,
-            rolePrompt: nil,
-            healthPromptMode: healthPromptMode,
-            weatherPromptMode: weatherPromptMode
-        )
         let promptSchemaMismatches = DeepTutorPromptSchemaConsistencyChecker.mismatchedTools(
-            prompt: prompt.systemPrompt,
-            schemaNames: DeepTutorToolPolicyResolver.effectiveToolSchemaNames(
-                inference: ChatOrchestratorInferenceOptions(
-                    useTools: toolPolicy.useTools,
-                    useKnowledgeBag: toolPolicy.useKnowledgeBag,
-                    useWebSearch: toolPolicy.useWebSearch,
-                    reasoningEnabled: true,
-                    reasoningEffortTier: 1,
-                    allowedToolNames: toolPolicy.allowedToolNames
-                )
-            )
+            prompt: finalized.systemPrompt,
+            schemaNames: DeepTutorToolPolicyResolver.effectiveToolSchemaNames(inference: finalized.inference)
         )
         if promptSchemaMismatches.isEmpty == false {
             DeepTutorChatLog.toolPolicyPromptSchemaMismatch(
@@ -110,31 +198,24 @@ enum DeepTutorRuntimeRequestBuilder: Sendable {
             )
         }
 
-        let inference = ChatOrchestratorInferenceOptions(
-            useTools: toolPolicy.useTools,
-            useKnowledgeBag: toolPolicy.useKnowledgeBag,
-            useWebSearch: toolPolicy.useWebSearch,
-            reasoningEnabled: true,
-            reasoningEffortTier: 1,
-            allowedToolNames: toolPolicy.allowedToolNames
-        )
-
         let history = visibleHistory
             .filter { $0.role != .system && $0.isDeleted == false }
             .map(chatMessage(from:))
 
-        let resolvedPreferred = preferredModelName
-            ?? settings.currentModelName
-
         return BuiltRequest(
             history: history,
-            systemPrompt: prompt.systemPrompt,
-            inference: inference,
+            systemPrompt: finalized.systemPrompt,
+            inference: finalized.inference,
             toolPolicy: toolPolicy,
-            preferredModelName: resolvedPreferred,
-            temperature: settings.temperature,
+            preferredModelName: modelContext.selectedModelName,
+            temperature: finalized.temperature,
             topP: settings.topP,
-            maxMessages: settings.maxMessages
+            maxTokens: finalized.maxTokens,
+            maxMessages: finalized.maxMessages,
+            modelContext: modelContext,
+            promptSource: finalized.promptSource,
+            finalAllowedToolNames: finalAllowedToolNames,
+            toolMergeReason: finalized.toolMergeReason
         )
     }
 

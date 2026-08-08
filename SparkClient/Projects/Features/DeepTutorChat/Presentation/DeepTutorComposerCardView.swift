@@ -5,7 +5,12 @@ struct DeepTutorComposerCardView: View {
     @Binding var text: String
     @Binding var isFocused: Bool
     @Binding var capability: DeepTutorCapability
-    let modelName: String?
+    @Binding var selectedModelName: String?
+    let modelRows: [AIScenarioRemoteModelRow]
+    let modelDisplayTitle: String?
+    let modelIconName: String
+    let isModelPickerDisabled: Bool
+    let onPersistSelectedModel: (String?) -> Void
     let hasMessages: Bool
     let isStreaming: Bool
     let references: [DeepTutorContextReference]
@@ -19,6 +24,17 @@ struct DeepTutorComposerCardView: View {
     let onStop: () -> Void
 
     @State private var isDragging = false
+    @State private var isKeyboardVisible = false
+
+    private var selectedModelBinding: Binding<String?> {
+        Binding(
+            get: { selectedModelName },
+            set: { newValue in
+                selectedModelName = newValue
+                onPersistSelectedModel(newValue)
+            }
+        )
+    }
 
     private var minInputHeight: CGFloat {
         hasMessages ? DeepTutorPalette.composerFilledMinHeight : DeepTutorPalette.composerEmptyMinHeight
@@ -46,7 +62,7 @@ struct DeepTutorComposerCardView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 4) {
             DeepTutorComposerAttachmentPreviewBandView(
                 drafts: attachmentDrafts,
                 onUpload: onUploadAttachment,
@@ -74,7 +90,8 @@ struct DeepTutorComposerCardView: View {
 
             DeepTutorComposerToolbarView(
                 capability: $capability,
-                modelName: modelName,
+                modelDisplayTitle: modelDisplayTitle,
+                modelIconName: modelIconName,
                 isStreaming: isStreaming,
                 canSend: canSend,
                 canPickAttachments: canPickAttachments,
@@ -82,6 +99,15 @@ struct DeepTutorComposerCardView: View {
                 onSend: sendWithKeyboardDismiss,
                 onStop: onStop
             )
+
+            if !isKeyboardVisible {
+                ChatComposerModelPickerRow(
+                    models: modelRows,
+                    selectedModelName: selectedModelBinding
+                )
+                .disabled(isModelPickerDisabled)
+                .opacity(isModelPickerDisabled ? 0.55 : 1)
+            }
         }
         .background(
             RoundedRectangle(cornerRadius: DeepTutorPalette.composerCornerRadius, style: .continuous)
@@ -102,5 +128,15 @@ struct DeepTutorComposerCardView: View {
         }
         .deepTutorComposerCardShadow()
         .onDrop(of: [.fileURL], isTargeted: $isDragging) { _ in false }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isKeyboardVisible = true
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isKeyboardVisible = false
+            }
+        }
     }
 }

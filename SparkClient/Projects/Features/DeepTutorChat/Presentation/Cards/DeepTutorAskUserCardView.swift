@@ -101,7 +101,7 @@ struct DeepTutorAskUserCardView: View {
                             .textFieldStyle(.roundedBorder)
                             .font(.system(size: DeepTutorPalette.askUserOptionTitleFontSize))
                             .padding(.top, 4)
-                            .onChange(of: freeTextAnswers[question.id, default: ""]) { _, newValue in
+                            .onChange(of: freeTextAnswers[question.id, default: ""]) { newValue in
                                 if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
                                     if question.multiSelect == false {
                                         selectedOptionIDs.removeValue(forKey: question.id)

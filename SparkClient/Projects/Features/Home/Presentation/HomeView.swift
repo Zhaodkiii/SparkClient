@@ -10,8 +10,6 @@ struct HomeView: View {
     @ObservedObject var externalMedicalDocumentImportCoordinator: ExternalMedicalDocumentImportCoordinator
     @ObservedObject var launchIntentCoordinator: LaunchIntentCoordinator
     let session: UserSession
-    var ios26DashboardActionHandler: IOS26HomeDashboardActionHandler?
-    var deepTutorChatViewModel: DeepTutorChatViewModel?
 
     init(
         dependencies: HomeFeatureDependencies,
@@ -19,9 +17,7 @@ struct HomeView: View {
         medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel,
         externalMedicalDocumentImportCoordinator: ExternalMedicalDocumentImportCoordinator,
         launchIntentCoordinator: LaunchIntentCoordinator,
-        session: UserSession,
-        ios26DashboardActionHandler: IOS26HomeDashboardActionHandler? = nil,
-        deepTutorChatViewModel: DeepTutorChatViewModel? = nil
+        session: UserSession
     ) {
         self.dependencies = dependencies
         self.viewModel = viewModel
@@ -29,8 +25,6 @@ struct HomeView: View {
         self.externalMedicalDocumentImportCoordinator = externalMedicalDocumentImportCoordinator
         self.launchIntentCoordinator = launchIntentCoordinator
         self.session = session
-        self.ios26DashboardActionHandler = ios26DashboardActionHandler
-        self.deepTutorChatViewModel = deepTutorChatViewModel
     }
 
     private var launchIntentConsumer: HomeLaunchIntentConsumer {
@@ -47,29 +41,7 @@ struct HomeView: View {
         homeContent
     }
 
-    @ViewBuilder
     private var homeScrollBody: some View {
-        if #available(iOS 26.0, *),
-           let actionHandler = ios26DashboardActionHandler,
-           let deepTutorChatViewModel {
-            IOS26HomeDashboardView(
-                viewModel: viewModel,
-                taskManager: dependencies.taskManager,
-                session: session,
-                actionHandler: actionHandler,
-                deepTutorChatViewModel: deepTutorChatViewModel
-            )
-            .refreshable {
-                await viewModel.refresh()
-                await dependencies.taskManager.syncIncremental(memberID: viewModel.selectedMemberID)
-            }
-            .navigationBarHidden(true)
-        } else {
-            legacyHomeScrollBody
-        }
-    }
-
-    private var legacyHomeScrollBody: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
 //                headerCard

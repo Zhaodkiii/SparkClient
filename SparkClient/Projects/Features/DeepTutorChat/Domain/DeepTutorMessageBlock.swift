@@ -598,6 +598,18 @@ nonisolated struct DeepTutorRequestSnapshot: Codable, Equatable, Sendable {
     var toolSnapshot: DeepTutorPerTurnToolSnapshot?
     var attachments: [DeepTutorAttachment]
     var searchConfigRevision: SearchRuntimeConfigRevision?
+    var selectedModelName: String?
+    var selectedModelIdentity: String?
+    var selectedAgentBaseModelName: String?
+    var modelAllowedToolNames: [String]?
+    var finalAllowedToolNames: [String]?
+    var promptSource: String?
+    var resolvedTemperature: Double?
+    var resolvedMaxTokens: Int?
+    var turnID: UUID?
+    var resumeMode: String?
+    var capabilityStage: String?
+    var modelResolutionMode: String?
 
     init(
         references: [DeepTutorContextReference] = [],
@@ -605,7 +617,19 @@ nonisolated struct DeepTutorRequestSnapshot: Codable, Equatable, Sendable {
         enabledTools: [String]? = nil,
         toolSnapshot: DeepTutorPerTurnToolSnapshot? = nil,
         attachments: [DeepTutorAttachment] = [],
-        searchConfigRevision: SearchRuntimeConfigRevision? = nil
+        searchConfigRevision: SearchRuntimeConfigRevision? = nil,
+        selectedModelName: String? = nil,
+        selectedModelIdentity: String? = nil,
+        selectedAgentBaseModelName: String? = nil,
+        modelAllowedToolNames: [String]? = nil,
+        finalAllowedToolNames: [String]? = nil,
+        promptSource: String? = nil,
+        resolvedTemperature: Double? = nil,
+        resolvedMaxTokens: Int? = nil,
+        turnID: UUID? = nil,
+        resumeMode: String? = nil,
+        capabilityStage: String? = nil,
+        modelResolutionMode: String? = nil
     ) {
         self.references = references
         self.capability = capability
@@ -613,10 +637,26 @@ nonisolated struct DeepTutorRequestSnapshot: Codable, Equatable, Sendable {
         self.toolSnapshot = toolSnapshot
         self.attachments = attachments
         self.searchConfigRevision = searchConfigRevision
+        self.selectedModelName = selectedModelName
+        self.selectedModelIdentity = selectedModelIdentity
+        self.selectedAgentBaseModelName = selectedAgentBaseModelName
+        self.modelAllowedToolNames = modelAllowedToolNames
+        self.finalAllowedToolNames = finalAllowedToolNames
+        self.promptSource = promptSource
+        self.resolvedTemperature = resolvedTemperature
+        self.resolvedMaxTokens = resolvedMaxTokens
+        self.turnID = turnID
+        self.resumeMode = resumeMode
+        self.capabilityStage = capabilityStage
+        self.modelResolutionMode = modelResolutionMode
     }
 
     enum CodingKeys: String, CodingKey {
         case references, capability, enabledTools, toolSnapshot, attachments, searchConfigRevision
+        case selectedModelName, selectedModelIdentity, selectedAgentBaseModelName
+        case modelAllowedToolNames, finalAllowedToolNames, promptSource
+        case resolvedTemperature, resolvedMaxTokens
+        case turnID, resumeMode, capabilityStage, modelResolutionMode
     }
 
     init(from decoder: Decoder) throws {
@@ -627,6 +667,18 @@ nonisolated struct DeepTutorRequestSnapshot: Codable, Equatable, Sendable {
         toolSnapshot = try container.decodeIfPresent(DeepTutorPerTurnToolSnapshot.self, forKey: .toolSnapshot)
         attachments = try container.decodeIfPresent([DeepTutorAttachment].self, forKey: .attachments) ?? []
         searchConfigRevision = try container.decodeIfPresent(SearchRuntimeConfigRevision.self, forKey: .searchConfigRevision)
+        selectedModelName = try container.decodeIfPresent(String.self, forKey: .selectedModelName)
+        selectedModelIdentity = try container.decodeIfPresent(String.self, forKey: .selectedModelIdentity)
+        selectedAgentBaseModelName = try container.decodeIfPresent(String.self, forKey: .selectedAgentBaseModelName)
+        modelAllowedToolNames = try container.decodeIfPresent([String].self, forKey: .modelAllowedToolNames)
+        finalAllowedToolNames = try container.decodeIfPresent([String].self, forKey: .finalAllowedToolNames)
+        promptSource = try container.decodeIfPresent(String.self, forKey: .promptSource)
+        resolvedTemperature = try container.decodeIfPresent(Double.self, forKey: .resolvedTemperature)
+        resolvedMaxTokens = try container.decodeIfPresent(Int.self, forKey: .resolvedMaxTokens)
+        turnID = try container.decodeIfPresent(UUID.self, forKey: .turnID)
+        resumeMode = try container.decodeIfPresent(String.self, forKey: .resumeMode)
+        capabilityStage = try container.decodeIfPresent(String.self, forKey: .capabilityStage)
+        modelResolutionMode = try container.decodeIfPresent(String.self, forKey: .modelResolutionMode)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -637,6 +689,18 @@ nonisolated struct DeepTutorRequestSnapshot: Codable, Equatable, Sendable {
         try container.encodeIfPresent(toolSnapshot, forKey: .toolSnapshot)
         try container.encode(attachments, forKey: .attachments)
         try container.encodeIfPresent(searchConfigRevision, forKey: .searchConfigRevision)
+        try container.encodeIfPresent(selectedModelName, forKey: .selectedModelName)
+        try container.encodeIfPresent(selectedModelIdentity, forKey: .selectedModelIdentity)
+        try container.encodeIfPresent(selectedAgentBaseModelName, forKey: .selectedAgentBaseModelName)
+        try container.encodeIfPresent(modelAllowedToolNames, forKey: .modelAllowedToolNames)
+        try container.encodeIfPresent(finalAllowedToolNames, forKey: .finalAllowedToolNames)
+        try container.encodeIfPresent(promptSource, forKey: .promptSource)
+        try container.encodeIfPresent(resolvedTemperature, forKey: .resolvedTemperature)
+        try container.encodeIfPresent(resolvedMaxTokens, forKey: .resolvedMaxTokens)
+        try container.encodeIfPresent(turnID, forKey: .turnID)
+        try container.encodeIfPresent(resumeMode, forKey: .resumeMode)
+        try container.encodeIfPresent(capabilityStage, forKey: .capabilityStage)
+        try container.encodeIfPresent(modelResolutionMode, forKey: .modelResolutionMode)
     }
 }
 

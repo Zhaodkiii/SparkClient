@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// iOS 26 正式主导航：系统 Liquid Glass 浮动 TabBar，底部 Tab 为首页、对话、DeepTutor、搜索（IOS26-TABBAR-000002）。
+/// iOS 26 正式主导航：系统 Liquid Glass 浮动 TabBar，底部 Tab 为首页、对话、DeepTutor、搜索、设置（IOS26-TABBAR-000002）。
 @available(iOS 26.0, *)
 struct IOS26TabBarView: View {
     let session: UserSession
@@ -25,6 +25,8 @@ struct IOS26TabBarView: View {
     let pushAdapter: PushAdapter
     @ObservedObject var externalMedicalDocumentImportCoordinator: ExternalMedicalDocumentImportCoordinator
     @ObservedObject var launchIntentCoordinator: LaunchIntentCoordinator
+
+    @State private var showsDeviceAccountUpgradeSheet = false
 
     private var destinationBuilder: MainTabRouteDestinationBuilder {
         MainTabRouteDestinationBuilder(
@@ -68,8 +70,25 @@ struct IOS26TabBarView: View {
             Tab(L10n.text("tab.search"), systemImage: "magnifyingglass", value: AppRouteStore.RootTab.search, role: .search) {
                 IOS26SearchTabView()
             }
+
+            Tab(L10n.text("tab.settings"), systemImage: "gearshape.fill", value: AppRouteStore.RootTab.settings) {
+                settingsContainer
+            }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
+        .sheet(isPresented: $showsDeviceAccountUpgradeSheet) {
+            LoginView(viewModel: upgradeLoginViewModel, mode: .upgradeDeviceAccount)
+        }
+        .onChange(of: session.isDeviceAccount) { _, isDeviceAccount in
+            if isDeviceAccount == false {
+                showsDeviceAccountUpgradeSheet = false
+            }
+        }
+        .onChange(of: session.accountID) { _, _ in
+            if session.isDeviceAccount == false {
+                showsDeviceAccountUpgradeSheet = false
+            }
+        }
         .onAppear {
             launchIntentCoordinator.updateReadiness { $0.mainTabReady = true }
         }
@@ -80,14 +99,15 @@ struct IOS26TabBarView: View {
 
     private var homeContainer: some View {
         CompatibleRouteNavigationContainer(path: routePath(.home)) {
-            HomeView(
+            IOS26HomeView(
                 dependencies: homeDependencies,
                 viewModel: homeViewModel,
+                taskManager: taskManager,
                 medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
                 externalMedicalDocumentImportCoordinator: externalMedicalDocumentImportCoordinator,
                 launchIntentCoordinator: launchIntentCoordinator,
                 session: session,
-                ios26DashboardActionHandler: homeDashboardActionHandler,
+                actionHandler: homeDashboardActionHandler,
                 deepTutorChatViewModel: deepTutorChatViewModel
             )
         } destination: { route in
@@ -116,6 +136,28 @@ struct IOS26TabBarView: View {
             DeepTutorConversationListPage(viewModel: deepTutorChatViewModel)
         } destination: { route in
             destinationBuilder.destination(route)
+        }
+    }
+
+    private var settingsContainer: some View {
+        CompatibleRouteNavigationContainer(path: routePath(.settings)) {
+            SettingsView(
+                viewModel: settingsViewModel,
+                aiSettingsViewModel: aiSettingsViewModel,
+                versionUpdateCoordinator: versionUpdateCoordinator,
+                session: session,
+                onAccountEntryTap: handleAccountEntryTap
+            )
+        } destination: { route in
+            destinationBuilder.destination(route)
+        }
+    }
+
+    private func handleAccountEntryTap() {
+        if session.isDeviceAccount {
+            showsDeviceAccountUpgradeSheet = true
+        } else {
+            routeStore.route(to: .accountManagement)
         }
     }
 

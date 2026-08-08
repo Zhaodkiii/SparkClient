@@ -4,7 +4,12 @@ struct DeepTutorComposerView: View {
     @Binding var text: String
     @Binding var isFocused: Bool
     @Binding var capability: DeepTutorCapability
-    let modelName: String?
+    @Binding var selectedModelName: String?
+    let modelRows: [AIScenarioRemoteModelRow]
+    let modelDisplayTitle: String?
+    let modelIconName: String
+    let isModelPickerDisabled: Bool
+    let onPersistSelectedModel: (String?) -> Void
     let hasMessages: Bool
     let isStreaming: Bool
     let references: [DeepTutorContextReference]
@@ -30,7 +35,12 @@ struct DeepTutorComposerView: View {
                 text: $text,
                 isFocused: $isFocused,
                 capability: $capability,
-                modelName: modelName,
+                selectedModelName: $selectedModelName,
+                modelRows: modelRows,
+                modelDisplayTitle: modelDisplayTitle,
+                modelIconName: modelIconName,
+                isModelPickerDisabled: isModelPickerDisabled,
+                onPersistSelectedModel: onPersistSelectedModel,
                 hasMessages: hasMessages,
                 isStreaming: isStreaming,
                 references: references,

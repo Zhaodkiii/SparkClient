@@ -1074,6 +1074,91 @@ nonisolated enum DeepTutorChatLog {
         )
     }
 
+    nonisolated static func modelToolPolicyMerged(
+        conversationID: UUID,
+        deepTutorTools: [String],
+        modelTools: [String],
+        finalTools: [String],
+        reason: String
+    ) {
+        logInfo(
+            "deeptutor.tool_policy.model_restricted conversation=\(shortID(conversationID)) deepTutor=\(deepTutorTools.joined(separator: ",")) model=\(modelTools.isEmpty ? "-" : modelTools.joined(separator: ",")) final=\(finalTools.isEmpty ? "-" : finalTools.joined(separator: ",")) reason=\(reason)"
+        )
+    }
+
+    nonisolated static func modelContextResolved(
+        conversationID: UUID,
+        selected: String,
+        identity: String,
+        baseModelName: String?,
+        supportsTools: Bool,
+        source: String
+    ) {
+        logInfo(
+            "deeptutor.model_context.resolved conversation=\(shortID(conversationID)) selected=\(selected) identity=\(identity) base=\(baseModelName ?? "-") supportsTools=\(supportsTools) source=\(source)"
+        )
+    }
+
+    nonisolated static func promptResolved(
+        conversationID: UUID,
+        source: String,
+        identity: String,
+        capability: String,
+        finalLength: Int
+    ) {
+        logInfo(
+            "deeptutor.prompt.resolved conversation=\(shortID(conversationID)) source=\(source) identity=\(identity) capability=\(capability) finalLength=\(finalLength)"
+        )
+    }
+
+    nonisolated static func turnPlanPrepared(
+        conversationID: UUID,
+        turnID: UUID,
+        capability: String,
+        stage: String,
+        resumeMode: String,
+        selectedModel: String,
+        identity: String,
+        promptSource: String,
+        finalToolCount: Int
+    ) {
+        logInfo(
+            "deeptutor.turn_plan.prepared conversation=\(shortID(conversationID)) turn=\(shortID(turnID)) capability=\(capability) stage=\(stage) resume=\(resumeMode) model=\(selectedModel) identity=\(identity) promptSource=\(promptSource) finalTools=\(finalToolCount)"
+        )
+    }
+
+    nonisolated static func modelPickerLoaded(
+        conversationID: UUID,
+        count: Int,
+        defaultModel: String?
+    ) {
+        logInfo(
+            "deeptutor.model_picker.loaded conversation=\(shortID(conversationID)) count=\(count) default=\(defaultModel ?? "-")"
+        )
+    }
+
+    nonisolated static func modelPickerSelected(
+        conversationID: UUID,
+        selected: String?,
+        identity: String?,
+        source: String
+    ) {
+        logInfo(
+            "deeptutor.model_picker.selected conversation=\(shortID(conversationID)) selected=\(selected ?? "default") identity=\(identity ?? "-") source=\(source)"
+        )
+    }
+
+    nonisolated static func generationParametersResolved(
+        conversationID: UUID,
+        identity: String,
+        temperature: Double?,
+        maxTokens: Int?
+    ) {
+        logInfo(
+            "deeptutor.generation.parameters conversation=\(shortID(conversationID)) identity=\(identity) temperature=\(temperature.map { String($0) } ?? "-") maxTokens=\(maxTokens.map(String.init) ?? "-")"
+        )
+    }
+
     nonisolated static func toolIntentDetected(
         conversationID: UUID,
         intentHints: [String],

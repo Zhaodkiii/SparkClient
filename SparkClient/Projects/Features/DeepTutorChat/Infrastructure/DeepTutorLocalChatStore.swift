@@ -190,6 +190,38 @@ actor DeepTutorLocalChatStore {
         _ = updated
     }
 
+    func updateConversationModel(
+        conversationID: UUID,
+        currentModelName: String?
+    ) async throws -> DeepTutorConversation {
+        let now = Date()
+        let trimmed = currentModelName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let persisted = (trimmed?.isEmpty == false) ? trimmed : nil
+        logger.info(
+            "DeepTutor 仓储：updateConversationModel conversation=\(DeepTutorChatLog.shortID(conversationID)) model=\(persisted ?? "default")",
+            module: DeepTutorChatLog.module
+        )
+        try await kernel.writeWithoutNotification { context, accountID in
+            guard let object = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: conversationID) else {
+                throw DeepTutorChatError.conversationNotFound
+            }
+            object.setValue(persisted, forKey: "currentModelName")
+            object.setValue(now, forKey: "updatedAt")
+        }
+        await postChange(
+            DeepTutorConversationChangeEvent(
+                conversationID: conversationID,
+                kind: .conversationMetadataUpdated,
+                affectedMessageIDs: [],
+                affectsConversationList: false
+            )
+        )
+        guard let updated = await loadConversation(id: conversationID) else {
+            throw DeepTutorChatError.conversationNotFound
+        }
+        return updated
+    }
+
     func deleteConversation(id: UUID) async throws {
         try await kernel.writeWithoutNotification { context, accountID in
             guard let object = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: id) else {
@@ -497,6 +529,7 @@ actor DeepTutorLocalChatStore {
             temperature: object.value(forKey: "temperature") as? Double,
             topP: object.value(forKey: "topP") as? Double ?? 1.0,
             maxMessages: object.value(forKey: "maxMessages") as? Int ?? 20,
+            rolePrompt: object.value(forKey: "rolePrompt") as? String,
             memberID: (object.value(forKey: "memberID") as? Int64).map(Int.init)
         )
     }

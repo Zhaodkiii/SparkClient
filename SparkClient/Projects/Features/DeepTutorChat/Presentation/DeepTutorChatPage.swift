@@ -29,7 +29,14 @@ struct DeepTutorChatPage: View {
                         get: { viewModel.state.activeCapability },
                         set: { viewModel.updateCapability($0) }
                     ),
-                    modelName: viewModel.conversation?.currentModelName,
+                    selectedModelName: $viewModel.composerSelectedModelName,
+                    modelRows: viewModel.chatScenarioModels,
+                    modelDisplayTitle: viewModel.selectedModelDisplayTitle,
+                    modelIconName: viewModel.selectedModelIconName,
+                    isModelPickerDisabled: viewModel.state.isStreaming,
+                    onPersistSelectedModel: { modelName in
+                        Task { await viewModel.updateConversationModel(modelName, for: conversationID) }
+                    },
                     hasMessages: viewModel.state.messages.isEmpty == false,
                     isStreaming: viewModel.state.isStreaming,
                     references: [],
@@ -55,13 +62,15 @@ struct DeepTutorChatPage: View {
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
-                    viewModel.logDebugInfo(
-                        conversationID: conversationID,
-                        pageContext: DeepTutorChatDebugPageContext(
-                            keyboardFocused: isComposerFocused,
-                            refreshCoordinatorLayoutNonce: refreshCoordinator.layoutNonce
+                    Task {
+                        await viewModel.logDebugInfo(
+                            conversationID: conversationID,
+                            pageContext: DeepTutorChatDebugPageContext(
+                                keyboardFocused: isComposerFocused,
+                                refreshCoordinatorLayoutNonce: refreshCoordinator.layoutNonce
+                            )
                         )
-                    )
+                    }
                 } label: {
                     Label(
                         L10n.text("chat.management.print_debug_info"),

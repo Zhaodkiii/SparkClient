@@ -79,8 +79,42 @@ enum DeepTutorPromptBuilder: Sendable {
         }
 
         let base = titleContext
-        let capabilityPrompt: String
+        let capabilityPrompt = capabilityProtocol(
+            capability: capability,
+            healthPromptMode: healthPromptMode,
+            weatherPromptMode: weatherPromptMode
+        )
 
+        let role = rolePrompt?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let systemPrompt = [base, capabilityPrompt, role.isEmpty ? nil : "Additional instructions:\n\(role)"]
+            .compactMap { $0 }
+            .joined(separator: "\n\n")
+
+        return BuiltPrompt(systemPrompt: systemPrompt)
+    }
+
+    /// DeepTutor capability / 工具协议追加段（不含默认 DeepTutor 人设），供智能体 Prompt 合并使用。
+    nonisolated static func buildProtocolAddendum(
+        capability: DeepTutorCapability,
+        healthPromptMode: DeepTutorHealthPromptMode = .unavailable,
+        weatherPromptMode: DeepTutorWeatherPromptMode = .unavailable
+    ) -> String {
+        let capabilityPrompt = capabilityProtocol(
+            capability: capability,
+            healthPromptMode: healthPromptMode,
+            weatherPromptMode: weatherPromptMode
+        )
+        return """
+        DeepTutorChat output protocol (must follow alongside your role instructions):
+        \(capabilityPrompt)
+        """
+    }
+
+    nonisolated private static func capabilityProtocol(
+        capability: DeepTutorCapability,
+        healthPromptMode: DeepTutorHealthPromptMode,
+        weatherPromptMode: DeepTutorWeatherPromptMode
+    ) -> String {
         switch capability {
         case .chat:
             let healthDataInstructions: String
@@ -130,7 +164,7 @@ enum DeepTutorPromptBuilder: Sendable {
                 Do not claim to have checked live weather unless tool results are available.
                 """
             }
-            capabilityPrompt = """
+            return """
             Mode: general tutoring chat.
             Explain clearly, cite reasoning steps, and ask clarifying questions when needed.
             You may call `ask_user_question` when you need structured user input.
@@ -138,13 +172,13 @@ enum DeepTutorPromptBuilder: Sendable {
             \(weatherInstructions)
             """
         case .deepResearch:
-            capabilityPrompt = """
+            return """
             Mode: deep research.
             First outline a research plan with sections (understand, decompose, evidence, result), then expand each section.
             Prefer structured markdown headings. Summarize sources and assumptions explicitly.
             """
         case .deepQuestion:
-            capabilityPrompt = """
+            return """
             Mode: quiz / knowledge check.
             Default to multiple-choice questions. For a typical 3-question quiz produce:
             - 2 choice questions with options A-D
@@ -154,7 +188,7 @@ enum DeepTutorPromptBuilder: Sendable {
             Do NOT repeat full question bodies, options, or answers in the prose — they belong only in the structured block below.
 
             After the brief intro, append exactly one fenced code block tagged `quiz_json` containing ONLY valid JSON in this shape:
-            {"results":[{"qa_pair":{"question_id":"q_1","question":"...","question_type":"choice|concept|fill_in_blank","options":{"A":"...","B":"...","C":"...","D":"..."},"correct_answer":"...","explanation":"...","difficulty":"easy|medium|hard","concentration":"..."}}]}
+            {"results":[{"qa_pair":{"question_id":"q_1","question":"...","question_type":"choice|concept|fill_in_blank","options":{"A":"...","B":"...","C":"...","D":"...","correct_answer":"...","explanation":"...","difficulty":"easy|medium|hard","concentration":"..."}}]}
 
             Rules:
             - question_id must be stable strings like q_1, q_2, q_3.
@@ -168,30 +202,23 @@ enum DeepTutorPromptBuilder: Sendable {
             - The structured quiz payload must be the final content in the response.
             """
         case .mathAnimator:
-            capabilityPrompt = """
+            return """
             Mode: math animation / step-by-step demonstration.
             Break the solution into numbered steps suitable for animation.
             Use clear formulas and intermediate results.
             """
         case .visualize:
-            capabilityPrompt = """
+            return """
             Mode: visualization.
             Describe charts, diagrams, or structured visual specs the UI can render.
             Prefer bullet lists and labeled sections over vague prose.
             """
         case .masteryPath:
-            capabilityPrompt = """
+            return """
             Mode: mastery learning path.
             Assess prerequisites, propose a learning sequence, and adapt difficulty.
             """
         }
-
-        let role = rolePrompt?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let systemPrompt = [base, capabilityPrompt, role.isEmpty ? nil : "Additional instructions:\n\(role)"]
-            .compactMap { $0 }
-            .joined(separator: "\n\n")
-
-        return BuiltPrompt(systemPrompt: systemPrompt)
     }
 
     /// 兼容旧调用方：Bool 映射到三态中的 memberSelection / unavailable。

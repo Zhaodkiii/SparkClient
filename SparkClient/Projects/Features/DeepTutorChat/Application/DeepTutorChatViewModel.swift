@@ -12,10 +12,16 @@ final class DeepTutorChatViewModel: ObservableObject {
     @Published var selectedConversationID: UUID?
     @Published private(set) var isQuizInlineInputFocused = false
     @Published private(set) var composerAttachmentDrafts: [DeepTutorComposerAttachmentDraft] = []
+    @Published private(set) var chatScenarioModels: [AIScenarioRemoteModelRow] = []
+    @Published private(set) var selectedModelDisplayTitle: String?
+    @Published private(set) var selectedModelIconName: String = "cpu"
+    @Published private(set) var selectedModelIdentity: AIModelIdentity?
+    @Published var composerSelectedModelName: String?
 
     var composerFileTransferService: FileTransferService { fileTransferService }
 
     private let repository: any DeepTutorLocalChatRepository
+    private let aiConfigCenter: AIConfigCenter
     private let loadMessagesUseCase: LoadDeepTutorMessagesUseCase
     private let loadConversationsUseCase: LoadDeepTutorConversationsUseCase
     private let createConversationUseCase: CreateDeepTutorConversationUseCase
@@ -24,6 +30,10 @@ final class DeepTutorChatViewModel: ObservableObject {
     private let sendMessageUseCase: SendDeepTutorAIMessageUseCase
     private let localSendMessageUseCase: SendLocalDeepTutorMessageUseCase
     private let attachmentUploadUseCase: DeepTutorAttachmentUploadUseCase
+    private let turnEventBus: DeepTutorTurnEventBus
+    private let turnCoordinator: DeepTutorTurnCoordinator
+    private let runtimeAdapter: DeepTutorAIRuntimeAdapter
+    private(set) var latestTurnPlan: DeepTutorTurnPlan?
     private let fileTransferService: FileTransferService
     private let toolInteractionCoordinatorStorage: ToolInteractionCoordinator
     private let memberContextStore: MemberContextStore
@@ -65,6 +75,7 @@ final class DeepTutorChatViewModel: ObservableObject {
         logger: Logger = ConsoleLogger()
     ) {
         self.repository = repository
+        self.aiConfigCenter = aiConfigCenter
         self.logger = logger
         self.fileTransferService = fileTransferService
         self.toolInteractionCoordinatorStorage = toolInteractionCoordinator
@@ -83,13 +94,23 @@ final class DeepTutorChatViewModel: ObservableObject {
             aiConfigCenter: aiConfigCenter
         )
         self.localSendMessageUseCase = SendLocalDeepTutorMessageUseCase(repository: repository, logger: logger)
+        let eventBus = DeepTutorTurnEventBus()
+        self.turnEventBus = eventBus
+        self.runtimeAdapter = DeepTutorAIRuntimeAdapter(
+            orchestrator: chatOrchestrator,
+            aiConfigCenter: aiConfigCenter,
+            eventBus: eventBus,
+            logger: logger
+        )
+        self.turnCoordinator = DeepTutorTurnCoordinator(
+            aiConfigCenter: aiConfigCenter,
+            logger: logger
+        )
         self.sendMessageUseCase = SendDeepTutorAIMessageUseCase(
             repository: repository,
-            adapter: DeepTutorAIRuntimeAdapter(
-                orchestrator: chatOrchestrator,
-                aiConfigCenter: aiConfigCenter,
-                logger: logger
-            ),
+            adapter: runtimeAdapter,
+            turnCoordinator: turnCoordinator,
+            eventBus: eventBus,
             toolInteractionCoordinator: toolInteractionCoordinator,
             logger: logger
         )
@@ -364,6 +385,14 @@ final class DeepTutorChatViewModel: ObservableObject {
         next.phase = .loadingLocal
         state = next
 
+        if let initialModel = await refreshChatModelPicker(for: conversationID) {
+            if composerSelectedModelName == nil, loadedConversation.currentModelName == nil {
+                await updateConversationModel(nil, for: conversationID)
+            } else if composerSelectedModelName == nil {
+                composerSelectedModelName = loadedConversation.currentModelName ?? initialModel
+            }
+        }
+
         let shouldLockBottom = DeepTutorScrollPositionStore.load(for: conversationID) == nil
         await reloadMessages(for: conversationID, lockBottom: shouldLockBottom, source: "open")
 
@@ -400,6 +429,139 @@ final class DeepTutorChatViewModel: ObservableObject {
         conversationCreationError = nil
     }
 
+    func refreshChatModelPicker(for conversationID: UUID) async -> String? {
+        guard let bundles = try? await aiConfigCenter.effectiveScenarioBundles() else {
+            chatScenarioModels = []
+            selectedModelDisplayTitle = nil
+            selectedModelIdentity = nil
+            selectedModelIconName = "cpu"
+            return nil
+        }
+
+        chatScenarioModels = bundles.chat.models
+        await validateCurrentModelSelection(for: conversationID)
+
+        let namesInPicker = Set(chatScenarioModels.map(\.name))
+        guard namesInPicker.isEmpty == false else { return nil }
+
+        let trimmedComposer = composerSelectedModelName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if trimmedComposer.isEmpty == false, namesInPicker.contains(trimmedComposer) {
+            syncSelectedModelDisplay(preferredModelName: trimmedComposer, bundles: bundles)
+            DeepTutorChatLog.modelPickerLoaded(
+                conversationID: conversationID,
+                count: chatScenarioModels.count,
+                defaultModel: bundles.resolveRow(for: .chat, preferredModelName: nil)?.name
+            )
+            return trimmedComposer
+        }
+
+        let trimmedThreadModel = conversation?.currentModelName?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let threadModel = trimmedThreadModel.isEmpty ? nil : trimmedThreadModel
+
+        if let threadModel, namesInPicker.contains(threadModel) {
+            syncSelectedModelDisplay(preferredModelName: threadModel, bundles: bundles)
+            DeepTutorChatLog.modelPickerLoaded(
+                conversationID: conversationID,
+                count: chatScenarioModels.count,
+                defaultModel: bundles.resolveRow(for: .chat, preferredModelName: nil)?.name
+            )
+            return threadModel
+        }
+
+        if let defaultName = bundles.resolveRow(for: .chat, preferredModelName: nil)?.name,
+           namesInPicker.contains(defaultName) {
+            syncSelectedModelDisplay(preferredModelName: defaultName, bundles: bundles)
+            DeepTutorChatLog.modelPickerLoaded(
+                conversationID: conversationID,
+                count: chatScenarioModels.count,
+                defaultModel: defaultName
+            )
+            return defaultName
+        }
+
+        let fallback = chatScenarioModels.first?.name
+        syncSelectedModelDisplay(preferredModelName: fallback, bundles: bundles)
+        DeepTutorChatLog.modelPickerLoaded(
+            conversationID: conversationID,
+            count: chatScenarioModels.count,
+            defaultModel: fallback
+        )
+        return fallback
+    }
+
+    func updateConversationModel(_ preferredModelName: String?, for conversationID: UUID) async {
+        guard state.isStreaming == false else { return }
+        guard let bundles = try? await aiConfigCenter.effectiveScenarioBundles() else { return }
+
+        let trimmedSelected = preferredModelName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let preferredForResolve = (trimmedSelected?.isEmpty == false) ? trimmedSelected : nil
+        guard let row = bundles.resolveRow(for: .chat, preferredModelName: preferredForResolve) else {
+            logger.warning(
+                "updateConversationModel：无法解析 chat 场景模型，conversation=\(DeepTutorChatLog.shortID(conversationID))",
+                module: DeepTutorChatLog.module
+            )
+            return
+        }
+
+        let persistedModelName: String
+        if let trimmedSelected, trimmedSelected.isEmpty == false {
+            persistedModelName = trimmedSelected
+        } else {
+            persistedModelName = row.name
+        }
+
+        composerSelectedModelName = preferredForResolve == nil ? nil : persistedModelName
+        syncSelectedModelDisplay(preferredModelName: persistedModelName, bundles: bundles)
+
+        guard conversation?.currentModelName != persistedModelName else { return }
+
+        do {
+            let updated = try await repository.updateConversationModel(
+                conversationID: conversationID,
+                currentModelName: persistedModelName
+            )
+            conversation = updated
+            DeepTutorChatLog.modelPickerSelected(
+                conversationID: conversationID,
+                selected: persistedModelName,
+                identity: row.identity,
+                source: preferredForResolve == nil ? "default" : "user"
+            )
+        } catch {
+            logger.warning(
+                "updateConversationModel 失败，conversation=\(DeepTutorChatLog.shortID(conversationID)), error=\(error.localizedDescription)",
+                module: DeepTutorChatLog.module
+            )
+        }
+    }
+
+    func validateCurrentModelSelection(for conversationID: UUID) async {
+        let namesInPicker = Set(chatScenarioModels.map(\.name))
+        let trimmed = composerSelectedModelName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let selected = trimmed.isEmpty ? nil : trimmed
+        guard let selected else { return }
+        guard namesInPicker.contains(selected) == false else { return }
+
+        composerSelectedModelName = nil
+        await updateConversationModel(nil, for: conversationID)
+    }
+
+    private func syncSelectedModelDisplay(
+        preferredModelName: String?,
+        bundles: AIScenarioRemoteBundlesCollection
+    ) {
+        guard let row = bundles.resolveRow(for: .chat, preferredModelName: preferredModelName) else {
+            selectedModelDisplayTitle = nil
+            selectedModelIdentity = nil
+            selectedModelIconName = "cpu"
+            return
+        }
+        selectedModelDisplayTitle = row.displayTitle
+        selectedModelIdentity = AIModelIdentity(rawValue: row.identity) ?? .model
+        selectedModelIconName = row.composerIconSystemName
+    }
+
     func resetForSessionSwitch() {
         activeConversationID = nil
         conversation = nil
@@ -423,9 +585,15 @@ final class DeepTutorChatViewModel: ObservableObject {
         pendingDatabaseReloadTask = nil
         pendingConversationListRefreshTask?.cancel()
         pendingConversationListRefreshTask = nil
+        latestTurnPlan = nil
         titleGenerationTasks.values.forEach { $0.cancel() }
         titleGenerationTasks = [:]
         titleGenerationGenerationByConversationID = [:]
+        chatScenarioModels = []
+        composerSelectedModelName = nil
+        selectedModelDisplayTitle = nil
+        selectedModelIdentity = nil
+        selectedModelIconName = "cpu"
         state = .initial
     }
 
@@ -838,17 +1006,22 @@ final class DeepTutorChatViewModel: ObservableObject {
                 )
             } else {
                 let requestedTools = state.enabledOptionalTools
-                result = try await sendMessageUseCase(
+                let plan = try await turnCoordinator.prepareSend(
                     conversationID: conversationID,
                     text: effectiveText,
                     capability: effectiveCapability,
                     conversationTitle: title,
+                    conversation: conversation,
                     settings: settings,
                     visibleHistory: history,
-                    session: session,
                     boundMemberID: conversation?.memberID,
                     requestedCanonicalTools: requestedTools,
-                    attachments: attachments,
+                    attachments: attachments
+                )
+                latestTurnPlan = plan
+                result = try await sendMessageUseCase.execute(
+                    plan: plan,
+                    session: session,
                     onStreamingUpdate: onStreamingUpdate
                 )
             }
@@ -1210,14 +1383,24 @@ final class DeepTutorChatViewModel: ObservableObject {
         allMessagesCache
     }
 
+    func turnEventReplayForDebug() async -> [DeepTutorStreamEvent] {
+        if let plan = latestTurnPlan {
+            return await turnEventBus.replayLog(for: plan.turnID)
+        }
+        return await turnEventBus.activeTurnEvents()
+    }
+
     func logDebugInfo(
         conversationID: UUID,
         pageContext: DeepTutorChatDebugPageContext
-    ) {
+    ) async {
+        let turnEventReplay = await turnEventReplayForDebug()
         DeepTutorChatDebugExporter.logDebugInfo(
             viewModel: self,
             conversationID: conversationID,
             pageContext: pageContext,
+            turnPlan: latestTurnPlan,
+            turnEventReplay: turnEventReplay,
             logger: logger
         )
     }
@@ -1400,6 +1583,18 @@ final class DeepTutorChatViewModel: ObservableObject {
                 if let updated = await repository.loadConversation(id: conversationID) {
                     await MainActor.run {
                         applyConversationTitleUpdate(updated, source: .autoGenerated, stage: "title")
+                    }
+                }
+            }
+            return
+        }
+        if event.kind == .conversationMetadataUpdated, let conversationID = event.conversationID {
+            Task {
+                if let updated = await repository.loadConversation(id: conversationID) {
+                    await MainActor.run {
+                        if self.activeConversationID == conversationID {
+                            self.conversation = updated
+                        }
                     }
                 }
             }

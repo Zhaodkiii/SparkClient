@@ -10,6 +10,7 @@ protocol DeepTutorLocalChatRepository: Sendable {
         source: DeepTutorConversationTitleSource
     ) async throws -> DeepTutorConversation
     func updateConversationMemberBinding(conversationID: UUID, memberID: Int?) async throws
+    func updateConversationModel(conversationID: UUID, currentModelName: String?) async throws -> DeepTutorConversation
     func deleteConversation(id: UUID) async throws
     func loadMessages(conversationID: UUID, limit: Int?, before: Date?) async -> [DeepTutorMessage]
     func countMessages(conversationID: UUID) async -> Int

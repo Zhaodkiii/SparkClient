@@ -5,6 +5,7 @@ nonisolated enum DeepTutorConversationChangeKind: String, Sendable {
     case messagesAppended
     case messagesUpdated
     case titleUpdated
+    case conversationMetadataUpdated
 }
 
 nonisolated struct DeepTutorConversationChangeEvent: Sendable {

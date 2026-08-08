@@ -2,7 +2,8 @@ import SwiftUI
 
 struct DeepTutorComposerToolbarView: View {
     @Binding var capability: DeepTutorCapability
-    let modelName: String?
+    let modelDisplayTitle: String?
+    let modelIconName: String
     let isStreaming: Bool
     let canSend: Bool
     let canPickAttachments: Bool
@@ -59,8 +60,8 @@ struct DeepTutorComposerToolbarView: View {
 
     private var modelChip: some View {
         toolbarChip(
-            title: modelName ?? "Chat Model",
-            systemImage: "cpu"
+            title: modelDisplayTitle ?? L10n.text("chat.composer.model.default"),
+            systemImage: modelIconName
         )
     }
 

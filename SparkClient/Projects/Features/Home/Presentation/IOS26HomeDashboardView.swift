@@ -73,7 +73,7 @@ struct IOS26HomeDashboardView: View {
             .padding(.bottom, 32)
         }
         .background(Color(uiColor: .systemGroupedBackground))
-        .onChange(of: deepTutorChatViewModel.isCreatingConversation) { isCreating in
+        .onChange(of: deepTutorChatViewModel.isCreatingConversation) { _, isCreating in
             if isCreating == false {
                 loadingAction = nil
             }
@@ -82,7 +82,7 @@ struct IOS26HomeDashboardView: View {
             await taskManager.loadInitial(memberID: viewModel.selectedMemberID)
             await taskManager.syncIncremental(memberID: viewModel.selectedMemberID)
         }
-        .onChange(of: viewModel.selectedMemberID) { memberID in
+        .onChange(of: viewModel.selectedMemberID) { _, memberID in
             Task {
                 await taskManager.loadInitial(memberID: memberID)
                 await taskManager.syncIncremental(memberID: memberID)

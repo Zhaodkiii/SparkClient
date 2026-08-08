@@ -26,16 +26,16 @@ struct DeepTutorQuizAnswerInputView: View {
         }
         .padding(.horizontal, 16)
         .padding(.top, 12)
-        .onChange(of: isTextInputFocused) { _, focused in
+        .onChange(of: isTextInputFocused) { focused in
             onInlineInputFocusChanged?(focused)
         }
-        .onChange(of: question.id) { _, _ in
+        .onChange(of: question.id) { _ in
             if isTextInputFocused {
                 isTextInputFocused = false
                 onInlineInputFocusChanged?(false)
             }
         }
-        .onChange(of: submitted) { _, isSubmitted in
+        .onChange(of: submitted) { isSubmitted in
             if isSubmitted, isTextInputFocused {
                 isTextInputFocused = false
                 onInlineInputFocusChanged?(false)

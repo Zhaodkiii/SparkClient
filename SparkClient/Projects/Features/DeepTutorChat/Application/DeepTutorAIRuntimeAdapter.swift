@@ -3,6 +3,7 @@ import Foundation
 struct DeepTutorAIRuntimeAdapter: Sendable {
     let orchestrator: ChatOrchestrator
     let aiConfigCenter: AIConfigCenter
+    let eventBus: DeepTutorTurnEventBus?
     let logger: Logger
 
     struct StreamRequest: Sendable {
@@ -10,12 +11,14 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
         let userInput: String
         let capability: DeepTutorCapability
         let conversationTitle: String
+        let conversation: DeepTutorConversation?
         let settings: DeepTutorConversationGenerationSettings
         let visibleHistory: [DeepTutorMessage]
         let currentUserMessage: DeepTutorMessage?
         let assistantMessageID: UUID
         let boundMemberID: Int?
         let requestSnapshot: DeepTutorRequestSnapshot?
+        let modelResolutionMode: DeepTutorModelContextResolver.ResolutionMode
         let session: DeepTutorGenerationSession
         let onAssistantUpdate: @Sendable (DeepTutorMessage) async -> Void
     }
@@ -36,16 +39,31 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
             module: DeepTutorChatLog.module
         )
 
-        let preliminaryPreferredModel = request.settings.currentModelName
+        let bundles = try await aiConfigCenter.effectiveScenarioBundles()
+        let modelContext = try DeepTutorModelContextResolver.resolve(
+            bundles: bundles,
+            conversation: request.conversation,
+            snapshot: request.requestSnapshot,
+            composerSelectedModelName: request.settings.currentModelName,
+            mode: request.modelResolutionMode
+        )
+        DeepTutorChatLog.modelContextResolved(
+            conversationID: request.conversationID,
+            selected: modelContext.selectedModelName,
+            identity: modelContext.identity.rawValue,
+            baseModelName: modelContext.baseModelName,
+            supportsTools: modelContext.supportsToolUse,
+            source: request.modelResolutionMode == .replaySnapshot ? "replay_snapshot" : "live_send"
+        )
 
         let resolvedConfig: AIResolvedConfig
         do {
             resolvedConfig = try await aiConfigCenter.resolve(
                 for: .chat,
-                preferredModelName: preliminaryPreferredModel
+                preferredModelName: modelContext.selectedModelName
             )
             logger.debug(
-                "DeepTutor AI 配置已解析，conversation=\(conversationShortID), model=\(resolvedConfig.model), source=\(resolvedConfig.source.rawValue)",
+                "DeepTutor AI 配置已解析，conversation=\(conversationShortID), selectedModel=\(modelContext.selectedModelName), apiModel=\(resolvedConfig.model), identity=\(modelContext.identity.rawValue), base=\(modelContext.baseModelName ?? "-"), source=\(resolvedConfig.source.rawValue)",
                 module: DeepTutorChatLog.module
             )
         } catch {
@@ -56,10 +74,9 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
             throw error
         }
 
-        let bundles = try? await aiConfigCenter.effectiveScenarioBundles()
-        let modelReasoning = bundles?.chatReasoningContext(selectedModelName: preliminaryPreferredModel) ?? .unknown
+        let modelReasoning = bundles.chatReasoningContext(selectedModelName: modelContext.selectedModelName)
         let modelSupportsToolCalling = Self.modelSupportsToolCalling(
-            modelName: resolvedConfig.model,
+            modelName: modelContext.selectedModelName,
             bundles: bundles
         )
 
@@ -91,10 +108,18 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
             capability: request.capability,
             conversationID: request.conversationID,
             conversationTitle: request.conversationTitle,
+            conversation: request.conversation,
             settings: request.settings,
+            modelContext: modelContext,
             visibleHistory: request.visibleHistory,
-            preferredModelName: preliminaryPreferredModel,
+            resolvedConfigMaxTokens: resolvedConfig.maxTokens,
             mountContext: mountContext
+        )
+        DeepTutorChatLog.generationParametersResolved(
+            conversationID: request.conversationID,
+            identity: modelContext.identity.rawValue,
+            temperature: built.temperature,
+            maxTokens: built.maxTokens
         )
 
         var modelHistory = built.history
@@ -103,10 +128,10 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
         }
 
         let hasImageAttachments = request.currentUserMessage?.attachments.contains { $0.type == "image" } ?? false
-        let multimodalCapabilities = bundles?.chatMultimodalCapabilities(
-            selectedModelName: built.preferredModelName ?? resolvedConfig.model
+        let multimodalCapabilities = bundles.chatMultimodalCapabilities(
+            selectedModelName: built.preferredModelName
         )
-        let deliverMultimodal = hasImageAttachments && (multimodalCapabilities?.supportsMultimodal ?? false)
+        let deliverMultimodal = hasImageAttachments && multimodalCapabilities.supportsMultimodal
 
         DeepTutorChatLog.toolPolicyResolved(
             conversationID: request.conversationID,
@@ -208,12 +233,12 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
                 preferredModelName: built.preferredModelName,
                 temperature: built.temperature ?? resolvedConfig.temperature,
                 topP: built.topP,
-                maxTokens: resolvedConfig.maxTokens,
+                maxTokens: built.maxTokens ?? resolvedConfig.maxTokens,
                 maxMessages: built.maxMessages,
                 cancellationToken: cancellationToken,
                 deliverMultimodalImages: deliverMultimodal,
                 sendsOriginalImagesToAI: false,
-                providerCompanyUppercased: multimodalCapabilities?.providerCompanyUppercased,
+                providerCompanyUppercased: multimodalCapabilities.providerCompanyUppercased,
                 preferInlineAskUser: true,
                 preferInlineMemberSelection: true,
                 onPartial: { partial in
@@ -223,6 +248,7 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
                         return
                     }
                     let mapped = await accumulator.apply(partial: partial)
+                    await publishTurnEvents(mapped.events)
                     let updated = mapped.message
                     let hasNewEvents = mapped.events.isEmpty == false
                     let hasAskUser = Self.containsAskUserEvent(mapped.events)
@@ -430,6 +456,7 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
             outputTextLen: output.text.count,
             events: Self.eventSummary(completionEvents)
         )
+        await publishTurnEvents(completionEvents)
         var assistant = await accumulator.applyCompletion(
             events: completionEvents,
             content: DeepTutorContentSanitizer.stripLeadingInternalThinking(from: output.text)
@@ -498,10 +525,12 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
         let conversationID: UUID
         let capability: DeepTutorCapability
         let conversationTitle: String
+        let conversation: DeepTutorConversation?
         let settings: DeepTutorConversationGenerationSettings
         let visibleHistory: [DeepTutorMessage]
         let assistantMessage: DeepTutorMessage
         let resumeContext: DeepTutorAskUserResumeContext
+        let requestSnapshot: DeepTutorRequestSnapshot?
         let priorToolSnapshot: DeepTutorPerTurnToolSnapshot?
         let session: DeepTutorGenerationSession
         let onAssistantUpdate: @Sendable (DeepTutorMessage) async -> Void
@@ -514,9 +543,18 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
             module: DeepTutorChatLog.module
         )
 
+        let bundles = try await aiConfigCenter.effectiveScenarioBundles()
+        let modelContext = try DeepTutorModelContextResolver.resolve(
+            bundles: bundles,
+            conversation: request.conversation,
+            snapshot: request.requestSnapshot,
+            composerSelectedModelName: request.settings.currentModelName,
+            mode: .replaySnapshot
+        )
+
         let resolvedConfig = try await aiConfigCenter.resolve(
             for: .chat,
-            preferredModelName: request.settings.currentModelName
+            preferredModelName: modelContext.selectedModelName
         )
 
         var mountContext = DeepTutorToolMountContext.default(
@@ -527,13 +565,26 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
         )
         mountContext.hasLocationPermission = SparkLocationService.hasWhenInUsePermission()
         mountContext.weatherToolEnabled = (try? await aiConfigCenter.currentSnapshot().weatherToolPreferences.useWeather) ?? true
-        let toolPolicy = DeepTutorToolPolicyResolver.resolveForAskUserResume(
+        let baseToolPolicy = DeepTutorToolPolicyResolver.resolveForAskUserResume(
             context: mountContext,
             originalUserPrompt: request.resumeContext.originalUserPrompt,
             answerSummary: request.resumeContext.answerSummary,
             priorSnapshot: request.priorToolSnapshot
         )
         mountContext.userInput = "\(request.resumeContext.originalUserPrompt)\n\(request.resumeContext.answerSummary)"
+
+        let finalized = DeepTutorRuntimeRequestBuilder.finalize(
+            baseToolPolicy: baseToolPolicy,
+            modelContext: modelContext,
+            capability: request.capability,
+            conversationID: request.conversationID,
+            conversationTitle: request.conversationTitle,
+            conversation: request.conversation,
+            settings: request.settings,
+            resolvedConfigMaxTokens: resolvedConfig.maxTokens
+        )
+        let toolPolicy = finalized.toolPolicy
+        let inference = finalized.inference
 
         DeepTutorChatLog.toolIntentDetected(
             conversationID: request.conversationID,
@@ -554,23 +605,11 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
             conversationID: request.conversationID,
             policy: toolPolicy
         )
-
-        let healthPromptMode = DeepTutorPromptBuilder.healthPromptMode(
-            allowedToolNames: toolPolicy.allowedToolNames
-        )
-        let prompt = DeepTutorPromptBuilder.build(
-            capability: request.capability,
-            conversationTitle: request.conversationTitle,
-            rolePrompt: nil,
-            healthPromptMode: healthPromptMode
-        )
-        let inference = ChatOrchestratorInferenceOptions(
-            useTools: toolPolicy.useTools,
-            useKnowledgeBag: toolPolicy.useKnowledgeBag,
-            useWebSearch: toolPolicy.useWebSearch,
-            reasoningEnabled: true,
-            reasoningEffortTier: 1,
-            allowedToolNames: toolPolicy.allowedToolNames
+        DeepTutorChatLog.generationParametersResolved(
+            conversationID: request.conversationID,
+            identity: modelContext.identity.rawValue,
+            temperature: finalized.temperature,
+            maxTokens: finalized.maxTokens
         )
 
         DeepTutorChatLog.toolPolicyResolved(
@@ -583,7 +622,7 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
         )
 
         let resumeLoopMessages = DeepTutorAskUserResumeBuilder.buildLoopMessages(
-            systemPrompt: prompt.systemPrompt,
+            systemPrompt: finalized.systemPrompt,
             visibleHistory: request.visibleHistory,
             context: request.resumeContext
         )
@@ -600,11 +639,11 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
             threadID: request.conversationID,
             assistantMessageClientID: request.assistantMessage.id,
             inference: inference,
-            preferredModelName: request.settings.currentModelName,
-            temperature: request.settings.temperature ?? resolvedConfig.temperature,
+            preferredModelName: modelContext.selectedModelName,
+            temperature: finalized.temperature,
             topP: request.settings.topP,
-            maxTokens: resolvedConfig.maxTokens,
-            maxMessages: request.settings.maxMessages,
+            maxTokens: finalized.maxTokens,
+            maxMessages: finalized.maxMessages,
             cancellationToken: cancellationToken,
             preferInlineAskUser: true,
             resumeLoopMessages: resumeLoopMessages,
@@ -615,6 +654,7 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
                     return
                 }
                 let mapped = await accumulator.apply(partial: partial)
+                await publishTurnEvents(mapped.events)
                 let updated = mapped.message
                 let hasNewEvents = mapped.events.isEmpty == false
                 let hasAskUser = Self.containsAskUserEvent(mapped.events)
@@ -641,6 +681,7 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
             completionTokens: nil,
             finishReason: output.finishReason
         )
+        await publishTurnEvents(completionEvents)
         var assistant = await accumulator.applyCompletion(
             events: completionEvents,
             content: DeepTutorContentSanitizer.stripLeadingInternalThinking(from: output.text)
@@ -677,10 +718,12 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
         let conversationID: UUID
         let capability: DeepTutorCapability
         let conversationTitle: String
+        let conversation: DeepTutorConversation?
         let settings: DeepTutorConversationGenerationSettings
         let visibleHistory: [DeepTutorMessage]
         let assistantMessage: DeepTutorMessage
         let resumeContext: DeepTutorMemberSelectionResumeContext
+        let requestSnapshot: DeepTutorRequestSnapshot?
         let priorToolSnapshot: DeepTutorPerTurnToolSnapshot?
         let session: DeepTutorGenerationSession
         let onAssistantUpdate: @Sendable (DeepTutorMessage) async -> Void
@@ -693,9 +736,18 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
             module: DeepTutorChatLog.module
         )
 
+        let bundles = try await aiConfigCenter.effectiveScenarioBundles()
+        let modelContext = try DeepTutorModelContextResolver.resolve(
+            bundles: bundles,
+            conversation: request.conversation,
+            snapshot: request.requestSnapshot,
+            composerSelectedModelName: request.settings.currentModelName,
+            mode: .replaySnapshot
+        )
+
         let resolvedConfig = try await aiConfigCenter.resolve(
             for: .chat,
-            preferredModelName: request.settings.currentModelName
+            preferredModelName: modelContext.selectedModelName
         )
 
         var mountContext = DeepTutorToolMountContext.default(
@@ -705,12 +757,25 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
             conversationTitle: request.conversationTitle
         )
         mountContext.hasSelectedMember = true
-        let toolPolicy = DeepTutorToolPolicyResolver.resolveForMemberSelectionResume(
+        let baseToolPolicy = DeepTutorToolPolicyResolver.resolveForMemberSelectionResume(
             context: mountContext,
             originalUserPrompt: request.resumeContext.originalUserPrompt,
             selectedMemberID: request.resumeContext.selectedMemberID,
             priorSnapshot: request.priorToolSnapshot
         )
+
+        let finalized = DeepTutorRuntimeRequestBuilder.finalize(
+            baseToolPolicy: baseToolPolicy,
+            modelContext: modelContext,
+            capability: request.capability,
+            conversationID: request.conversationID,
+            conversationTitle: request.conversationTitle,
+            conversation: request.conversation,
+            settings: request.settings,
+            resolvedConfigMaxTokens: resolvedConfig.maxTokens
+        )
+        let toolPolicy = finalized.toolPolicy
+        let inference = finalized.inference
 
         DeepTutorChatLog.toolIntentDetected(
             conversationID: request.conversationID,
@@ -731,27 +796,15 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
             conversationID: request.conversationID,
             policy: toolPolicy
         )
-
-        let healthPromptMode = DeepTutorPromptBuilder.healthPromptMode(
-            allowedToolNames: toolPolicy.allowedToolNames
-        )
-        let prompt = DeepTutorPromptBuilder.build(
-            capability: request.capability,
-            conversationTitle: request.conversationTitle,
-            rolePrompt: nil,
-            healthPromptMode: healthPromptMode
-        )
-        let inference = ChatOrchestratorInferenceOptions(
-            useTools: toolPolicy.useTools,
-            useKnowledgeBag: toolPolicy.useKnowledgeBag,
-            useWebSearch: toolPolicy.useWebSearch,
-            reasoningEnabled: true,
-            reasoningEffortTier: 1,
-            allowedToolNames: toolPolicy.allowedToolNames
+        DeepTutorChatLog.generationParametersResolved(
+            conversationID: request.conversationID,
+            identity: modelContext.identity.rawValue,
+            temperature: finalized.temperature,
+            maxTokens: finalized.maxTokens
         )
 
         let resumeLoopMessages = DeepTutorMemberSelectionResumeBuilder.buildLoopMessages(
-            systemPrompt: prompt.systemPrompt,
+            systemPrompt: finalized.systemPrompt,
             visibleHistory: request.visibleHistory,
             context: request.resumeContext
         )
@@ -768,11 +821,11 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
             threadID: request.conversationID,
             assistantMessageClientID: request.assistantMessage.id,
             inference: inference,
-            preferredModelName: request.settings.currentModelName,
-            temperature: request.settings.temperature ?? resolvedConfig.temperature,
+            preferredModelName: modelContext.selectedModelName,
+            temperature: finalized.temperature,
             topP: request.settings.topP,
-            maxTokens: resolvedConfig.maxTokens,
-            maxMessages: request.settings.maxMessages,
+            maxTokens: finalized.maxTokens,
+            maxMessages: finalized.maxMessages,
             cancellationToken: cancellationToken,
             preferInlineAskUser: true,
             preferInlineMemberSelection: true,
@@ -784,6 +837,7 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
                     return
                 }
                 let mapped = await accumulator.apply(partial: partial)
+                await publishTurnEvents(mapped.events)
                 let updated = mapped.message
                 let hasAskUser = Self.containsAskUserEvent(mapped.events)
                 let hasMemberSelection = Self.containsMemberSelectionEvent(mapped.events)
@@ -810,6 +864,7 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
             completionTokens: nil,
             finishReason: output.finishReason
         )
+        await publishTurnEvents(completionEvents)
         var assistant = await accumulator.applyCompletion(
             events: completionEvents,
             content: DeepTutorContentSanitizer.stripLeadingInternalThinking(from: output.text)
@@ -1132,5 +1187,10 @@ private extension DeepTutorAIRuntimeAdapter {
             return selected.supportsToolUse || base.supportsToolUse
         }
         return selected.supportsToolUse
+    }
+
+    func publishTurnEvents(_ events: [DeepTutorStreamEvent]) async {
+        guard let eventBus, events.isEmpty == false else { return }
+        await eventBus.publish(events)
     }
 }

@@ -3,14 +3,10 @@ import Foundation
 struct SendDeepTutorAIMessageUseCase: Sendable {
     let repository: any DeepTutorLocalChatRepository
     let adapter: DeepTutorAIRuntimeAdapter
+    let turnCoordinator: DeepTutorTurnCoordinator
+    let eventBus: DeepTutorTurnEventBus
     let toolInteractionCoordinator: ToolInteractionCoordinator
     let logger: Logger
-
-    enum Mode: Sendable {
-        case send(userText: String)
-        case retryAssistant(assistantMessageID: UUID, userMessageID: UUID)
-        case regenerate(assistantMessageID: UUID, userMessageID: UUID)
-    }
 
     func callAsFunction(
         conversationID: UUID,
@@ -23,36 +19,46 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
         boundMemberID: Int? = nil,
         requestedCanonicalTools: [String]? = nil,
         attachments: [DeepTutorAttachment] = [],
-        requestSnapshot: DeepTutorRequestSnapshot? = nil,
         onStreamingUpdate: (@Sendable (DeepTutorMessage) async -> Void)? = nil
     ) async throws -> (user: DeepTutorMessage, assistant: DeepTutorMessage) {
-        let resolvedSnapshot: DeepTutorRequestSnapshot
-        if let requestSnapshot {
-            resolvedSnapshot = requestSnapshot
-        } else {
-            resolvedSnapshot = await Self.buildRequestSnapshot(
-                adapter: adapter,
-                conversationID: conversationID,
-                capability: capability,
-                conversationTitle: conversationTitle,
-                userInput: text,
-                requestedCanonicalTools: requestedCanonicalTools,
-                boundMemberID: boundMemberID,
-                attachments: attachments
-            )
-        }
-        return try await execute(
-            mode: .send(userText: text),
+        let conversation = await repository.loadConversation(id: conversationID)
+        let plan = try await turnCoordinator.prepareSend(
             conversationID: conversationID,
+            text: text,
             capability: capability,
             conversationTitle: conversationTitle,
+            conversation: conversation,
             settings: settings,
             visibleHistory: visibleHistory,
-            session: session,
             boundMemberID: boundMemberID,
-            requestSnapshot: resolvedSnapshot,
+            requestedCanonicalTools: requestedCanonicalTools,
+            attachments: attachments
+        )
+        return try await execute(
+            plan: plan,
+            session: session,
             onStreamingUpdate: onStreamingUpdate
         )
+    }
+
+    func execute(
+        plan: DeepTutorTurnPlan,
+        session: DeepTutorGenerationSession,
+        onStreamingUpdate: (@Sendable (DeepTutorMessage) async -> Void)? = nil
+    ) async throws -> (user: DeepTutorMessage, assistant: DeepTutorMessage) {
+        await eventBus.beginTurn(plan.turnID)
+        do {
+            let result = try await executeTurn(
+                plan: plan,
+                session: session,
+                onStreamingUpdate: onStreamingUpdate
+            )
+            await eventBus.endTurn()
+            return result
+        } catch {
+            await eventBus.endTurn()
+            throw error
+        }
     }
 
     func retryAssistant(
@@ -66,15 +72,26 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
         session: DeepTutorGenerationSession,
         onStreamingUpdate: (@Sendable (DeepTutorMessage) async -> Void)? = nil
     ) async throws -> DeepTutorMessage {
-        let result = try await execute(
-            mode: .retryAssistant(assistantMessageID: assistantMessageID, userMessageID: userMessageID),
+        let messages = await repository.loadMessages(conversationID: conversationID, limit: nil, before: nil)
+        guard let userMessage = messages.first(where: { $0.id == userMessageID && $0.role == .user }) else {
+            throw DeepTutorChatError.messageNotFound
+        }
+        let conversation = await repository.loadConversation(id: conversationID)
+        let plan = try await turnCoordinator.prepareRetry(
             conversationID: conversationID,
+            assistantMessageID: assistantMessageID,
+            userMessageID: userMessageID,
             capability: capability,
             conversationTitle: conversationTitle,
+            conversation: conversation,
             settings: settings,
             visibleHistory: visibleHistory,
+            userMessage: userMessage,
+            boundMemberID: conversation?.memberID
+        )
+        let result = try await execute(
+            plan: plan,
             session: session,
-            requestSnapshot: nil,
             onStreamingUpdate: onStreamingUpdate
         )
         return result.assistant
@@ -91,15 +108,26 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
         session: DeepTutorGenerationSession,
         onStreamingUpdate: (@Sendable (DeepTutorMessage) async -> Void)? = nil
     ) async throws -> (user: DeepTutorMessage, assistant: DeepTutorMessage) {
-        try await execute(
-            mode: .regenerate(assistantMessageID: assistantMessageID, userMessageID: userMessageID),
+        let messages = await repository.loadMessages(conversationID: conversationID, limit: nil, before: nil)
+        guard let userMessage = messages.first(where: { $0.id == userMessageID && $0.role == .user }) else {
+            throw DeepTutorChatError.messageNotFound
+        }
+        let conversation = await repository.loadConversation(id: conversationID)
+        let plan = try await turnCoordinator.prepareRegenerate(
             conversationID: conversationID,
+            assistantMessageID: assistantMessageID,
+            userMessageID: userMessageID,
             capability: capability,
             conversationTitle: conversationTitle,
+            conversation: conversation,
             settings: settings,
             visibleHistory: visibleHistory,
+            userMessage: userMessage,
+            boundMemberID: conversation?.memberID
+        )
+        return try await execute(
+            plan: plan,
             session: session,
-            requestSnapshot: nil,
             onStreamingUpdate: onStreamingUpdate
         )
     }
@@ -194,6 +222,7 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
         assistant = assistant.replacing(events: events, status: .streaming)
         assistant = DeepTutorMessageReducer.applyBlocks(to: assistant)
         _ = try await repository.upsertMessage(assistant)
+        await eventBus.publish(.askUserResolved(toolCallID: canonicalToolCallID, answers: answers))
         await onStreamingUpdate?(assistant)
         DeepTutorChatLog.askUserSubmitResolvedLocal(
             conversationID: conversationID,
@@ -219,15 +248,19 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
             resumeMode: "sameAssistantMessage"
         )
 
+        let conversation = await repository.loadConversation(id: conversationID)
+
         let streamResult = try await adapter.resumeStream(
             DeepTutorAIRuntimeAdapter.ResumeStreamRequest(
                 conversationID: conversationID,
                 capability: capability,
                 conversationTitle: conversationTitle,
+                conversation: conversation,
                 settings: settings,
                 visibleHistory: visibleHistory.filter { $0.id != assistantMessageID },
                 assistantMessage: assistant,
                 resumeContext: resumeContext,
+                requestSnapshot: precedingUser.requestSnapshot,
                 priorToolSnapshot: precedingUser.requestSnapshot?.toolSnapshot,
                 session: session,
                 onAssistantUpdate: { [repository] updated in
@@ -303,6 +336,7 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
         assistant = assistant.replacing(events: events, status: .streaming)
         assistant = DeepTutorMessageReducer.applyBlocks(to: assistant)
         _ = try await repository.upsertMessage(assistant)
+        await eventBus.publish(.memberSelectionResolved(toolCallID: toolCallID, memberID: memberID, memberName: memberName))
         await onStreamingUpdate?(assistant)
 
         try await repository.updateConversationMemberBinding(conversationID: conversationID, memberID: memberID)
@@ -325,15 +359,19 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
 
         await session.bindAssistantMessageID(assistantMessageID)
 
+        let conversation = await repository.loadConversation(id: conversationID)
+
         let streamResult = try await adapter.resumeMemberSelectionStream(
             DeepTutorAIRuntimeAdapter.MemberSelectionResumeStreamRequest(
                 conversationID: conversationID,
                 capability: capability,
                 conversationTitle: conversationTitle,
+                conversation: conversation,
                 settings: settings,
                 visibleHistory: visibleHistory.filter { $0.id != assistantMessageID },
                 assistantMessage: assistant,
                 resumeContext: resumeContext,
+                requestSnapshot: precedingUser.requestSnapshot,
                 priorToolSnapshot: precedingUser.requestSnapshot?.toolSnapshot,
                 session: session,
                 onAssistantUpdate: { [repository] updated in
@@ -397,28 +435,27 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
 
     // MARK: - Private
 
-	    private func execute(
-        mode: Mode,
-        conversationID: UUID,
-        capability: DeepTutorCapability,
-        conversationTitle: String,
-        settings: DeepTutorConversationGenerationSettings,
-        visibleHistory: [DeepTutorMessage],
+	    private func executeTurn(
+        plan: DeepTutorTurnPlan,
         session: DeepTutorGenerationSession,
-        boundMemberID: Int? = nil,
-        requestSnapshot: DeepTutorRequestSnapshot?,
         onStreamingUpdate: (@Sendable (DeepTutorMessage) async -> Void)?
     ) async throws -> (user: DeepTutorMessage, assistant: DeepTutorMessage) {
+        let conversationID = plan.conversationID
+        let capability = plan.capability
+        let settings = plan.settings
+        let visibleHistory = plan.visibleHistory
+        let requestSnapshot = plan.snapshot
+        let boundMemberID = plan.boundMemberID
+
         let userMessage: DeepTutorMessage
         let userInput: String
         let historyForModel: [DeepTutorMessage]
         let assistantID: UUID
-        var replaySnapshot: DeepTutorRequestSnapshot?
 
-        switch mode {
+        switch plan.intent {
         case .send(let userText):
             let trimmed = userText.trimmingCharacters(in: .whitespacesAndNewlines)
-            let persistedAttachments = requestSnapshot?.attachments ?? []
+            let persistedAttachments = requestSnapshot.attachments
             guard trimmed.isEmpty == false || persistedAttachments.isEmpty == false else {
                 throw DeepTutorChatError.emptyInput
             }
@@ -449,7 +486,6 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
             )
             historyForModel = visibleHistory
             assistantID = UUID()
-            replaySnapshot = requestSnapshot
         case .retryAssistant(let assistantMessageID, let userMessageID):
             let messages = await repository.loadMessages(conversationID: conversationID, limit: nil, before: nil)
             guard let existingUser = messages.first(where: { $0.id == userMessageID && $0.role == .user }) else {
@@ -467,7 +503,6 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
             failedAssistant = DeepTutorMessageReducer.applyBlocks(to: failedAssistant)
             _ = try await repository.upsertMessage(failedAssistant)
             await onStreamingUpdate?(failedAssistant)
-            replaySnapshot = existingUser.requestSnapshot
         case .regenerate(let assistantMessageID, let userMessageID):
             let messages = await repository.loadMessages(conversationID: conversationID, limit: nil, before: nil)
             guard let existingUser = messages.first(where: { $0.id == userMessageID && $0.role == .user }) else {
@@ -477,10 +512,14 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
             userInput = existingUser.content
             historyForModel = visibleHistory.filter { $0.id != assistantMessageID }
             assistantID = UUID()
-            replaySnapshot = existingUser.requestSnapshot
         }
 
-        let effectiveSnapshot = replaySnapshot ?? requestSnapshot
+        let loadedConversation: DeepTutorConversation?
+        if let conversation = plan.conversation {
+            loadedConversation = conversation
+        } else {
+            loadedConversation = await repository.loadConversation(id: conversationID)
+        }
 
         await session.bindAssistantMessageID(assistantID)
 
@@ -496,14 +535,14 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
                 updatedAt: Date()
             )
         )
-        if case .send = mode {
+        if case .send = plan.intent {
             _ = try await repository.upsertMessage(assistant)
             await onStreamingUpdate?(assistant)
             logger.info(
                 "助手消息落库（流式开始），conversation=\(DeepTutorChatLog.shortID(conversationID)), messageID=\(DeepTutorChatLog.shortID(assistant.id)), status=\(DeepTutorChatLog.statusLabel(assistant.status))",
                 module: DeepTutorChatLog.module
             )
-        } else if case .regenerate = mode {
+        } else if case .regenerate = plan.intent {
             _ = try await repository.upsertMessage(assistant)
             await onStreamingUpdate?(assistant)
             logger.info(
@@ -518,13 +557,15 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
 	                    conversationID: conversationID,
 	                    userInput: userInput,
 	                    capability: capability,
-	                    conversationTitle: conversationTitle,
+	                    conversationTitle: plan.conversationTitle,
+	                    conversation: loadedConversation,
 	                    settings: settings,
 	                    visibleHistory: historyForModel,
 	                    currentUserMessage: userMessage,
 	                    assistantMessageID: assistantID,
 	                    boundMemberID: boundMemberID,
-	                    requestSnapshot: effectiveSnapshot,
+	                    requestSnapshot: requestSnapshot,
+	                    modelResolutionMode: plan.modelResolutionMode,
 	                    session: session,
 	                    onAssistantUpdate: { [repository, logger] updated in
 	                        await onStreamingUpdate?(updated)
@@ -617,42 +658,5 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
     nonisolated private func finalizeAssistantMessage(_ assistant: DeepTutorMessage) -> DeepTutorMessage {
         let parsed = DeepTutorQuizContentParser.apply(to: assistant)
         return DeepTutorMessageReducer.applyBlocks(to: parsed)
-    }
-
-    nonisolated private static func buildRequestSnapshot(
-        adapter: DeepTutorAIRuntimeAdapter,
-        conversationID: UUID,
-        capability: DeepTutorCapability,
-        conversationTitle: String,
-        userInput: String,
-        requestedCanonicalTools: [String]?,
-        boundMemberID: Int?,
-        attachments: [DeepTutorAttachment] = []
-    ) async -> DeepTutorRequestSnapshot {
-        var mountContext = DeepTutorToolMountContext.default(
-            capability: capability,
-            userInput: userInput,
-            conversationID: conversationID,
-            conversationTitle: conversationTitle
-        )
-        mountContext.hasSelectedMember = boundMemberID != nil && (boundMemberID ?? 0) > 0
-        mountContext.hasLocationPermission = SparkLocationService.hasWhenInUsePermission()
-        let snapshot = await adapter.aiConfigCenter.currentSnapshot()
-        mountContext.weatherToolEnabled = snapshot.weatherToolPreferences.useWeather
-        mountContext.hasAttachment = attachments.isEmpty == false
-        if let requestedCanonicalTools {
-            mountContext.snapshotRequestedTools = requestedCanonicalTools
-        }
-        if capability == .deepQuestion {
-            mountContext.toolPhase = .explore
-        }
-        let policy = DeepTutorToolPolicyResolver.resolve(mountContext)
-        let searchRevision = await adapter.aiConfigCenter.currentSnapshot().searchConfigRevision
-        return DeepTutorToolPolicyResolver.makePerTurnSnapshot(
-            for: mountContext,
-            policy: policy,
-            attachments: attachments,
-            searchConfigRevision: searchRevision
-        )
     }
 }
