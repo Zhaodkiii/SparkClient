@@ -8,6 +8,8 @@ struct DeepTutorAssistantBubble: View {
     let onDelete: (() -> Void)?
     let onSubmitAskUser: (String, [DeepTutorAskUserAnswer]) -> Void
     let onSubmitMemberSelection: (String, Int) -> Void
+    let onCaptureCardAction: (DeepTutorCaptureCardType, DeepTutorCaptureCardAction) -> Void
+    let onToolPreview: (DeepTutorToolPreviewPrompt) -> Void
     let onQuizFollowUp: (String) -> Void
     let onQuizJudge: (DeepTutorQuizQuestion, String) async -> String?
     let onQuizInlineInputFocusChanged: (Bool) -> Void
@@ -20,6 +22,8 @@ struct DeepTutorAssistantBubble: View {
         onDelete: (() -> Void)? = nil,
         onSubmitAskUser: @escaping (String, [DeepTutorAskUserAnswer]) -> Void,
         onSubmitMemberSelection: @escaping (String, Int) -> Void,
+        onCaptureCardAction: @escaping (DeepTutorCaptureCardType, DeepTutorCaptureCardAction) -> Void = { _, _ in },
+        onToolPreview: @escaping (DeepTutorToolPreviewPrompt) -> Void = { _ in },
         onQuizFollowUp: @escaping (String) -> Void = { _ in },
         onQuizJudge: @escaping (DeepTutorQuizQuestion, String) async -> String? = { _, _ in nil },
         onQuizInlineInputFocusChanged: @escaping (Bool) -> Void = { _ in }
@@ -31,6 +35,8 @@ struct DeepTutorAssistantBubble: View {
         self.onDelete = onDelete
         self.onSubmitAskUser = onSubmitAskUser
         self.onSubmitMemberSelection = onSubmitMemberSelection
+        self.onCaptureCardAction = onCaptureCardAction
+        self.onToolPreview = onToolPreview
         self.onQuizFollowUp = onQuizFollowUp
         self.onQuizJudge = onQuizJudge
         self.onQuizInlineInputFocusChanged = onQuizInlineInputFocusChanged
@@ -57,7 +63,11 @@ struct DeepTutorAssistantBubble: View {
     private func blockView(_ block: DeepTutorMessageBlock) -> some View {
         switch block.payload {
         case .trace(let payload):
-            DeepTutorTracePanelView(messageID: message.id, payload: payload)
+            DeepTutorTracePanelView(
+                message: message,
+                payload: payload,
+                onToolPreview: onToolPreview
+            )
         case .askUser(let payload):
             DeepTutorAskUserCardView(payload: payload) { answers in
                 onSubmitAskUser(payload.toolCallID, answers)
@@ -66,6 +76,10 @@ struct DeepTutorAssistantBubble: View {
             DeepTutorMemberSelectionCardView(payload: payload, members: members) { memberID in
                 onSubmitMemberSelection(payload.toolCallID, memberID)
             }
+        case .captureCard(let payload):
+            DeepTutorCaptureCardView(payload: payload, onAction: onCaptureCardAction)
+        case .memberProfile(let payload):
+            DeepTutorMemberProfileCardView(payload: payload)
         case .researchOutline(let payload):
             DeepTutorResearchOutlineCardView(payload: payload)
         case .quiz(let payload):

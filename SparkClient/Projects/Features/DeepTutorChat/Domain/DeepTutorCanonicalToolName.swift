@@ -25,6 +25,7 @@ nonisolated enum DeepTutorCanonicalToolName: String, CaseIterable, Sendable {
     case loadTools = "load_tools"
     case cron
     case askUser = "ask_user"
+    case showCustomMessageCard = "show_custom_message_card"
 
     case masteryStatus = "mastery_status"
     case masteryQuiz = "mastery_quiz"
@@ -62,6 +63,7 @@ nonisolated enum DeepTutorCanonicalToolName: String, CaseIterable, Sendable {
             loadTools.rawValue,
             cron.rawValue,
             askUser.rawValue,
+            showCustomMessageCard.rawValue,
         ]
     }
 
@@ -71,6 +73,7 @@ nonisolated enum DeepTutorCanonicalToolName: String, CaseIterable, Sendable {
             webFetch.rawValue,
             github.rawValue,
             askUser.rawValue,
+            showCustomMessageCard.rawValue,
             cron.rawValue,
         ]
     }

@@ -245,9 +245,78 @@ enum DeepTutorMessageReducer: Sendable {
                     )
                 )
             }
+            if case let .memberProfileLoaded(payload, toolCallID) = event {
+                appendMemberProfileBlock(
+                    message: message,
+                    payload: payload,
+                    toolCallID: toolCallID,
+                    blocks: &blocks,
+                    orderKey: &orderKey
+                )
+            }
+            if case let .toolResult(callID, payload) = event,
+               let capturePayload = captureCardPayload(from: payload, toolCallID: callID) {
+                appendCaptureCardBlock(
+                    message: message,
+                    payload: capturePayload,
+                    toolCallID: callID,
+                    blocks: &blocks,
+                    orderKey: &orderKey
+                )
+            }
         }
 
         return orderKey
+    }
+
+    nonisolated private static func appendCaptureCardBlock(
+        message: DeepTutorMessage,
+        payload: DeepTutorCaptureCardPayload,
+        toolCallID: String,
+        blocks: inout [DeepTutorMessageBlock],
+        orderKey: inout Double
+    ) {
+        if blocks.contains(where: { block in
+            guard case let .captureCard(existing) = block.payload else { return false }
+            return existing.sourceToolCallID == toolCallID || existing.cardType == payload.cardType
+        }) {
+            return
+        }
+
+        blocks.append(
+            DeepTutorMessageBlock(
+                id: DeepTutorMessageCodec.stableBlockID(messageID: message.id, suffix: "capture-\(toolCallID)-\(payload.cardType.rawValue)"),
+                kind: .captureCard,
+                payload: .captureCard(payload),
+                toolCallID: toolCallID,
+                orderKey: orderKey
+            )
+        )
+        orderKey += 100
+    }
+
+    nonisolated private static func captureCardPayload(
+        from toolResult: DeepTutorToolResultPayload,
+        toolCallID: String
+    ) -> DeepTutorCaptureCardPayload? {
+        let metadata = toolResult.metadata ?? [:]
+        let kind = (metadata["kind"] ?? toolResult.kind)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard kind == "capture_card"
+            || kind == DeepTutorToolName.showCustomMessageCard.rawValue else {
+            return nil
+        }
+        guard let rawType = metadata["card_type"],
+              let cardType = DeepTutorCaptureCardType(rawValue: rawType) else {
+            return nil
+        }
+        return DeepTutorCaptureCardPayload(
+            cardType: cardType,
+            title: metadata["title"],
+            subtitle: metadata["subtitle"],
+            sourceToolCallID: toolCallID
+        )
     }
 
     nonisolated private static func appendAskUserBlock(
@@ -402,6 +471,24 @@ enum DeepTutorMessageReducer: Sendable {
             return
         }
 
+        if let preserved = completedMemberSelectionBlockToPreserve(
+            in: message,
+            requestedToolCallID: toolCallID,
+            orderKey: orderKey
+        ) {
+            blocks.append(preserved)
+            orderKey += 100
+            DeepTutorChatLog.memberSelectionPersistProbe(
+                phase: "reducer_preserve_completed_block",
+                conversationID: message.conversationID,
+                messageID: message.id,
+                source: "reducer",
+                summary: DeepTutorChatLog.memberSelectionSummary(for: message),
+                extra: "requestedTool=\(toolCallID) preservedTool=\(preserved.toolCallID ?? "-")"
+            )
+            return
+        }
+
         let resolved = message.events.contains { event in
             if case let .memberSelectionResolved(existingID, _, _) = event {
                 return existingID == toolCallID
@@ -424,6 +511,14 @@ enum DeepTutorMessageReducer: Sendable {
                 resultText = L10n.text("tool.result.request_member_selection.completed")
             }
         }
+        DeepTutorChatLog.memberSelectionPersistProbe(
+            phase: "reducer_member_block",
+            conversationID: message.conversationID,
+            messageID: message.id,
+            source: "reducer",
+            summary: DeepTutorChatLog.memberSelectionSummary(for: message),
+            extra: "toolCall=\(toolCallID) resolved=\(resolved) selected=\(selectedMemberID.map(String.init) ?? "-") status=\((resolved ? DeepTutorMemberSelectionBlockPayload.Status.completed : status).rawValue)"
+        )
 
         let blockID = DeepTutorMessageCodec.stableBlockID(messageID: message.id, suffix: "member-\(toolCallID)")
         blocks.append(
@@ -453,6 +548,74 @@ enum DeepTutorMessageReducer: Sendable {
             toolCallID: toolCallID,
             memberCount: 0,
             status: resolved ? "completed" : "pending"
+        )
+    }
+
+    nonisolated private static func appendMemberProfileBlock(
+        message: DeepTutorMessage,
+        payload: DeepTutorMemberProfileBlockPayload,
+        toolCallID: String,
+        blocks: inout [DeepTutorMessageBlock],
+        orderKey: inout Double
+    ) {
+        if blocks.contains(where: { block in
+            guard case let .memberProfile(existing) = block.payload else { return false }
+            return existing.toolCallID == toolCallID || (existing.memberID == payload.memberID && existing.source == payload.source)
+        }) {
+            return
+        }
+
+        var normalized = payload
+        normalized.toolCallID = toolCallID
+        normalized.updatedAt = Date()
+        if normalized.createdAt.timeIntervalSince1970 <= 0 {
+            normalized.createdAt = normalized.updatedAt
+        }
+
+        blocks.append(
+            DeepTutorMessageBlock(
+                id: DeepTutorMessageCodec.stableBlockID(messageID: message.id, suffix: "member-profile-\(toolCallID)"),
+                kind: .memberProfile,
+                payload: .memberProfile(normalized),
+                toolCallID: toolCallID,
+                orderKey: orderKey
+            )
+        )
+        orderKey += 100
+    }
+
+    nonisolated private static func completedMemberSelectionBlockToPreserve(
+        in message: DeepTutorMessage,
+        requestedToolCallID: String,
+        orderKey: Double
+    ) -> DeepTutorMessageBlock? {
+        let completedBlocks = message.blocks.filter { block in
+            guard case let .memberSelection(payload) = block.payload else { return false }
+            return payload.status == .completed
+        }
+        guard completedBlocks.isEmpty == false else { return nil }
+
+        let matched = completedBlocks.first { block in
+            guard case let .memberSelection(payload) = block.payload else { return false }
+            return payload.toolCallID == requestedToolCallID || block.toolCallID == requestedToolCallID
+        } ?? (completedBlocks.count == 1 ? completedBlocks[0] : nil)
+
+        guard let matched,
+              case var .memberSelection(payload) = matched.payload else {
+            return nil
+        }
+
+        payload.status = .completed
+        payload.resultText = payload.resultText ?? L10n.text("tool.result.request_member_selection.completed")
+        return DeepTutorMessageBlock(
+            id: matched.id,
+            kind: matched.kind,
+            payload: .memberSelection(payload),
+            toolCallID: matched.toolCallID ?? payload.toolCallID,
+            revision: matched.revision,
+            orderKey: orderKey,
+            createdAt: matched.createdAt,
+            updatedAt: matched.updatedAt
         )
     }
 

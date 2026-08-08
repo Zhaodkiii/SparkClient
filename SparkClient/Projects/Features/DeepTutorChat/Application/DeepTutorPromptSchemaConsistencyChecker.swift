@@ -4,6 +4,7 @@ import Foundation
 /// 否则模型只能在 reasoning 中承认「没有相关工具」而无法真正调用。
 enum DeepTutorPromptSchemaConsistencyChecker: Sendable {
     private nonisolated static let watchedTools: [(toolName: String, promptMarker: String)] = [
+        (SparkToolName.showCustomMessageCard.rawValue, "show_custom_message_card"),
         (SparkToolName.requestMemberSelection.rawValue, "request_member_selection"),
         (SparkToolName.fetchSleepDetails.rawValue, "fetch_sleep_details"),
         (SparkToolName.fetchStepDetails.rawValue, "fetch_step_details"),

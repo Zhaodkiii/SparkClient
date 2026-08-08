@@ -6,7 +6,9 @@ enum DeepTutorBlockKindConstants: Sendable {
     nonisolated static let thinking = "deepTutorThinking"
     nonisolated static let trace = "deepTutorTrace"
     nonisolated static let askUser = "deepTutorAskUser"
+    nonisolated static let captureCard = "deepTutorCaptureCard"
     nonisolated static let memberSelection = "deepTutorMemberSelection"
+    nonisolated static let memberProfile = "deepTutorMemberProfile"
     nonisolated static let generatedFile = "deepTutorGeneratedFile"
     nonisolated static let researchOutline = "deepTutorResearchOutline"
     nonisolated static let quiz = "deepTutorQuiz"
@@ -86,7 +88,9 @@ nonisolated enum DeepTutorMessageCodec {
         case .thinking: DeepTutorBlockKindConstants.thinking
         case .trace: DeepTutorBlockKindConstants.trace
         case .askUser: DeepTutorBlockKindConstants.askUser
+        case .captureCard: DeepTutorBlockKindConstants.captureCard
         case .memberSelection: DeepTutorBlockKindConstants.memberSelection
+        case .memberProfile: DeepTutorBlockKindConstants.memberProfile
         case .generatedFile: DeepTutorBlockKindConstants.generatedFile
         case .researchOutline: DeepTutorBlockKindConstants.researchOutline
         case .quiz: DeepTutorBlockKindConstants.quiz
@@ -103,7 +107,9 @@ nonisolated enum DeepTutorMessageCodec {
         case DeepTutorBlockKindConstants.thinking: .thinking
         case DeepTutorBlockKindConstants.trace: .trace
         case DeepTutorBlockKindConstants.askUser: .askUser
+        case DeepTutorBlockKindConstants.captureCard: .captureCard
         case DeepTutorBlockKindConstants.memberSelection: .memberSelection
+        case DeepTutorBlockKindConstants.memberProfile: .memberProfile
         case DeepTutorBlockKindConstants.generatedFile: .generatedFile
         case DeepTutorBlockKindConstants.researchOutline: .researchOutline
         case DeepTutorBlockKindConstants.quiz: .quiz

@@ -1,17 +1,29 @@
+import AVFoundation
+import PhotosUI
 import SwiftUI
+import UniformTypeIdentifiers
+import UIKit
 
 struct DeepTutorChatPage: View {
     let conversationID: UUID
     @ObservedObject var viewModel: DeepTutorChatViewModel
+    @ObservedObject private var toolInteractionCoordinator: DeepTutorToolInteractionCoordinator
     @StateObject private var refreshCoordinator: DeepTutorRefreshCoordinator
     @State private var isComposerFocused = false
     @State private var showAttachmentPreview = false
     @State private var previewInputs: [FilePreviewInput] = []
     @State private var previewStartIndex = 0
+    @State private var pendingCaptureCardType: DeepTutorCaptureCardType?
+    @State private var showCaptureCameraPicker = false
+    @State private var showCaptureCameraUnavailableAlert = false
+    @State private var showCaptureDocumentPicker = false
+    @State private var showCapturePhotoPicker = false
+    @State private var capturePhotoItems: [PhotosPickerItem] = []
 
     init(conversationID: UUID, viewModel: DeepTutorChatViewModel) {
         self.conversationID = conversationID
         self.viewModel = viewModel
+        _toolInteractionCoordinator = ObservedObject(wrappedValue: viewModel.toolInteractionCoordinator)
         _refreshCoordinator = StateObject(wrappedValue: DeepTutorRefreshCoordinator(conversationID: conversationID, viewModel: viewModel))
     }
 
@@ -84,13 +96,82 @@ struct DeepTutorChatPage: View {
                 }
             }
         }
+        .sheet(
+            item: Binding(
+                get: { toolInteractionCoordinator.activePresentation },
+                set: { newValue in
+                    if newValue == nil {
+                        toolInteractionCoordinator.dismissActivePresentationByUser()
+                    }
+                }
+            )
+        ) { active in
+            DeepTutorToolInteractionPresentationSheet(
+                active: active,
+                coordinator: toolInteractionCoordinator
+            )
+            .interactiveDismissDisabled(active.snapshot.requiresForcedSheetDismiss)
+        }
         .unifiedFilePreview(
             isPresented: $showAttachmentPreview,
             inputs: previewInputs,
             startIndex: previewStartIndex
         )
+        .photosPicker(
+            isPresented: $showCapturePhotoPicker,
+            selection: $capturePhotoItems,
+            maxSelectionCount: DeepTutorAttachmentMapper.maxComposerAttachments,
+            matching: .images
+        )
+        .onChange(of: capturePhotoItems) { items in
+            Task {
+                let files = await convertCapturePhotoItems(items)
+                enqueueCaptureFiles(files, source: "capture_card_photo_library")
+                capturePhotoItems = []
+            }
+        }
+        .fileImporter(
+            isPresented: $showCaptureDocumentPicker,
+            allowedContentTypes: [.image, .pdf, .plainText, .text],
+            allowsMultipleSelection: true
+        ) { result in
+            guard case .success(let urls) = result else {
+                return
+            }
+            let files = urls.compactMap {
+                MedicalUploadLocalFileImportSupport.copyToTempFile(from: $0, logger: ConsoleLogger())
+            }
+            enqueueCaptureFiles(files, source: "capture_card_files")
+        }
+        .fullScreenCover(isPresented: $showCaptureCameraPicker) {
+            CustomCameraFullScreenView(
+                onMediaBatchCaptured: { mediaItems in
+                    handleCaptureCameraMediaBatch(mediaItems)
+                    showCaptureCameraPicker = false
+                },
+                onImageCaptured: { image in
+                    handleCaptureCameraImage(image)
+                    showCaptureCameraPicker = false
+                },
+                onVideoCaptured: { _, _ in
+                    showCaptureCameraPicker = false
+                },
+                onDismiss: {
+                    showCaptureCameraPicker = false
+                }
+            )
+            .ignoresSafeArea()
+        }
+        .alert(L10n.text("medical.upload.medicine_box.sheet.camera_unavailable_title"), isPresented: $showCaptureCameraUnavailableAlert) {
+            Button(L10n.text("common.ok"), role: .cancel) {}
+        } message: {
+            Text(L10n.text("medical.upload.medicine_box.sheet.camera_unavailable_message"))
+        }
         .task(id: conversationID) {
             await viewModel.openConversation(conversationID)
+        }
+        .onDisappear {
+            toolInteractionCoordinator.reset()
         }
     }
 
@@ -100,6 +181,91 @@ struct DeepTutorChatPage: View {
         previewInputs = DeepTutorAttachmentPreviewInputBuilder.previewInputs(for: drafts)
         previewStartIndex = index
         showAttachmentPreview = true
+    }
+
+    private func handleCaptureCardAction(
+        cardType: DeepTutorCaptureCardType,
+        action: DeepTutorCaptureCardAction
+    ) {
+        guard viewModel.state.isStreaming == false else { return }
+        pendingCaptureCardType = cardType
+        switch action {
+        case .camera:
+            presentCaptureCamera()
+        case .photoLibrary:
+            showCapturePhotoPicker = true
+        case .files:
+            guard cardType.supportsFiles else { return }
+            showCaptureDocumentPicker = true
+        }
+    }
+
+    private func presentCaptureCamera() {
+        if AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) != nil {
+            showCaptureCameraPicker = true
+        } else {
+            showCaptureCameraUnavailableAlert = true
+        }
+    }
+
+    private func enqueueCaptureFiles(_ files: [MedicalUploadLocalFile], source: String) {
+        guard files.isEmpty == false else { return }
+        let cardType = pendingCaptureCardType?.rawValue ?? "unknown"
+        viewModel.handleAttachmentsPicked(files, source: "\(source)_\(cardType)")
+        isComposerFocused = true
+    }
+
+    private func handleCaptureCameraMediaBatch(_ mediaItems: [CustomCameraMedia]) {
+        let files = mediaItems
+            .compactMap { $0.getImage() }
+            .prefix(DeepTutorAttachmentMapper.maxComposerAttachments)
+            .compactMap { saveCaptureUIImageToTemp(image: $0, namePrefix: "deeptutor_camera") }
+        enqueueCaptureFiles(Array(files), source: "capture_card_camera")
+    }
+
+    private func handleCaptureCameraImage(_ image: UIImage) {
+        guard let file = saveCaptureUIImageToTemp(image: image, namePrefix: "deeptutor_camera") else { return }
+        enqueueCaptureFiles([file], source: "capture_card_camera")
+    }
+
+    private func convertCapturePhotoItems(_ items: [PhotosPickerItem]) async -> [MedicalUploadLocalFile] {
+        var files: [MedicalUploadLocalFile] = []
+        for item in items.prefix(DeepTutorAttachmentMapper.maxComposerAttachments) {
+            guard let data = try? await item.loadTransferable(type: Data.self),
+                  let file = saveCaptureDataToTemp(
+                    data: data,
+                    preferredExtension: "jpg",
+                    namePrefix: "deeptutor_photo"
+                  ) else {
+                continue
+            }
+            files.append(file)
+        }
+        return files
+    }
+
+    private func saveCaptureUIImageToTemp(image: UIImage, namePrefix: String) -> MedicalUploadLocalFile? {
+        guard let data = image.jpegData(compressionQuality: 0.95) else { return nil }
+        return saveCaptureDataToTemp(data: data, preferredExtension: "jpg", namePrefix: namePrefix)
+    }
+
+    private func saveCaptureDataToTemp(
+        data: Data,
+        preferredExtension: String,
+        namePrefix: String
+    ) -> MedicalUploadLocalFile? {
+        let filename = "\(namePrefix)_\(UUID().uuidString).\(preferredExtension)"
+        let target = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+        do {
+            try data.write(to: target, options: .atomic)
+            return MedicalUploadLocalFile(
+                url: target,
+                displayName: filename,
+                mimeType: UTType(filenameExtension: preferredExtension)?.preferredMIMEType
+            )
+        } catch {
+            return nil
+        }
     }
 
     @ViewBuilder
@@ -113,7 +279,8 @@ struct DeepTutorChatPage: View {
                 conversationID: conversationID,
                 viewModel: viewModel,
                 refreshCoordinator: refreshCoordinator,
-                fileTransferService: viewModel.composerFileTransferService
+                fileTransferService: viewModel.composerFileTransferService,
+                onCaptureCardAction: handleCaptureCardAction
             )
         case .error(let message):
             VStack(spacing: 12) {

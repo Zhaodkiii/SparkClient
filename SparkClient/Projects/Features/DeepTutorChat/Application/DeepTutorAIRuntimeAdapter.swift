@@ -960,6 +960,7 @@ struct DeepTutorAIRuntimeAdapter: Sendable {
             case .askUserResolved(let toolCallID, let answers): "askResolved(a=\(answers.count)#\(toolCallID))"
             case .memberSelectionRequested(let reason, _, let toolCallID): "memberSelection(\(reason.count)#\(toolCallID))"
             case .memberSelectionResolved(let toolCallID, let memberID, _): "memberResolved(\(memberID)#\(toolCallID))"
+            case .memberProfileLoaded(let payload, let toolCallID): "memberProfile(\(payload.memberID)#\(toolCallID))"
             case .quizQuestionEmitted(let question, let index, _): "quiz(\(question.id)#\(index))"
             case .result(let metadata, _): "result(\(metadata["finishReason"] ?? "-"))"
             case .error: "error"
@@ -1248,7 +1249,8 @@ private extension DeepTutorAIRuntimeAdapter {
             case .contentDelta, .reasoningDelta:
                 return false
             case .toolCallStarted, .toolProgress, .toolResult, .askUser, .askUserResolved,
-                 .memberSelectionRequested, .memberSelectionResolved, .quizQuestionEmitted, .result, .error:
+                 .memberSelectionRequested, .memberSelectionResolved, .memberProfileLoaded,
+                 .quizQuestionEmitted, .result, .error:
                 return true
             }
         }

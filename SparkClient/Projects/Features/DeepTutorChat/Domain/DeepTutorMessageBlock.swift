@@ -7,7 +7,9 @@ nonisolated enum DeepTutorMessageBlockKind: String, Codable, Sendable {
     case thinking
     case trace
     case askUser
+    case captureCard
     case memberSelection
+    case memberProfile
     case generatedFile
     case researchOutline
     case quiz
@@ -31,7 +33,9 @@ nonisolated enum DeepTutorMessageBlockPayload: Codable, Equatable, Sendable {
     case thinking(String)
     case trace(DeepTutorTraceBlockPayload)
     case askUser(DeepTutorAskUserBlockPayload)
+    case captureCard(DeepTutorCaptureCardPayload)
     case memberSelection(DeepTutorMemberSelectionBlockPayload)
+    case memberProfile(DeepTutorMemberProfileBlockPayload)
     case generatedFile(DeepTutorGeneratedFilePayload)
     case researchOutline(DeepTutorResearchOutlinePayload)
     case quiz(DeepTutorQuizPayload)
@@ -46,7 +50,9 @@ nonisolated enum DeepTutorMessageBlockPayload: Codable, Equatable, Sendable {
         case thinking
         case trace
         case askUser
+        case captureCard
         case memberSelection
+        case memberProfile
         case generatedFile
         case researchOutline
         case quiz
@@ -61,7 +67,9 @@ nonisolated enum DeepTutorMessageBlockPayload: Codable, Equatable, Sendable {
         case thinking
         case trace
         case askUser
+        case captureCard
         case memberSelection
+        case memberProfile
         case generatedFile
         case researchOutline
         case quiz
@@ -84,8 +92,12 @@ nonisolated enum DeepTutorMessageBlockPayload: Codable, Equatable, Sendable {
             self = .trace(try container.decode(DeepTutorTraceBlockPayload.self, forKey: .trace))
         case .askUser:
             self = .askUser(try container.decode(DeepTutorAskUserBlockPayload.self, forKey: .askUser))
+        case .captureCard:
+            self = .captureCard(try container.decode(DeepTutorCaptureCardPayload.self, forKey: .captureCard))
         case .memberSelection:
             self = .memberSelection(try container.decode(DeepTutorMemberSelectionBlockPayload.self, forKey: .memberSelection))
+        case .memberProfile:
+            self = .memberProfile(try container.decode(DeepTutorMemberProfileBlockPayload.self, forKey: .memberProfile))
         case .generatedFile:
             self = .generatedFile(try container.decode(DeepTutorGeneratedFilePayload.self, forKey: .generatedFile))
         case .researchOutline:
@@ -119,9 +131,15 @@ nonisolated enum DeepTutorMessageBlockPayload: Codable, Equatable, Sendable {
         case .askUser(let value):
             try container.encode(PayloadType.askUser, forKey: .type)
             try container.encode(value, forKey: .askUser)
+        case .captureCard(let value):
+            try container.encode(PayloadType.captureCard, forKey: .type)
+            try container.encode(value, forKey: .captureCard)
         case .memberSelection(let value):
             try container.encode(PayloadType.memberSelection, forKey: .type)
             try container.encode(value, forKey: .memberSelection)
+        case .memberProfile(let value):
+            try container.encode(PayloadType.memberProfile, forKey: .type)
+            try container.encode(value, forKey: .memberProfile)
         case .generatedFile(let value):
             try container.encode(PayloadType.generatedFile, forKey: .type)
             try container.encode(value, forKey: .generatedFile)
@@ -548,6 +566,43 @@ nonisolated struct DeepTutorMemberSelectionBlockPayload: Codable, Equatable, Sen
         }
         return nil
     }
+}
+
+nonisolated struct DeepTutorMemberProfileSectionCardPayload: Codable, Equatable, Sendable, Identifiable {
+    var sectionCode: String
+    var title: String
+    var summary: String
+    var status: String
+
+    var id: String { sectionCode }
+}
+
+nonisolated struct DeepTutorMemberProfileBlockPayload: Codable, Equatable, Sendable {
+    var toolCallID: String
+    var memberID: Int
+    var memberName: String
+    var relationshipText: String
+    var genderText: String
+    var ageText: String
+    var bodyMetricsSummary: String
+    var requestedFocus: String?
+    var basicProfileSummary: String
+    var healthHistorySummary: String
+    var lifestyleSummary: String
+    var examArchiveSummary: String
+    var riskAssessmentSummary: String
+    var sections: [DeepTutorMemberProfileSectionCardPayload]
+    var medicalCaseCount: Int
+    var symptomCount: Int
+    var surgeryCount: Int
+    var followUpCount: Int
+    var healthExamReportCount: Int
+    var examinationReportCount: Int
+    var medicationPlanCount: Int
+    var guidanceUpdatedAt: Date?
+    var source: String
+    var createdAt: Date
+    var updatedAt: Date
 }
 
 nonisolated struct DeepTutorGeneratedFilePayload: Codable, Equatable, Sendable {

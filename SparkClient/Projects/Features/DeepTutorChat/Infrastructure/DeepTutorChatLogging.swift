@@ -253,6 +253,52 @@ nonisolated enum DeepTutorChatLog {
         )
     }
 
+    nonisolated static func memberSelectionPersistProbe(
+        phase: String,
+        conversationID: UUID,
+        messageID: UUID,
+        source: String,
+        summary: String,
+        extra: String = "-"
+    ) {
+        logInfo(
+            "deeptutor.member_selection.persist_probe.\(phase) conversation=\(shortID(conversationID)) message=\(shortID(messageID)) source=\(source) summary=\(contentSnippet(summary, limit: 700)) extra=\(contentSnippet(extra, limit: 700))"
+        )
+    }
+
+    nonisolated static func memberSelectionSummary(for message: DeepTutorMessage) -> String {
+        let blocks = message.blocks.compactMap { block -> String? in
+            guard case let .memberSelection(payload) = block.payload else { return nil }
+            return [
+                "block=\(shortID(block.id))",
+                "rowTool=\(contentSnippet(block.toolCallID ?? "-", limit: 40))",
+                "payloadTool=\(contentSnippet(payload.toolCallID, limit: 40))",
+                "status=\(payload.status.rawValue)",
+                "selected=\(payload.selectedMemberID.map(String.init) ?? "-")",
+                "name=\(contentSnippet(payload.selectedMemberName ?? "-", limit: 40))",
+            ].joined(separator: "/")
+        }
+        let resolvedEvents = message.events.compactMap { event -> String? in
+            if case let .memberSelectionResolved(toolCallID, memberID, memberName) = event {
+                return "resolved(tool=\(contentSnippet(toolCallID, limit: 40)),member=\(memberID),name=\(contentSnippet(memberName ?? "-", limit: 40)))"
+            }
+            return nil
+        }
+        let requestedEvents = message.events.compactMap { event -> String? in
+            if case let .memberSelectionRequested(_, _, toolCallID) = event {
+                return "requested(tool=\(contentSnippet(toolCallID, limit: 40)))"
+            }
+            return nil
+        }
+        return [
+            "status=\(message.status.rawValue)",
+            "contentLen=\(message.content.count)",
+            "blocks=\(blocks.isEmpty ? "-" : blocks.joined(separator: ","))",
+            "requested=\(requestedEvents.isEmpty ? "-" : requestedEvents.joined(separator: ","))",
+            "resolved=\(resolvedEvents.isEmpty ? "-" : resolvedEvents.joined(separator: ","))",
+        ].joined(separator: " ")
+    }
+
     nonisolated static func conversationOpenStart(conversationID: UUID) {
         guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
         logDebug("deeptutor.conversation.open.start conversation=\(shortID(conversationID))")

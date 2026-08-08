@@ -338,6 +338,7 @@ struct DeepTutorAgenticRuntime: Sendable {
 
     private func isPauseTool(_ name: String) -> Bool {
         name == DeepTutorToolName.askUser.rawValue
+            || name == DeepTutorToolName.showCustomMessageCard.rawValue
             || name == DeepTutorToolName.requestMemberSelection.rawValue
     }
 }

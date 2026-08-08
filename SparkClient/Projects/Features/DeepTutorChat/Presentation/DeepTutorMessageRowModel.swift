@@ -22,6 +22,8 @@ struct DeepTutorMessageRowActions {
     var onSelectBranch: (UUID, Int) -> Void
     var onSubmitAskUser: (UUID, String, [DeepTutorAskUserAnswer]) -> Void
     var onSubmitMemberSelection: (UUID, String, Int) -> Void
+    var onCaptureCardAction: (DeepTutorCaptureCardType, DeepTutorCaptureCardAction) -> Void
+    var onToolPreview: (DeepTutorToolPreviewPrompt) -> Void
     var onQuizFollowUp: (String) -> Void
     var onQuizJudge: (DeepTutorQuizQuestion, String) async -> String?
     var onQuizInlineInputFocusChanged: (Bool) -> Void
@@ -56,11 +58,22 @@ enum DeepTutorMessageRowModelBuilder: Sendable {
                 hasher.combine(payload.isResolved)
                 hasher.combine(payload.payload.questions.count)
                 hasher.combine(payload.answers.count)
+            case .captureCard(let payload):
+                hasher.combine(payload.cardType.rawValue)
+                hasher.combine(payload.title)
+                hasher.combine(payload.subtitle)
+                hasher.combine(payload.sourceToolCallID)
             case .memberSelection(let payload):
                 hasher.combine(payload.toolCallID)
                 hasher.combine(payload.status.rawValue)
                 hasher.combine(payload.selectedMemberID)
                 hasher.combine(payload.reason)
+            case .memberProfile(let payload):
+                hasher.combine(payload.toolCallID)
+                hasher.combine(payload.memberID)
+                hasher.combine(payload.memberName)
+                hasher.combine(payload.healthExamReportCount)
+                hasher.combine(payload.riskAssessmentSummary)
             case .quiz(let payload):
                 hasher.combine(payload.turnID)
                 hasher.combine(payload.questions.count)

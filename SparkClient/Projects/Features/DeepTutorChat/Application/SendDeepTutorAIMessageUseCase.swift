@@ -301,6 +301,14 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
         guard canonicalToolCallID.isEmpty == false else {
             throw DeepTutorChatError.messageNotFound
         }
+        DeepTutorChatLog.memberSelectionPersistProbe(
+            phase: "submit_loaded",
+            conversationID: conversationID,
+            messageID: assistantMessageID,
+            source: "usecase",
+            summary: DeepTutorChatLog.memberSelectionSummary(for: assistant),
+            extra: "submittedTool=\(toolCallID) canonicalTool=\(canonicalToolCallID) memberID=\(memberID)"
+        )
 
         logger.info(
             "DeepTutor 成员选择已恢复（DeepTutor inline），toolCall=\(canonicalToolCallID), submittedToolCall=\(toolCallID), memberID=\(memberID)",
@@ -311,7 +319,23 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
         events.append(.memberSelectionResolved(toolCallID: canonicalToolCallID, memberID: memberID, memberName: memberName))
         assistant = assistant.replacing(events: events, status: .streaming)
         assistant = DeepTutorMessageReducer.applyBlocks(to: assistant)
+        DeepTutorChatLog.memberSelectionPersistProbe(
+            phase: "submit_after_reducer",
+            conversationID: conversationID,
+            messageID: assistantMessageID,
+            source: "usecase",
+            summary: DeepTutorChatLog.memberSelectionSummary(for: assistant),
+            extra: "canonicalTool=\(canonicalToolCallID) memberID=\(memberID)"
+        )
         _ = try await repository.upsertMessage(assistant)
+        DeepTutorChatLog.memberSelectionPersistProbe(
+            phase: "submit_after_local_upsert",
+            conversationID: conversationID,
+            messageID: assistantMessageID,
+            source: "usecase",
+            summary: DeepTutorChatLog.memberSelectionSummary(for: assistant),
+            extra: "canonicalTool=\(canonicalToolCallID) memberID=\(memberID)"
+        )
         await eventBus.publish(.memberSelectionResolved(toolCallID: canonicalToolCallID, memberID: memberID, memberName: memberName))
         await onStreamingUpdate?(assistant)
 
@@ -354,6 +378,14 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
                     await onStreamingUpdate?(updated)
                     let shouldPersist = await session.shouldFlushDatabase(force: updated.status == .ready)
                     if shouldPersist {
+                        DeepTutorChatLog.memberSelectionPersistProbe(
+                            phase: "resume_stream_flush_before_upsert",
+                            conversationID: updated.conversationID,
+                            messageID: updated.id,
+                            source: "usecase",
+                            summary: DeepTutorChatLog.memberSelectionSummary(for: updated),
+                            extra: "updatedStatus=\(updated.status.rawValue)"
+                        )
                         _ = try? await repository.upsertMessage(updated)
                         await session.markDatabaseFlushed()
                     }
@@ -363,7 +395,23 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
 
         var finalAssistant = streamResult.assistantMessage.replacing(status: .ready)
         finalAssistant = finalizeAssistantMessage(finalAssistant)
+        DeepTutorChatLog.memberSelectionPersistProbe(
+            phase: "final_before_upsert",
+            conversationID: conversationID,
+            messageID: assistantMessageID,
+            source: "usecase",
+            summary: DeepTutorChatLog.memberSelectionSummary(for: finalAssistant),
+            extra: "canonicalTool=\(canonicalToolCallID)"
+        )
         _ = try await repository.upsertMessage(finalAssistant)
+        DeepTutorChatLog.memberSelectionPersistProbe(
+            phase: "final_after_upsert",
+            conversationID: conversationID,
+            messageID: assistantMessageID,
+            source: "usecase",
+            summary: DeepTutorChatLog.memberSelectionSummary(for: finalAssistant),
+            extra: "canonicalTool=\(canonicalToolCallID)"
+        )
         await onStreamingUpdate?(finalAssistant)
 
         let durationMs = Int(Date().timeIntervalSince(start) * 1000)

@@ -12,6 +12,7 @@ extension DeepTutorChatViewModel {
             saveMemoryUseCase: container.saveMemoryUseCase,
             updateMemoryUseCase: container.updateMemoryUseCase,
             memberContextStore: container.memberContextStore,
+            medicalQueryAPI: container.backend.medicalQuery,
             fileTransferService: container.fileTransferService,
             logger: container.logger
         )

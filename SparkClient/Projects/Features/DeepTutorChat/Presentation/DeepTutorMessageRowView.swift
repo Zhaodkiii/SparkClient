@@ -43,6 +43,8 @@ struct DeepTutorMessageRowView: View {
                     onSubmitMemberSelection: { toolCallID, memberID in
                         actions.onSubmitMemberSelection(message.id, toolCallID, memberID)
                     },
+                    onCaptureCardAction: actions.onCaptureCardAction,
+                    onToolPreview: actions.onToolPreview,
                     onQuizFollowUp: actions.onQuizFollowUp,
                     onQuizJudge: actions.onQuizJudge,
                     onQuizInlineInputFocusChanged: actions.onQuizInlineInputFocusChanged

@@ -388,8 +388,30 @@ actor DeepTutorLocalChatStore {
         guard await activeAccountID() != nil else {
             throw DeepTutorChatError.notAuthenticated
         }
+        if message.blocks.contains(where: { $0.kind == .memberSelection })
+            || message.events.contains(where: { if case .memberSelectionResolved = $0 { return true }; return false }) {
+            DeepTutorChatLog.memberSelectionPersistProbe(
+                phase: "upsert_input",
+                conversationID: message.conversationID,
+                messageID: message.id,
+                source: "store",
+                summary: DeepTutorChatLog.memberSelectionSummary(for: message)
+            )
+        }
+        let normalizedMessage = DeepTutorMemberSelectionPersistenceRepair.normalized(message)
+        if normalizedMessage.blocks.contains(where: { $0.kind == .memberSelection })
+            || normalizedMessage.events.contains(where: { if case .memberSelectionResolved = $0 { return true }; return false }) {
+            DeepTutorChatLog.memberSelectionPersistProbe(
+                phase: "upsert_normalized",
+                conversationID: normalizedMessage.conversationID,
+                messageID: normalizedMessage.id,
+                source: "store",
+                summary: DeepTutorChatLog.memberSelectionSummary(for: normalizedMessage),
+                extra: "changed=\(normalizedMessage != message)"
+            )
+        }
         let inserted = try await kernel.writeWithoutNotification { context, accountID in
-            guard let threadObject = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: message.conversationID) else {
+            guard let threadObject = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: normalizedMessage.conversationID) else {
                 throw DeepTutorChatError.conversationNotFound
             }
             let object: NSManagedObject
@@ -397,7 +419,7 @@ actor DeepTutorLocalChatStore {
             if let existing = try Self.fetchMessage(
                 context: context,
                 ownerAccountID: accountID,
-                clientMessageID: message.id
+                clientMessageID: normalizedMessage.id
             ) {
                 object = existing
                 didInsert = false
@@ -405,58 +427,66 @@ actor DeepTutorLocalChatStore {
                 object = NSEntityDescription.insertNewObject(forEntityName: EntityName.message, into: context)
                 didInsert = true
             }
-            try Self.fillMessage(object: object, message: message, context: context, ownerAccountID: accountID)
+            try Self.fillMessage(object: object, message: normalizedMessage, context: context, ownerAccountID: accountID)
+            DeepTutorChatLog.memberSelectionPersistProbe(
+                phase: "upsert_filled_rows",
+                conversationID: normalizedMessage.conversationID,
+                messageID: normalizedMessage.id,
+                source: "store",
+                summary: DeepTutorChatLog.memberSelectionSummary(for: normalizedMessage),
+                extra: "didInsert=\(didInsert)"
+            )
             threadObject.setValue(Date(), forKey: "updatedAt")
             return didInsert
         }
         let validation = DeepTutorMessageCodec.validateMessageBlocks(
-            message.blocks,
-            messageID: message.id
+            normalizedMessage.blocks,
+            messageID: normalizedMessage.id
         )
-        let askUserCount = message.blocks.filter { $0.kind == .askUser }.count
-        let memberSelectionCount = message.blocks.filter { $0.kind == .memberSelection }.count
+        let askUserCount = normalizedMessage.blocks.filter { $0.kind == .askUser }.count
+        let memberSelectionCount = normalizedMessage.blocks.filter { $0.kind == .memberSelection }.count
         if validation.ok {
             DeepTutorChatLog.messagePersistRoundtripOK(
-                conversationID: message.conversationID,
-                messageID: message.id,
-                blockCount: message.blocks.count,
+                conversationID: normalizedMessage.conversationID,
+                messageID: normalizedMessage.id,
+                blockCount: normalizedMessage.blocks.count,
                 askUserBlockCount: askUserCount,
                 memberSelectionBlockCount: memberSelectionCount
             )
         } else {
             DeepTutorChatLog.messagePersistRoundtripFailed(
-                conversationID: message.conversationID,
-                messageID: message.id,
+                conversationID: normalizedMessage.conversationID,
+                messageID: normalizedMessage.id,
                 failedKinds: validation.failedKinds
             )
             DeepTutorChatLog.blockLifecycle(
-                conversationID: message.conversationID,
-                assistantMessageID: message.id,
+                conversationID: normalizedMessage.conversationID,
+                assistantMessageID: normalizedMessage.id,
                 blockKind: validation.failedKinds.joined(separator: ","),
                 phase: "codec_roundtrip_failed",
                 source: "persistence",
-                statusAfter: message.status.rawValue,
+                statusAfter: normalizedMessage.status.rawValue,
                 reason: "failedKinds=\(validation.failedKinds.joined(separator: ","))"
             )
         }
         DeepTutorChatLog.messagePersistCompleted(
-            conversationID: message.conversationID,
-            messageID: message.id,
-            status: message.status,
-            blockCount: message.blocks.count,
+            conversationID: normalizedMessage.conversationID,
+            messageID: normalizedMessage.id,
+            status: normalizedMessage.status,
+            blockCount: normalizedMessage.blocks.count,
             askUserBlockCount: askUserCount,
             memberSelectionBlockCount: memberSelectionCount,
-            contentLength: message.content.count
+            contentLength: normalizedMessage.content.count
         )
         await postChange(
             DeepTutorConversationChangeEvent(
-                conversationID: message.conversationID,
+                conversationID: normalizedMessage.conversationID,
                 kind: inserted ? .messagesAppended : .messagesUpdated,
-                affectedMessageIDs: [message.id],
+                affectedMessageIDs: [normalizedMessage.id],
                 affectsConversationList: true
             )
         )
-        return message
+        return normalizedMessage
     }
 
     func softDeleteMessage(id: UUID, conversationID: UUID) async throws {
@@ -702,7 +732,7 @@ actor DeepTutorLocalChatStore {
             )
         }
         let updatedAt = envelope?.updatedAt ?? (object.value(forKey: "serverUpdatedAt") as? Date) ?? createdAt
-        return DeepTutorMessage(
+        let message = DeepTutorMessage(
             id: id,
             conversationID: threadID,
             role: role,
@@ -719,6 +749,35 @@ actor DeepTutorLocalChatStore {
             updatedAt: updatedAt,
             isDeleted: object.value(forKey: "isTombstone") as? Bool ?? false
         )
+        if message.blocks.contains(where: { $0.kind == .memberSelection })
+            || message.events.contains(where: { if case .memberSelectionResolved = $0 { return true }; return false }) {
+            DeepTutorChatLog.memberSelectionPersistProbe(
+                phase: "load_raw",
+                conversationID: threadID,
+                messageID: id,
+                source: "store",
+                summary: DeepTutorChatLog.memberSelectionSummary(for: message)
+            )
+        }
+        let repaired = DeepTutorMemberSelectionPersistenceRepair.normalized(message)
+        if repaired != message {
+            stats.recoveredBlocks += 1
+            stats.repairApplied = true
+            DeepTutorChatLog.memberSelectionPersistProbe(
+                phase: "load_repaired",
+                conversationID: threadID,
+                messageID: id,
+                source: "store",
+                summary: DeepTutorChatLog.memberSelectionSummary(for: repaired),
+                extra: "repairApplied=true"
+            )
+            DeepTutorChatLog.messagesLoadRepairNeeded(
+                conversationID: threadID,
+                messageID: id,
+                repairCount: stats.recoveredBlocks
+            )
+        }
+        return repaired
     }
 
     private static func fetchBlockRows(

@@ -86,7 +86,7 @@ enum DeepTutorChatDebugExporter {
         )
         let schemaNames = DeepTutorToolPolicyResolver.effectiveToolSchemaNames(inference: inference)
 
-        let presentationSummary = activePresentationSummary()
+        let presentationSummary = activePresentationSummary(viewModel: viewModel)
         let lastError = lastErrorMessage(from: state.phase)
         let turnPlanSummary = turnPlanDebugSummary(turnPlan: turnPlan)
         let consolidatedTurnEvents = consolidatedEvents(from: turnEventReplay)
@@ -296,6 +296,10 @@ enum DeepTutorChatDebugExporter {
             row["ask_user_tool_call_id"] = askUser.toolCallID
             row["ask_user_is_resolved"] = askUser.isResolved
             row["ask_user_answers"] = encodableToJSONObject(askUser.answers) ?? []
+        case .captureCard(let captureCard):
+            row["capture_card_type"] = captureCard.cardType.rawValue
+            row["capture_card_title"] = captureCard.title
+            row["capture_card_tool_call_id"] = captureCard.sourceToolCallID ?? ""
         case .trace(let trace):
             row["trace_title"] = trace.title
             row["trace_row_count"] = trace.rows.count
@@ -359,10 +363,20 @@ enum DeepTutorChatDebugExporter {
                 "type": "askUser",
                 "askUser": encodableToJSONObject(askUser) ?? [:],
             ]
+        case .captureCard(let captureCard):
+            row["payload"] = [
+                "type": "captureCard",
+                "captureCard": encodableToJSONObject(captureCard) ?? [:],
+            ]
         case .memberSelection(let memberSelection):
             row["payload"] = [
                 "type": "memberSelection",
                 "memberSelection": encodableToJSONObject(memberSelection) ?? [:],
+            ]
+        case .memberProfile(let memberProfile):
+            row["payload"] = [
+                "type": "memberProfile",
+                "memberProfile": encodableToJSONObject(memberProfile) ?? [:],
             ]
         case .trace(let trace):
             row["payload"] = [
@@ -644,6 +658,28 @@ enum DeepTutorChatDebugExporter {
                 turnTerminal: nil,
                 mergedDeltaCount: nil
             )
+        case let .memberProfileLoaded(payload, toolCallID):
+            return ConsolidatedDebugEvent(
+                type: "memberProfileLoaded",
+                callID: toolCallID,
+                round: payload.memberID,
+                text: payload.memberName,
+                toolName: DeepTutorToolName.queryMemberProfile.rawValue,
+                argsSummary: payload.requestedFocus,
+                progressLabel: nil,
+                progress: nil,
+                toolResultPayload: nil,
+                askUserPayload: nil,
+                askUserAnswers: nil,
+                resultMetadata: [
+                    "member_id": String(payload.memberID),
+                    "member_name": payload.memberName,
+                    "source": payload.source,
+                ],
+                errorMessage: nil,
+                turnTerminal: nil,
+                mergedDeltaCount: nil
+            )
         case let .quizQuestionEmitted(question, questionIndex, turnID):
             return ConsolidatedDebugEvent(
                 type: "quizQuestionEmitted",
@@ -809,6 +845,7 @@ enum DeepTutorChatDebugExporter {
         case .askUserResolved: return "askUserResolved"
         case .memberSelectionRequested: return "memberSelectionRequested"
         case .memberSelectionResolved: return "memberSelectionResolved"
+        case .memberProfileLoaded: return "memberProfileLoaded"
         case .quizQuestionEmitted: return "quizQuestionEmitted"
         case .result: return "result"
         case .error: return "error"
@@ -825,8 +862,17 @@ enum DeepTutorChatDebugExporter {
         }
     }
 
-    private static func activePresentationSummary() -> ActivePresentationSummary {
-        ActivePresentationSummary(snapshotLabel: "none", questionCount: 0)
+    private static func activePresentationSummary(viewModel: DeepTutorChatViewModel) -> ActivePresentationSummary {
+        guard let active = viewModel.toolInteractionCoordinator.activePresentation else {
+            return ActivePresentationSummary(snapshotLabel: "none", questionCount: 0)
+        }
+        switch active.snapshot {
+        case .toolPreview(let prompt):
+            return ActivePresentationSummary(
+                snapshotLabel: "toolPreview:\(prompt.toolName)",
+                questionCount: 0
+            )
+        }
     }
 
     private static func turnPlanDebugSummary(turnPlan: DeepTutorTurnPlan?) -> String {

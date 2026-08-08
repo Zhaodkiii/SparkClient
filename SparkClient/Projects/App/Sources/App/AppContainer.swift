@@ -605,6 +605,7 @@ final class AppContainer {
             saveMemoryUseCase: ai.saveMemoryUseCase,
             updateMemoryUseCase: ai.updateMemoryUseCase,
             memberContextStore: notification.memberContextStore,
+            medicalQueryAPI: backend.medicalQuery,
             fileTransferService: fileTransferService,
             logger: logger
         )

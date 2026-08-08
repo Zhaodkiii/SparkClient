@@ -33,9 +33,11 @@ final class DeepTutorChatViewModel: ObservableObject {
     private let turnEventBus: DeepTutorTurnEventBus
     private let turnCoordinator: DeepTutorTurnCoordinator
     private let runtimeAdapter: DeepTutorAIRuntimeAdapter
+    let toolInteractionCoordinator: DeepTutorToolInteractionCoordinator
     private(set) var latestTurnPlan: DeepTutorTurnPlan?
     private let fileTransferService: FileTransferService
     private let memberContextStore: MemberContextStore
+    private let medicalQueryAPI: SparkMedicalQueryAPI
     private let logger: Logger
     private var activeConversationID: UUID?
     private let messagePageSize = 50
@@ -87,6 +89,7 @@ final class DeepTutorChatViewModel: ObservableObject {
         saveMemoryUseCase: SaveMemoryUseCase,
         updateMemoryUseCase: UpdateMemoryUseCase,
         memberContextStore: MemberContextStore,
+        medicalQueryAPI: SparkMedicalQueryAPI,
         fileTransferService: FileTransferService,
         logger: Logger = ConsoleLogger()
     ) {
@@ -95,6 +98,7 @@ final class DeepTutorChatViewModel: ObservableObject {
         self.logger = logger
         self.fileTransferService = fileTransferService
         self.memberContextStore = memberContextStore
+        self.medicalQueryAPI = medicalQueryAPI
         self.loadMessagesUseCase = LoadDeepTutorMessagesUseCase(repository: repository)
         self.loadConversationsUseCase = LoadDeepTutorConversationsUseCase(repository: repository)
         self.createConversationUseCase = CreateDeepTutorConversationUseCase(repository: repository)
@@ -111,10 +115,12 @@ final class DeepTutorChatViewModel: ObservableObject {
         self.localSendMessageUseCase = SendLocalDeepTutorMessageUseCase(repository: repository, logger: logger)
         let eventBus = DeepTutorTurnEventBus()
         self.turnEventBus = eventBus
+        let memberProfileDataSource = DeepTutorMemberProfileDataSource(medicalQueryAPI: medicalQueryAPI)
         let toolRegistry = DeepTutorToolRegistry(
             tools: [
                 DeepTutorAskUserTool(),
                 DeepTutorGetCurrentMemberBindingTool(),
+                DeepTutorQueryMemberProfileTool(dataSource: memberProfileDataSource),
                 DeepTutorMemberSelectionTool(),
                 DeepTutorReadMemoryTool(loadUseCase: loadMemoryArchiveUseCase),
                 DeepTutorWriteMemoryTool(
@@ -134,6 +140,7 @@ final class DeepTutorChatViewModel: ObservableObject {
             eventBus: eventBus,
             logger: logger
         )
+        self.toolInteractionCoordinator = DeepTutorToolInteractionCoordinator()
         self.turnCoordinator = DeepTutorTurnCoordinator(
             aiConfigCenter: aiConfigCenter,
             logger: logger
@@ -610,6 +617,10 @@ final class DeepTutorChatViewModel: ObservableObject {
         }
     }
 
+    func presentToolPreview(_ prompt: DeepTutorToolPreviewPrompt) {
+        toolInteractionCoordinator.presentToolPreview(prompt: prompt)
+    }
+
     func validateCurrentModelSelection(for conversationID: UUID) async {
         let namesInPicker = Set(chatScenarioModels.map(\.name))
         let trimmed = composerSelectedModelName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -872,9 +883,9 @@ final class DeepTutorChatViewModel: ObservableObject {
         }
     }
 
-    func handleAttachmentsPicked(_ files: [MedicalUploadLocalFile]) {
+    func handleAttachmentsPicked(_ files: [MedicalUploadLocalFile], source: String = "paperclip") {
         guard state.isStreaming == false else { return }
-        DeepTutorAttachmentDiagnostics.pickStart(source: "paperclip")
+        DeepTutorAttachmentDiagnostics.pickStart(source: source)
         Task {
             let remainingSlots = max(0, DeepTutorAttachmentMapper.maxComposerAttachments - composerAttachmentDrafts.count)
             guard remainingSlots > 0 else { return }

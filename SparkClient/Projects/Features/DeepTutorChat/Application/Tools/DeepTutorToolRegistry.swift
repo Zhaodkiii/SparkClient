@@ -25,7 +25,9 @@ struct DeepTutorToolRegistry: Sendable {
         var names: [String] = [
             DeepTutorToolName.askUser.rawValue,
             DeepTutorToolName.getCurrentMemberBinding.rawValue,
+            DeepTutorToolName.queryMemberProfile.rawValue,
             DeepTutorToolName.requestMemberSelection.rawValue,
+            DeepTutorToolName.showCustomMessageCard.rawValue,
             DeepTutorToolName.writeMemory.rawValue,
         ]
 
@@ -83,11 +85,17 @@ struct DeepTutorToolRegistry: Sendable {
         工具规则：
         - 先调用 get_current_member_binding 检查当前会话是否已绑定成员。
         - \(memberStateHint)
+        - 任何个性化体检计划、筛查方案、健康检查建议生成前，必须先调用 query_member_profile 读取成员医疗资料。
         - 如果需要成员上下文且当前没有成员，先调用 request_member_selection，并在用户选择后继续原始请求。
         - 如果当前已绑定成员，但用户明确要求切换成员，先调用 request_member_selection 让用户确认。
         - 只有真正缺少用户决策时才调用 ask_user；不要问“是否继续”，不要确认用户已经说清楚的信息。
         - read_memory 只用于个性化语气、深度、格式和偏好。
+        - 当需要用户上传体检报告、化验单、影像报告或 PDF 才能继续时，调用 show_custom_message_card(card_type=report_photo)，调用后等待用户上传附件。
+        - 当需要用户提供药盒、药品外包装或说明书照片时，调用 show_custom_message_card(card_type=medicine_box_photo)，调用后等待用户上传附件。
+        - 当需要用户提供皮肤局部照片以辅助记录症状或判断是否需要就医时，调用 show_custom_message_card(card_type=skin_photo)，调用后等待用户上传附件。
+        - show_custom_message_card 只负责展示附件入口；没有用户上传的材料前，不要编造报告、药品或皮肤照片结论。
         - write_memory 只保存用户明确表达的长期偏好，不保存医疗诊断、体检异常、家族史或模型推断。
+        - query_member_profile 返回的是已整理的成员基础档案、健康病史与症状记录、生活习惯、过往体检档案、风险评估摘要，应优先基于这些资料作答。
         - ask_user 或 request_member_selection 解决后，必须继续完成用户的原始请求，不要只回复确认。
         """
     }

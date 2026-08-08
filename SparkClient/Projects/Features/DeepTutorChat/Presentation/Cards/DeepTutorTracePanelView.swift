@@ -1,8 +1,9 @@
 import SwiftUI
 
 struct DeepTutorTracePanelView: View {
-    let messageID: UUID
+    let message: DeepTutorMessage
     let payload: DeepTutorTraceBlockPayload
+    let onToolPreview: (DeepTutorToolPreviewPrompt) -> Void
     @State private var userPinnedExpansion: Bool?
     @State private var expandedToolIDs: Set<String> = []
 
@@ -41,13 +42,13 @@ struct DeepTutorTracePanelView: View {
             }
         }
         .padding(.bottom, 12)
-        .onChange(of: messageID) { _ in
+        .onChange(of: message.id) { _ in
             userPinnedExpansion = nil
         }
         .onChange(of: payload.isFinalAnswerPhase) { oldValue, newValue in
             guard userPinnedExpansion == nil, oldValue == false, newValue else { return }
             DeepTutorChatLog.traceAutoCollapse(
-                messageID: messageID,
+                messageID: message.id,
                 fromExpanded: true,
                 reason: "final_answer_phase"
             )
@@ -59,7 +60,7 @@ struct DeepTutorTracePanelView: View {
             withAnimation(.easeOut(duration: 0.3)) {
                 let next = !effectiveExpanded
                 userPinnedExpansion = next
-                DeepTutorChatLog.traceUserToggle(messageID: messageID, expanded: next)
+                DeepTutorChatLog.traceUserToggle(messageID: message.id, expanded: next)
             }
         } label: {
             HStack(spacing: 10) {
@@ -129,31 +130,18 @@ struct DeepTutorTracePanelView: View {
         let isExpandable = row.argsDetail != nil || row.resultDetail != nil
         let isToolExpanded = expandedToolIDs.contains(row.id)
         return VStack(alignment: .leading, spacing: 0) {
-            Button {
-                guard isExpandable else { return }
-                withAnimation(.easeOut(duration: 0.15)) {
-                    toggleToolExpansion(row.id)
-                }
-            } label: {
-                HStack(alignment: .top, spacing: 10) {
-                    rowIcon(row, active: row.status == .running)
-                    Text(row.verb)
-                        .font(.system(size: 14))
-                        .foregroundStyle(DeepTutorPalette.traceMutedText)
-                        .lineLimit(2)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    if isExpandable {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(DeepTutorPalette.traceMutedText.opacity(0.4))
-                            .rotationEffect(.degrees(isToolExpanded ? 0 : -90))
-                            .padding(.top, 2)
+            HStack(alignment: .top, spacing: 10) {
+                rowIcon(row, active: row.status == .running)
+                toolNameButton(for: row)
+                if isExpandable {
+                    expandButton(isExpanded: isToolExpanded) {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            toggleToolExpansion(row.id)
+                        }
                     }
                 }
-                .padding(.vertical, 6)
             }
-            .buttonStyle(.plain)
-            .disabled(isExpandable == false)
+            .padding(.vertical, 6)
 
             if isToolExpanded {
                 toolDetail(for: row)
@@ -167,48 +155,33 @@ struct DeepTutorTracePanelView: View {
         let active = row.status == .running
 
         return VStack(alignment: .leading, spacing: 0) {
-            Button {
-                guard isExpandable else { return }
-                withAnimation(.easeOut(duration: 0.15)) {
-                    toggleToolExpansion(row.id)
+            HStack(alignment: .top, spacing: 10) {
+                rowIcon(row, active: active)
+                VStack(alignment: .leading, spacing: 0) {
+                    if let chip = row.chip, chip.isEmpty == false {
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            toolNameButton(for: row, fixedSize: true)
+                            Text(chip)
+                                .font(.system(size: row.chipIsMonospaced ? 12.5 : 14, weight: .regular, design: row.chipIsMonospaced ? .monospaced : .default))
+                                .foregroundStyle(DeepTutorPalette.traceMutedText.opacity(0.55))
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                        }
+                    } else {
+                        toolNameButton(for: row)
+                    }
                 }
-            } label: {
-                HStack(alignment: .top, spacing: 10) {
-                    rowIcon(row, active: active)
-                    VStack(alignment: .leading, spacing: 0) {
-                        if let chip = row.chip, chip.isEmpty == false {
-                            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                                Text(row.verb)
-                                    .font(.system(size: 14))
-                                    .foregroundStyle(DeepTutorPalette.traceMutedText)
-                                    .fixedSize(horizontal: true, vertical: false)
-                                Text(chip)
-                                    .font(.system(size: row.chipIsMonospaced ? 12.5 : 14, weight: .regular, design: row.chipIsMonospaced ? .monospaced : .default))
-                                    .foregroundStyle(DeepTutorPalette.traceMutedText.opacity(0.55))
-                                    .lineLimit(1)
-                                    .truncationMode(.tail)
-                            }
-                        } else {
-                            Text(row.verb)
-                                .font(.system(size: 14))
-                                .foregroundStyle(DeepTutorPalette.traceMutedText)
-                                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                if isExpandable {
+                    expandButton(isExpanded: isToolExpanded) {
+                        withAnimation(.easeOut(duration: 0.15)) {
+                            toggleToolExpansion(row.id)
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    if isExpandable {
-                        Image(systemName: "chevron.down")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(DeepTutorPalette.traceMutedText.opacity(0.4))
-                            .rotationEffect(.degrees(isToolExpanded ? 0 : -90))
-                            .padding(.top, 2)
-                    }
                 }
-                .padding(.vertical, 6)
             }
-            .buttonStyle(.plain)
-            .disabled(isExpandable == false)
+            .padding(.vertical, 6)
 
             if isToolExpanded {
                 toolDetail(for: row)
@@ -240,6 +213,44 @@ struct DeepTutorTracePanelView: View {
             expandedToolIDs.remove(id)
         } else {
             expandedToolIDs.insert(id)
+        }
+    }
+
+    private func toolNameButton(for row: DeepTutorTraceRowModel, fixedSize: Bool = false) -> some View {
+        Button {
+            onToolPreview(DeepTutorToolPreviewRelatedContentMapper.makePrompt(message: message, row: row))
+        } label: {
+            Text(row.verb)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Color.accentColor.opacity(0.9))
+                .lineLimit(2)
+                .if(fixedSize) { view in
+                    view.fixedSize(horizontal: true, vertical: false)
+                }
+                .frame(maxWidth: fixedSize ? nil : .infinity, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func expandButton(isExpanded: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "chevron.down")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(DeepTutorPalette.traceMutedText.opacity(0.4))
+                .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                .padding(.top, 2)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func `if`<Content: View>(_ condition: Bool, transform: (Self) -> Content) -> some View {
+        if condition {
+            transform(self)
+        } else {
+            self
         }
     }
 }

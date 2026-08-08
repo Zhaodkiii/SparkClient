@@ -194,6 +194,31 @@ extension DeepTutorMessageCodec {
                 && left.resultText == right.resultText
                 && datesEquivalent(left.createdAt, right.createdAt)
                 && datesEquivalent(left.updatedAt, right.updatedAt)
+        case let (.memberProfile(left), .memberProfile(right)):
+            return left.toolCallID == right.toolCallID
+                && left.memberID == right.memberID
+                && left.memberName == right.memberName
+                && left.relationshipText == right.relationshipText
+                && left.genderText == right.genderText
+                && left.ageText == right.ageText
+                && left.bodyMetricsSummary == right.bodyMetricsSummary
+                && left.requestedFocus == right.requestedFocus
+                && left.basicProfileSummary == right.basicProfileSummary
+                && left.healthHistorySummary == right.healthHistorySummary
+                && left.lifestyleSummary == right.lifestyleSummary
+                && left.examArchiveSummary == right.examArchiveSummary
+                && left.riskAssessmentSummary == right.riskAssessmentSummary
+                && left.sections == right.sections
+                && left.medicalCaseCount == right.medicalCaseCount
+                && left.symptomCount == right.symptomCount
+                && left.surgeryCount == right.surgeryCount
+                && left.followUpCount == right.followUpCount
+                && left.healthExamReportCount == right.healthExamReportCount
+                && left.examinationReportCount == right.examinationReportCount
+                && left.medicationPlanCount == right.medicationPlanCount
+                && left.source == right.source
+                && datesEquivalent(left.createdAt, right.createdAt)
+                && datesEquivalent(left.updatedAt, right.updatedAt)
         default:
             return lhs == rhs
         }
@@ -638,6 +663,12 @@ enum DeepTutorStreamEventCompatibility {
                     memberID: memberID,
                     memberName: memberName
                 )
+            case let .memberProfileLoaded(payload, toolCallID):
+                let seed = messageID.map { "\($0.uuidString)|member-profile|\(payload.memberID)" }
+                    ?? "member-profile|\(payload.memberID)"
+                var copy = payload
+                copy.toolCallID = normalizedCallID(toolCallID, prefix: "member-profile", seed: seed)
+                return .memberProfileLoaded(payload: copy, toolCallID: copy.toolCallID)
 
             default:
                 return event
@@ -698,7 +729,7 @@ enum DeepTutorStreamEventCompatibility {
                 let seed = messageID.map { DeepTutorStableToolCallID.toolEvent(messageID: $0, prefix: type, toolName: toolName, callSeed: toolName).description } ?? toolName
                 dict["callID"] = dict["call_id"] ?? dict["toolCallID"] ?? dict["tool_call_id"] ?? DeepTutorStableToolCallID.legacy(prefix: type, seed: seed)
             }
-        case "askUser", "askUserResolved", "memberSelectionRequested", "memberSelectionResolved":
+        case "askUser", "askUserResolved", "memberSelectionRequested", "memberSelectionResolved", "memberProfileLoaded":
             if (dict["toolCallID"] as? String)?.isEmpty != false {
                 let seed = messageID.map { "\($0.uuidString)|\(type)" } ?? type
                 dict["toolCallID"] = dict["tool_call_id"] ?? dict["callID"] ?? dict["call_id"] ?? DeepTutorStableToolCallID.legacy(prefix: type, seed: seed)

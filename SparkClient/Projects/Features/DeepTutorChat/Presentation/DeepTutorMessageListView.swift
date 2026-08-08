@@ -278,6 +278,7 @@ struct DeepTutorMessageListRepresentable: UIViewControllerRepresentable {
     @ObservedObject var viewModel: DeepTutorChatViewModel
     @ObservedObject var refreshCoordinator: DeepTutorRefreshCoordinator
     let fileTransferService: FileTransferService
+    let onCaptureCardAction: (DeepTutorCaptureCardType, DeepTutorCaptureCardAction) -> Void
 
     func makeUIViewController(context: Context) -> DeepTutorMessageListViewController {
         let controller = DeepTutorMessageListViewController()
@@ -348,6 +349,10 @@ struct DeepTutorMessageListRepresentable: UIViewControllerRepresentable {
                         memberID: memberID
                     )
                 }
+            },
+            onCaptureCardAction: onCaptureCardAction,
+            onToolPreview: { prompt in
+                viewModel.presentToolPreview(prompt)
             },
             onQuizFollowUp: { prefill in
                 viewModel.startQuizFollowUp(prefill: prefill)

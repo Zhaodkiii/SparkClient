@@ -20,6 +20,8 @@ enum DeepTutorToolAliasMap: Sendable {
         switch normalized {
         case DeepTutorCanonicalToolName.askUser.rawValue:
             return mapped(canonicalName, spark: [.askUserQuestion])
+        case DeepTutorCanonicalToolName.showCustomMessageCard.rawValue:
+            return mapped(canonicalName, spark: [.showCustomMessageCard])
         case DeepTutorCanonicalToolName.webSearch.rawValue:
             return mapped(canonicalName, spark: [.searchOnline])
         case DeepTutorCanonicalToolName.webFetch.rawValue:

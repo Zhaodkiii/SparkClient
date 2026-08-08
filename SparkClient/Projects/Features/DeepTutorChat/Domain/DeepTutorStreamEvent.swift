@@ -11,6 +11,7 @@ nonisolated enum DeepTutorStreamEvent: Codable, Equatable, Sendable {
     case askUserResolved(toolCallID: String, answers: [DeepTutorAskUserAnswer])
     case memberSelectionRequested(reason: String, arguments: [String: String], toolCallID: String)
     case memberSelectionResolved(toolCallID: String, memberID: Int, memberName: String?)
+    case memberProfileLoaded(payload: DeepTutorMemberProfileBlockPayload, toolCallID: String)
     case quizQuestionEmitted(question: DeepTutorQuizQuestion, questionIndex: Int, turnID: String?)
     case result(metadata: [String: String], summaryJSON: String? = nil)
     case error(message: String, turnTerminal: Bool)
@@ -33,6 +34,7 @@ nonisolated enum DeepTutorStreamEvent: Codable, Equatable, Sendable {
         case arguments
         case memberID
         case memberName
+        case memberProfile
         case metadata
         case summaryJSON
         case question
@@ -52,6 +54,7 @@ nonisolated enum DeepTutorStreamEvent: Codable, Equatable, Sendable {
         case askUserResolved
         case memberSelectionRequested
         case memberSelectionResolved
+        case memberProfileLoaded
         case quizQuestionEmitted
         case result
         case error
@@ -111,6 +114,11 @@ nonisolated enum DeepTutorStreamEvent: Codable, Equatable, Sendable {
                 toolCallID: Self.decodeToolCallID(from: container, fallbackPrefix: "member-resolved"),
                 memberID: try container.decode(Int.self, forKey: .memberID),
                 memberName: try container.decodeIfPresent(String.self, forKey: .memberName)
+            )
+        case .memberProfileLoaded:
+            self = .memberProfileLoaded(
+                payload: try container.decode(DeepTutorMemberProfileBlockPayload.self, forKey: .memberProfile),
+                toolCallID: Self.decodeToolCallID(from: container, fallbackPrefix: "member-profile")
             )
         case .quizQuestionEmitted:
             self = .quizQuestionEmitted(
@@ -176,6 +184,10 @@ nonisolated enum DeepTutorStreamEvent: Codable, Equatable, Sendable {
             try container.encode(toolCallID, forKey: .toolCallID)
             try container.encode(memberID, forKey: .memberID)
             try container.encodeIfPresent(memberName, forKey: .memberName)
+        case let .memberProfileLoaded(payload, toolCallID):
+            try container.encode(EventType.memberProfileLoaded, forKey: .type)
+            try container.encode(payload, forKey: .memberProfile)
+            try container.encode(toolCallID, forKey: .toolCallID)
         case let .quizQuestionEmitted(question, questionIndex, turnID):
             try container.encode(EventType.quizQuestionEmitted, forKey: .type)
             try container.encode(question, forKey: .question)

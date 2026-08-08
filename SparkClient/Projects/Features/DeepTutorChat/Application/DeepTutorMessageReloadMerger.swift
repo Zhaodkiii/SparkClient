@@ -19,6 +19,13 @@ enum DeepTutorMessageReloadMerger: Sendable {
         conversationID: UUID
     ) -> DeepTutorMessage {
         if memory.status == .streaming {
+            DeepTutorChatLog.memberSelectionPersistProbe(
+                phase: "reload_merge_choose_memory_streaming",
+                conversationID: conversationID,
+                messageID: memory.id,
+                source: "reload_merger",
+                summary: "memory{\(DeepTutorChatLog.memberSelectionSummary(for: memory))} db{\(DeepTutorChatLog.memberSelectionSummary(for: db))}"
+            )
             return memory
         }
 
@@ -38,6 +45,13 @@ enum DeepTutorMessageReloadMerger: Sendable {
         }
 
         if hasMemberSelectionResolvedRegression(db: db, memory: memory) {
+            DeepTutorChatLog.memberSelectionPersistProbe(
+                phase: "reload_merge_reject_db_member_regression",
+                conversationID: conversationID,
+                messageID: memory.id,
+                source: "reload_merger",
+                summary: "memory{\(DeepTutorChatLog.memberSelectionSummary(for: memory))} db{\(DeepTutorChatLog.memberSelectionSummary(for: db))}"
+            )
             DeepTutorChatLog.messagesReloadRejectedRenderRegression(
                 conversationID: conversationID,
                 messageID: memory.id,
@@ -92,6 +106,16 @@ enum DeepTutorMessageReloadMerger: Sendable {
             return memory
         }
 
+        if db.blocks.contains(where: { $0.kind == .memberSelection })
+            || memory.blocks.contains(where: { $0.kind == .memberSelection }) {
+            DeepTutorChatLog.memberSelectionPersistProbe(
+                phase: "reload_merge_choose_db",
+                conversationID: conversationID,
+                messageID: db.id,
+                source: "reload_merger",
+                summary: "memory{\(DeepTutorChatLog.memberSelectionSummary(for: memory))} db{\(DeepTutorChatLog.memberSelectionSummary(for: db))}"
+            )
+        }
         return db
     }
 

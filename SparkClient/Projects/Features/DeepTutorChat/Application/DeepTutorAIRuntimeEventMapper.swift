@@ -8,6 +8,7 @@ struct DeepTutorAIRuntimeEventMapper: Sendable {
     private var completedToolCallIDs: Set<String> = []
     private var askUserToolCallIDs: Set<String> = []
     private var memberSelectionToolCallIDs: Set<String> = []
+    private var memberProfileToolCallIDs: Set<String> = []
     private var loggedAskUserMapFailures: Set<String> = []
 
     nonisolated mutating func events(from partial: ChatAssistantPartialDelta) -> [DeepTutorStreamEvent] {
@@ -94,6 +95,12 @@ struct DeepTutorAIRuntimeEventMapper: Sendable {
                     phase: "tool_completed",
                     into: &events
                 )
+                appendMemberProfileEventsIfNeeded(
+                    toolName: toolName,
+                    toolCallID: toolCallID,
+                    partial: partial,
+                    into: &events
+                )
                 let kind = DeepTutorAskUserNormalizer.canonicalToolName(for: toolName)
                 events.append(
                     .toolResult(
@@ -162,7 +169,21 @@ struct DeepTutorAIRuntimeEventMapper: Sendable {
         completedToolCallIDs = []
         askUserToolCallIDs = []
         memberSelectionToolCallIDs = []
+        memberProfileToolCallIDs = []
         loggedAskUserMapFailures = []
+    }
+
+    nonisolated private mutating func appendMemberProfileEventsIfNeeded(
+        toolName: String,
+        toolCallID: String,
+        partial: ChatAssistantPartialDelta,
+        into events: inout [DeepTutorStreamEvent]
+    ) {
+        guard DeepTutorQueryMemberProfileNormalizer.isQueryMemberProfileTool(toolName) else { return }
+        guard memberProfileToolCallIDs.contains(toolCallID) == false else { return }
+        guard let payload = DeepTutorQueryMemberProfileNormalizer.payload(from: partial) else { return }
+        memberProfileToolCallIDs.insert(toolCallID)
+        events.append(.memberProfileLoaded(payload: payload, toolCallID: toolCallID))
     }
 
     nonisolated private mutating func appendMemberSelectionEventsIfNeeded(
