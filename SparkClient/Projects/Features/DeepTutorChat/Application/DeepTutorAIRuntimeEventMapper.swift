@@ -101,7 +101,8 @@ struct DeepTutorAIRuntimeEventMapper: Sendable {
                         payload: DeepTutorToolResultPayload(
                             kind: kind,
                             title: SparkToolName.displayName(for: toolName),
-                            summary: toolContent
+                            summary: toolContent,
+                            metadata: partial.toolInvocationArguments
                         )
                     )
                 )

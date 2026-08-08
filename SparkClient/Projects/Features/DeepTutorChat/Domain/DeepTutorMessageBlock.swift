@@ -431,6 +431,26 @@ nonisolated struct DeepTutorMemberSelectionBlockPayload: Codable, Equatable, Sen
     var createdAt: Date
     var updatedAt: Date
 
+    enum CodingKeys: String, CodingKey {
+        case toolCallID
+        case tool_call_id
+        case toolName
+        case tool_name
+        case reason
+        case arguments
+        case selectedMemberID
+        case selected_member_id
+        case selectedMemberName
+        case selected_member_name
+        case status
+        case resultText
+        case result_text
+        case createdAt
+        case created_at
+        case updatedAt
+        case updated_at
+    }
+
     var isResolved: Bool {
         status == .completed
     }
@@ -457,6 +477,76 @@ nonisolated struct DeepTutorMemberSelectionBlockPayload: Codable, Equatable, Sen
         self.resultText = resultText
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        toolCallID = Self.decodeString(from: container, keys: [.toolCallID, .tool_call_id]) ?? ""
+        toolName = Self.decodeString(from: container, keys: [.toolName, .tool_name]) ?? SparkToolName.requestMemberSelection.rawValue
+        reason = Self.decodeString(from: container, keys: [.reason]) ?? "需要先确认本次对话对应的家庭成员。"
+        arguments = (try? container.decodeIfPresent([String: String].self, forKey: .arguments)) ?? [:]
+        selectedMemberID = Self.decodeInt(from: container, keys: [.selectedMemberID, .selected_member_id])
+        selectedMemberName = Self.decodeString(from: container, keys: [.selectedMemberName, .selected_member_name])
+        status = (try? container.decodeIfPresent(Status.self, forKey: .status)) ?? (selectedMemberID == nil ? .pending : .completed)
+        resultText = Self.decodeString(from: container, keys: [.resultText, .result_text])
+        let now = Date()
+        createdAt = Self.decodeDate(from: container, keys: [.createdAt, .created_at]) ?? now
+        updatedAt = Self.decodeDate(from: container, keys: [.updatedAt, .updated_at]) ?? createdAt
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(toolCallID, forKey: .toolCallID)
+        try container.encode(toolName, forKey: .toolName)
+        try container.encode(reason, forKey: .reason)
+        try container.encode(arguments, forKey: .arguments)
+        try container.encodeIfPresent(selectedMemberID, forKey: .selectedMemberID)
+        try container.encodeIfPresent(selectedMemberName, forKey: .selectedMemberName)
+        try container.encode(status, forKey: .status)
+        try container.encodeIfPresent(resultText, forKey: .resultText)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(updatedAt, forKey: .updatedAt)
+    }
+
+    private static func decodeString(
+        from container: KeyedDecodingContainer<CodingKeys>,
+        keys: [CodingKeys]
+    ) -> String? {
+        for key in keys {
+            if let value = try? container.decodeIfPresent(String.self, forKey: key),
+               value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                return value
+            }
+        }
+        return nil
+    }
+
+    private static func decodeInt(
+        from container: KeyedDecodingContainer<CodingKeys>,
+        keys: [CodingKeys]
+    ) -> Int? {
+        for key in keys {
+            if let value = try? container.decodeIfPresent(Int.self, forKey: key) {
+                return value
+            }
+            if let value = try? container.decodeIfPresent(String.self, forKey: key),
+               let intValue = Int(value) {
+                return intValue
+            }
+        }
+        return nil
+    }
+
+    private static func decodeDate(
+        from container: KeyedDecodingContainer<CodingKeys>,
+        keys: [CodingKeys]
+    ) -> Date? {
+        for key in keys {
+            if let value = try? container.decodeIfPresent(Date.self, forKey: key) {
+                return value
+            }
+        }
+        return nil
     }
 }
 

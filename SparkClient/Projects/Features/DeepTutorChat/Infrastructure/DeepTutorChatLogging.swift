@@ -5,8 +5,7 @@ nonisolated enum DeepTutorChatLog {
     nonisolated static let module: LogModule = .deepTutorChat
 
     nonisolated static func shortID(_ value: UUID?) -> String {
-        guard let value else { return "-" }
-        return String(value.uuidString.prefix(8))
+        value?.uuidString ?? "-"
     }
 
     nonisolated static func format(_ seconds: TimeInterval) -> String {
@@ -25,7 +24,9 @@ nonisolated enum DeepTutorChatLog {
     }
 
     nonisolated static func contentSnippet(_ text: String, limit: Int = 500) -> String {
-        LogMessageSanitizer.singleLineSnippet(text, limit: limit)
+        text
+            .replacingOccurrences(of: "\n", with: "\\n")
+            .replacingOccurrences(of: "\r", with: "")
     }
 
     nonisolated static func statusLabel(_ status: DeepTutorMessageStatus) -> String {
@@ -67,6 +68,7 @@ nonisolated enum DeepTutorChatLog {
         hasFinalContent: Bool,
         isFinalAnswerPhase: Bool
     ) {
+        guard DeepTutorDebugFlags.verboseChatStreamLogs else { return }
         logDebug(
             "deeptutor.trace.final_phase message=\(shortID(messageID)) isStreaming=\(isStreaming) hasFinalContent=\(hasFinalContent) isFinalAnswerPhase=\(isFinalAnswerPhase)"
         )
@@ -176,6 +178,7 @@ nonisolated enum DeepTutorChatLog {
         memberCount: Int,
         status: String
     ) {
+        guard DeepTutorDebugFlags.verboseChatRenderLogs else { return }
         logInfo(
             "deeptutor.member_selection.card_created conversation=\(shortID(conversationID)) assistant=\(shortID(assistantMessageID)) block=\(shortID(blockID)) toolCall=\(contentSnippet(toolCallID, limit: 24)) memberCount=\(memberCount) status=\(status)"
         )
@@ -186,6 +189,7 @@ nonisolated enum DeepTutorChatLog {
         status: String,
         selectedMemberID: Int?
     ) {
+        guard DeepTutorDebugFlags.verboseChatRenderLogs else { return }
         logDebug(
             "deeptutor.member_selection.card_rendered block=\(shortID(blockID)) status=\(status) selectedMemberID=\(selectedMemberID.map(String.init) ?? "-")"
         )
@@ -243,6 +247,7 @@ nonisolated enum DeepTutorChatLog {
         blockID: UUID,
         action: String
     ) {
+        guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
         logInfo(
             "deeptutor.member_selection.reload_recovered_pending conversation=\(shortID(conversationID)) assistant=\(shortID(assistantMessageID)) block=\(shortID(blockID)) action=\(action)"
         )
@@ -505,6 +510,7 @@ nonisolated enum DeepTutorChatLog {
         assistantMessageID: UUID,
         answerLen: Int
     ) {
+        guard DeepTutorDebugFlags.verboseChatStreamLogs else { return }
         logInfo(
             "deeptutor.stream.answer.phase_enter conversation=\(shortID(conversationID)) assistant=\(shortID(assistantMessageID)) answerLen=\(answerLen) thinkingAutoCollapsed=true"
         )
@@ -521,6 +527,7 @@ nonisolated enum DeepTutorChatLog {
         forceFlush: Bool,
         blocks: String
     ) {
+        guard DeepTutorDebugFlags.verboseChatStreamLogs else { return }
         logDebug(
             "deeptutor.stream.partial.mapped conversation=\(shortID(conversationID)) assistant=\(shortID(assistantMessageID)) tool=\(tool) call=\(call) answerLen=\(answerLen) reasoningLen=\(reasoningLen) events=\(events) forceFlush=\(forceFlush) blocks=\(blocks)"
         )
@@ -534,6 +541,7 @@ nonisolated enum DeepTutorChatLog {
         outputTextLen: Int,
         events: String
     ) {
+        guard DeepTutorDebugFlags.verboseChatStreamLogs else { return }
         let signature = "\(finish)|\(outputTool)|\(outputTextLen)|\(events)"
         guard LogState.shared.logIfChanged(
             scope: "stream.completion.mapped:\(conversationID.uuidString):\(assistantMessageID.uuidString)",
@@ -583,6 +591,7 @@ nonisolated enum DeepTutorChatLog {
         isStreaming: Bool,
         activeAssistantMessage: UUID? = nil
     ) {
+        guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
         guard LogState.shared.logIfChanged(
             scope: "reload.skipped:\(conversationID.uuidString)",
             signature: "\(reason)|\(phase)|\(isStreaming)"
@@ -598,6 +607,7 @@ nonisolated enum DeepTutorChatLog {
         phase: String,
         isStreaming: Bool
     ) {
+        guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
         let signature = "\(reason)|\(phase)|\(isStreaming)"
         guard LogState.shared.logIfChanged(
             scope: "reload.applied_after_stream:\(conversationID.uuidString)",
@@ -798,6 +808,7 @@ nonisolated enum DeepTutorChatLog {
         assistantMessageID: UUID,
         durationMs: Int
     ) {
+        guard DeepTutorDebugFlags.verboseChatStreamLogs else { return }
         logInfo(
             "deeptutor.message.send.done conversation=\(shortID(conversationID)) userMessage=\(shortID(userMessageID)) assistantMessage=\(shortID(assistantMessageID)) durationMs=\(durationMs)"
         )
@@ -859,6 +870,7 @@ nonisolated enum DeepTutorChatLog {
     }
 
     nonisolated static func askUserBlockCreated(messageID: UUID, toolCallID: String, questionCount: Int, blockID: UUID) {
+        guard DeepTutorDebugFlags.verboseChatStreamLogs else { return }
         guard LogState.shared.logOnce(key: "ask_user.block:\(messageID.uuidString):\(toolCallID)") else {
             return
         }
@@ -868,6 +880,7 @@ nonisolated enum DeepTutorChatLog {
     }
 
     nonisolated static func askUserBlockSkipped(messageID: UUID, toolCallID: String, reason: String) {
+        guard DeepTutorDebugFlags.verboseChatStreamLogs else { return }
         logDebug(
             "deeptutor.message_reducer.ask_user_block_skipped message=\(shortID(messageID)) toolCallID=\(toolCallID) reason=\(reason)"
         )
@@ -930,6 +943,7 @@ nonisolated enum DeepTutorChatLog {
         activePresentationSnapshot: String,
         decision: String
     ) {
+        guard DeepTutorDebugFlags.verboseChatStreamLogs else { return }
         guard LogState.shared.logOnce(key: "empty_output:\(messageID.uuidString):\(decision)") else {
             return
         }
@@ -1019,6 +1033,7 @@ nonisolated enum DeepTutorChatLog {
         policy: DeepTutorToolPolicyResult,
         modelSupportsToolCalling: Bool
     ) {
+        guard DeepTutorDebugFlags.verboseCapabilityLogs else { return }
         let mountFlags = policy.mountFlags
             .sorted { $0.key < $1.key }
             .map { "\($0.key):\($0.value)" }
@@ -1042,6 +1057,7 @@ nonisolated enum DeepTutorChatLog {
         selectedTools: [String],
         snapshotTools: [String]
     ) {
+        guard DeepTutorDebugFlags.verboseCapabilityLogs else { return }
         let selected = selectedTools.joined(separator: ",")
         let snapshot = snapshotTools.joined(separator: ",")
         logInfo(
@@ -1054,6 +1070,7 @@ nonisolated enum DeepTutorChatLog {
         capability: DeepTutorCapability,
         enabledTools: [String]
     ) {
+        guard DeepTutorDebugFlags.verboseCapabilityLogs else { return }
         let manifest = DeepTutorCapabilityToolManifest.manifest(for: capability)
         logInfo(
             "deeptutor.tool_policy.manifest conversation=\(shortID(conversationID)) capability=\(capability.rawValue) allowedTools=\(manifest.allowedTools.joined(separator: ",")) defaultTools=\(manifest.defaultTools.joined(separator: ",")) ownedTools=\(manifest.ownedTools.joined(separator: ",")) enabledTools=\(enabledTools.joined(separator: ","))"
@@ -1068,6 +1085,7 @@ nonisolated enum DeepTutorChatLog {
         aliasFailures: [String],
         intentHints: [String]
     ) {
+        guard DeepTutorDebugFlags.verboseCapabilityLogs else { return }
         let conversationLabel = conversationID.map(shortID) ?? "-"
         logInfo(
             "deeptutor.tool_policy.compose conversation=\(conversationLabel) requestedTools=\(requestedTools.joined(separator: ",")) autoMountedTools=\(autoMountedTools.joined(separator: ",")) resolvedTools=\(resolvedTools.joined(separator: ",")) aliasFailures=\(aliasFailures.joined(separator: ",")) intentHints=\(intentHints.joined(separator: ","))"
@@ -1081,6 +1099,7 @@ nonisolated enum DeepTutorChatLog {
         finalTools: [String],
         reason: String
     ) {
+        guard DeepTutorDebugFlags.verboseCapabilityLogs else { return }
         logInfo(
             "deeptutor.tool_policy.model_restricted conversation=\(shortID(conversationID)) deepTutor=\(deepTutorTools.joined(separator: ",")) model=\(modelTools.isEmpty ? "-" : modelTools.joined(separator: ",")) final=\(finalTools.isEmpty ? "-" : finalTools.joined(separator: ",")) reason=\(reason)"
         )
@@ -1284,6 +1303,7 @@ nonisolated enum DeepTutorChatLog {
         sideEffectCount: Int,
         awaitingUserInput: Bool
     ) {
+        guard DeepTutorDebugFlags.verboseChatStreamLogs else { return }
         logInfo(
             "deeptutor.tool_call.completed conversation=\(shortID(conversationID)) message=\(shortID(assistantMessageID)) round=\(round ?? -1) toolName=\(toolName) toolCallID=\(toolCallID) status=\(status) durationMs=\(durationMs) resultLength=\(resultLength) sideEffectCount=\(sideEffectCount) awaitingUserInput=\(awaitingUserInput)"
         )
@@ -1399,6 +1419,7 @@ nonisolated enum DeepTutorChatLog {
         kind: String,
         reason: String
     ) {
+        guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
         guard LogState.shared.logOnce(key: "load.recovered:\(messageID.uuidString):\(blockID.uuidString)") else {
             return
         }
@@ -1414,6 +1435,7 @@ nonisolated enum DeepTutorChatLog {
         kind: String,
         payloadBytes: Int
     ) {
+        guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
         logWarning(
             "deeptutor.messages.load.block_dropped conversation=\(shortID(conversationID)) message=\(shortID(messageID)) block=\(shortID(blockID)) kind=\(kind) payloadBytes=\(payloadBytes)"
         )
@@ -1424,6 +1446,7 @@ nonisolated enum DeepTutorChatLog {
         messageID: UUID,
         repairCount: Int
     ) {
+        guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
         guard LogState.shared.logOnce(key: "load.repair:\(messageID.uuidString)") else {
             return
         }
@@ -1438,12 +1461,15 @@ nonisolated enum DeepTutorChatLog {
         status: DeepTutorMessageStatus,
         blockCount: Int,
         askUserBlockCount: Int,
+        memberSelectionBlockCount: Int,
         contentLength: Int
     ) {
+        guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
         let signature = [
             statusLabel(status),
             String(blockCount),
             String(askUserBlockCount),
+            String(memberSelectionBlockCount),
             String(contentLength),
         ].joined(separator: "|")
         guard LogState.shared.logIfChanged(scope: "persist.completed:\(messageID.uuidString)", signature: signature) else {
@@ -1452,7 +1478,7 @@ nonisolated enum DeepTutorChatLog {
         let level: PersistLogLevel = (status == .ready || status == .failed) ? .info : .debug
         logPersist(
             level,
-            "deeptutor.message.persist.completed conversation=\(shortID(conversationID)) message=\(shortID(messageID)) status=\(statusLabel(status)) blockCount=\(blockCount) askUserBlockCount=\(askUserBlockCount) contentLength=\(contentLength)"
+            "deeptutor.message.persist.completed conversation=\(shortID(conversationID)) message=\(shortID(messageID)) status=\(statusLabel(status)) blockCount=\(blockCount) askUserBlockCount=\(askUserBlockCount) memberSelectionBlockCount=\(memberSelectionBlockCount) contentLength=\(contentLength)"
         )
     }
 
@@ -1460,13 +1486,15 @@ nonisolated enum DeepTutorChatLog {
         conversationID: UUID,
         messageID: UUID,
         blockCount: Int,
-        askUserBlockCount: Int
+        askUserBlockCount: Int,
+        memberSelectionBlockCount: Int
     ) {
+        guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
         guard LogState.shared.logOnce(key: "persist.roundtrip_ok:\(messageID.uuidString)") else {
             return
         }
         logInfo(
-            "deeptutor.message.persist.roundtrip_ok conversation=\(shortID(conversationID)) message=\(shortID(messageID)) blockCount=\(blockCount) askUserBlockCount=\(askUserBlockCount)"
+            "deeptutor.message.persist.roundtrip_ok conversation=\(shortID(conversationID)) message=\(shortID(messageID)) blockCount=\(blockCount) askUserBlockCount=\(askUserBlockCount) memberSelectionBlockCount=\(memberSelectionBlockCount)"
         )
     }
 
@@ -1475,6 +1503,7 @@ nonisolated enum DeepTutorChatLog {
         messageID: UUID,
         failedKinds: [String]
     ) {
+        guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
         let kinds = failedKinds.sorted().joined(separator: ",")
         guard LogState.shared.logOnce(key: "persist.roundtrip_failed:\(messageID.uuidString):\(kinds)") else {
             return
@@ -1698,6 +1727,9 @@ nonisolated enum DeepTutorChatLog {
         statusAfter: String = "-",
         reason: String = "-"
     ) {
+        if phase == "codec_roundtrip_failed", DeepTutorDebugFlags.verboseChatRefreshLogs == false {
+            return
+        }
         let message = "deeptutor.block.lifecycle.\(phase) conversation=\(shortID(conversationID)) assistant=\(shortID(assistantMessageID)) blockKind=\(blockKind) source=\(source) statusBefore=\(statusBefore) statusAfter=\(statusAfter) reason=\(reason)"
         switch phase {
         case "lost_on_ready", "final_mismatch":
@@ -1712,6 +1744,7 @@ nonisolated enum DeepTutorChatLog {
         assistantMessageID: UUID,
         blockKinds: String
     ) {
+        guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
         let logKey = "block.rehydrated:\(assistantMessageID.uuidString):\(blockKinds)"
         guard LogState.shared.logOnce(key: logKey) else { return }
         logInfo(
@@ -2062,6 +2095,7 @@ nonisolated enum DeepTutorChatLog {
         guard LogState.shared.logIfChanged(scope: "conversation.list.refreshed", signature: signature) else {
             return
         }
+        guard DeepTutorDebugFlags.verboseConversationListRefreshLogs else { return }
 
         if let containsCreated {
             logDebug(
@@ -2119,6 +2153,7 @@ nonisolated enum DeepTutorChatLog {
         messageCount: Int,
         isRegenerate: Bool
     ) {
+        guard DeepTutorDebugFlags.verboseConversationListRefreshLogs else { return }
         logInfo(
             "deeptutor.title.maybe.start conversation=\(shortID(conversationID)) currentTitle=\(currentTitle) isPlaceholder=\(isPlaceholder) messageCount=\(messageCount) isRegenerate=\(isRegenerate)"
         )
@@ -2128,6 +2163,7 @@ nonisolated enum DeepTutorChatLog {
         conversationID: UUID,
         reason: GenerateDeepTutorConversationTitleUseCase.SkipReason
     ) {
+        guard DeepTutorDebugFlags.verboseConversationListRefreshLogs else { return }
         logInfo(
             "deeptutor.title.maybe.skipped conversation=\(shortID(conversationID)) skipReason=\(reason.rawValue)"
         )
@@ -2449,6 +2485,7 @@ private extension DeepTutorChatLog {
         skipped: Bool,
         queued: Bool
     ) {
+        guard DeepTutorDebugFlags.verboseChatRefreshLogs else { return }
         let applyMsText = applyDurationMs.map(String.init) ?? "-"
         logInfo(
             "deeptutor.refresh.summary conversation=\(shortID(conversationID)) source=\(source) messages=\(messages) visible=\(visible) total=\(totalCount) isStreaming=\(isStreaming) reloadMs=\(reloadDurationMs) applyMs=\(applyMsText) skipped=\(skipped) queued=\(queued)"

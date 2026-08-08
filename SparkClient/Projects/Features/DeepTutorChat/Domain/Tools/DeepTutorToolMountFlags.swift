@@ -1,6 +1,6 @@
 import Foundation
 
-/// 对齐 DeepTutor-main `ToolMountFlags`。
+/// 对齐 DeepTutor-main `ToolMountFlags`，作为 DeepTutorChat 工具装配策略的统一输入。
 nonisolated struct DeepTutorToolMountFlags: Equatable, Sendable {
     var hasKB: Bool = false
     var hasSources: Bool = false
@@ -30,4 +30,9 @@ nonisolated struct DeepTutorToolMountFlags: Equatable, Sendable {
             "has_health_resource": hasHealthResourceContext,
         ]
     }
+}
+
+nonisolated struct DeepTutorToolRuntimeMountFlags: Equatable, Sendable {
+    var hasMemory: Bool
+    var hasSelectedMember: Bool
 }

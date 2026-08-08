@@ -2,8 +2,14 @@ import Foundation
 
 enum DeepTutorMemberSelectionNormalizer: Sendable {
     nonisolated static func isMemberSelectionTool(_ toolName: String?) -> Bool {
-        guard let toolName else { return false }
-        return toolName == SparkToolName.requestMemberSelection.rawValue
+        guard let normalized = toolName?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased(),
+            normalized.isEmpty == false else {
+            return false
+        }
+        return normalized == SparkToolName.requestMemberSelection.rawValue
+            || normalized == DeepTutorToolName.requestMemberSelection.rawValue
     }
 
     nonisolated static func reason(from arguments: [String: String]) -> String {

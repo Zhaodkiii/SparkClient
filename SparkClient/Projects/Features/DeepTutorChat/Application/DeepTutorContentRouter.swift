@@ -21,11 +21,11 @@ enum DeepTutorContentRouter: Sendable {
         var result: [Segment] = []
         var textBuffer = ""
         var seenAskUserToolCallIDs: Set<String> = []
+        var seenAskUserPayloads: [DeepTutorAskUserPayload] = []
         var seenMemberSelectionToolCallIDs: Set<String> = []
         var activeAskUserToolCallID: String?
         var activeMemberSelectionToolCallID: String?
         var hasAskUserToolCallStarted = false
-        var hasMemberSelectionToolCallStarted = false
 
         func flushText() {
             let visible = message.capability == .deepQuestion
@@ -58,7 +58,6 @@ enum DeepTutorContentRouter: Sendable {
                     activeAskUserToolCallID = callID
                 } else if DeepTutorMemberSelectionNormalizer.isMemberSelectionTool(toolName) {
                     flushText()
-                    hasMemberSelectionToolCallStarted = true
                     activeMemberSelectionToolCallID = callID
                 }
 
@@ -67,6 +66,7 @@ enum DeepTutorContentRouter: Sendable {
                 guard seenAskUserToolCallIDs.contains(toolCallID) == false else { continue }
                 guard let validated = DeepTutorAskUserNormalizer.validated(payload) else { continue }
                 seenAskUserToolCallIDs.insert(toolCallID)
+                seenAskUserPayloads.append(validated)
                 activeAskUserToolCallID = toolCallID
                 result.append(.askUser(payload: validated, toolCallID: toolCallID))
 
@@ -86,7 +86,6 @@ enum DeepTutorContentRouter: Sendable {
             case let .memberSelectionResolved(toolCallID, _, _):
                 if activeMemberSelectionToolCallID == toolCallID {
                     activeMemberSelectionToolCallID = nil
-                    hasMemberSelectionToolCallStarted = false
                 }
 
             case let .toolResult(callID, payload) where DeepTutorAskUserNormalizer.isAskUserTool(payload.kind):
@@ -96,7 +95,11 @@ enum DeepTutorContentRouter: Sendable {
                 }
                 flushText()
                 guard seenAskUserToolCallIDs.contains(callID) == false else { continue }
+                guard seenAskUserPayloads.contains(where: { DeepTutorAskUserIdentity.payloadsMatch($0, validated) }) == false else {
+                    continue
+                }
                 seenAskUserToolCallIDs.insert(callID)
+                seenAskUserPayloads.append(validated)
                 activeAskUserToolCallID = callID
                 result.append(.askUser(payload: validated, toolCallID: callID))
 

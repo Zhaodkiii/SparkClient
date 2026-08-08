@@ -9,6 +9,8 @@ struct DeepTutorComposerView: View {
     let modelDisplayTitle: String?
     let modelIconName: String
     let isModelPickerDisabled: Bool
+    let boundMemberDisplayModel: DeepTutorBoundMemberDisplayModel
+    let members: [Member]
     let onPersistSelectedModel: (String?) -> Void
     let hasMessages: Bool
     let isStreaming: Bool
@@ -19,6 +21,7 @@ struct DeepTutorComposerView: View {
     let onRetryAttachmentUpload: (UUID) -> Void
     let onRemoveAttachment: (UUID) -> Void
     let onPreviewAttachment: (UUID) -> Void
+    let onSetMemberBinding: (Int?) -> Void
     let onSend: () -> Void
     let onStop: () -> Void
 
@@ -40,6 +43,8 @@ struct DeepTutorComposerView: View {
                 modelDisplayTitle: modelDisplayTitle,
                 modelIconName: modelIconName,
                 isModelPickerDisabled: isModelPickerDisabled,
+                boundMemberDisplayModel: boundMemberDisplayModel,
+                members: members,
                 onPersistSelectedModel: onPersistSelectedModel,
                 hasMessages: hasMessages,
                 isStreaming: isStreaming,
@@ -50,6 +55,7 @@ struct DeepTutorComposerView: View {
                 onRetryAttachmentUpload: onRetryAttachmentUpload,
                 onRemoveAttachment: onRemoveAttachment,
                 onPreviewAttachment: onPreviewAttachment,
+                onSetMemberBinding: onSetMemberBinding,
                 onSend: onSend,
                 onStop: onStop
             )

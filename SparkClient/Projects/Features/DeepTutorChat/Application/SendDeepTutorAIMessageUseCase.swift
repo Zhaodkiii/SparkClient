@@ -5,7 +5,6 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
     let adapter: DeepTutorAIRuntimeAdapter
     let turnCoordinator: DeepTutorTurnCoordinator
     let eventBus: DeepTutorTurnEventBus
-    let toolInteractionCoordinator: ToolInteractionCoordinator
     let logger: Logger
 
     func callAsFunction(
@@ -192,30 +191,10 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
             throw DeepTutorChatError.messageNotFound
         }
 
-        if let active = await MainActor.run(body: { toolInteractionCoordinator.activePresentation }),
-           case .question = active.snapshot {
-            let askPayload = assistant.events.compactMap { event -> DeepTutorAskUserPayload? in
-                if case let .askUser(payload, id) = event, id == canonicalToolCallID { return payload }
-                return nil
-            }.first
-            let mapped = askPayload.map {
-                DeepTutorAskUserAnswerMapper.toolQuestionAnswer(deeptutorAnswers: answers, payload: $0)
-            } ?? ToolQuestionAnswer(responses: answers.map {
-                ToolQuestionResponse(questionID: $0.questionID, selectedOptionIDs: [], otherText: $0.text)
-            })
-            await MainActor.run {
-                toolInteractionCoordinator.completeQuestion(id: active.id, answer: mapped)
-            }
-            logger.info(
-                "DeepTutor 追问已恢复（sheet），prompt=\(DeepTutorChatLog.shortID(active.id)), toolCall=\(canonicalToolCallID)",
-                module: DeepTutorChatLog.module
-            )
-        } else {
-            logger.info(
-                "DeepTutor 追问已恢复（inline），toolCall=\(canonicalToolCallID), answers=\(answers.count)",
-                module: DeepTutorChatLog.module
-            )
-        }
+        logger.info(
+            "DeepTutor 追问已恢复（DeepTutor inline），toolCall=\(canonicalToolCallID), answers=\(answers.count)",
+            module: DeepTutorChatLog.module
+        )
 
         var events = assistant.events
         events.append(.askUserResolved(toolCallID: canonicalToolCallID, answers: answers))
@@ -315,28 +294,25 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
             throw DeepTutorChatError.messageNotFound
         }
 
-        if let active = await MainActor.run(body: { toolInteractionCoordinator.activePresentation }),
-           case .member = active.snapshot {
-            await MainActor.run {
-                toolInteractionCoordinator.completeMemberSelection(id: active.id, memberID: memberID)
-            }
-            logger.info(
-                "DeepTutor 成员选择已恢复（sheet fallback），prompt=\(DeepTutorChatLog.shortID(active.id)), toolCall=\(toolCallID)",
-                module: DeepTutorChatLog.module
-            )
-        } else {
-            logger.info(
-                "DeepTutor 成员选择已恢复（inline），toolCall=\(toolCallID), memberID=\(memberID)",
-                module: DeepTutorChatLog.module
-            )
+        let canonicalToolCallID = DeepTutorMemberSelectionResumeBuilder.canonicalToolCallID(
+            in: assistant,
+            submittedToolCallID: toolCallID
+        )
+        guard canonicalToolCallID.isEmpty == false else {
+            throw DeepTutorChatError.messageNotFound
         }
 
+        logger.info(
+            "DeepTutor 成员选择已恢复（DeepTutor inline），toolCall=\(canonicalToolCallID), submittedToolCall=\(toolCallID), memberID=\(memberID)",
+            module: DeepTutorChatLog.module
+        )
+
         var events = assistant.events
-        events.append(.memberSelectionResolved(toolCallID: toolCallID, memberID: memberID, memberName: memberName))
+        events.append(.memberSelectionResolved(toolCallID: canonicalToolCallID, memberID: memberID, memberName: memberName))
         assistant = assistant.replacing(events: events, status: .streaming)
         assistant = DeepTutorMessageReducer.applyBlocks(to: assistant)
         _ = try await repository.upsertMessage(assistant)
-        await eventBus.publish(.memberSelectionResolved(toolCallID: toolCallID, memberID: memberID, memberName: memberName))
+        await eventBus.publish(.memberSelectionResolved(toolCallID: canonicalToolCallID, memberID: memberID, memberName: memberName))
         await onStreamingUpdate?(assistant)
 
         try await repository.updateConversationMemberBinding(conversationID: conversationID, memberID: memberID)
@@ -350,7 +326,7 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
         guard let resumeContext = DeepTutorMemberSelectionResumeBuilder.buildContext(
             assistant: assistant,
             precedingUser: precedingUser,
-            toolCallID: toolCallID,
+            toolCallID: canonicalToolCallID,
             memberID: memberID,
             memberName: memberName
         ) else {
@@ -394,7 +370,7 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
         DeepTutorChatLog.memberSelectionContinuationResumed(
             conversationID: conversationID,
             assistantMessageID: assistantMessageID,
-            toolCallID: toolCallID,
+            toolCallID: canonicalToolCallID,
             memberID: memberID,
             durationMs: durationMs
         )
@@ -480,10 +456,12 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
                 messageID: userMessage.id,
                 attachmentCount: userMessage.attachments.count
             )
-            logger.info(
-                "用户消息落库成功，conversation=\(DeepTutorChatLog.shortID(conversationID)), messageID=\(DeepTutorChatLog.shortID(userMessage.id)), status=\(DeepTutorChatLog.statusLabel(userMessage.status)), content=\(DeepTutorChatLog.contentSnippet(trimmed))",
-                module: DeepTutorChatLog.module
-            )
+            if DeepTutorDebugFlags.verboseChatStreamLogs {
+                logger.info(
+                    "用户消息落库成功，conversation=\(DeepTutorChatLog.shortID(conversationID)), messageID=\(DeepTutorChatLog.shortID(userMessage.id)), status=\(DeepTutorChatLog.statusLabel(userMessage.status)), content=\(DeepTutorChatLog.contentSnippet(trimmed))",
+                    module: DeepTutorChatLog.module
+                )
+            }
             historyForModel = visibleHistory
             assistantID = UUID()
         case .retryAssistant(let assistantMessageID, let userMessageID):
@@ -538,17 +516,21 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
         if case .send = plan.intent {
             _ = try await repository.upsertMessage(assistant)
             await onStreamingUpdate?(assistant)
-            logger.info(
-                "助手消息落库（流式开始），conversation=\(DeepTutorChatLog.shortID(conversationID)), messageID=\(DeepTutorChatLog.shortID(assistant.id)), status=\(DeepTutorChatLog.statusLabel(assistant.status))",
-                module: DeepTutorChatLog.module
-            )
+            if DeepTutorDebugFlags.verboseChatStreamLogs {
+                logger.info(
+                    "助手消息落库（流式开始），conversation=\(DeepTutorChatLog.shortID(conversationID)), messageID=\(DeepTutorChatLog.shortID(assistant.id)), status=\(DeepTutorChatLog.statusLabel(assistant.status))",
+                    module: DeepTutorChatLog.module
+                )
+            }
         } else if case .regenerate = plan.intent {
             _ = try await repository.upsertMessage(assistant)
             await onStreamingUpdate?(assistant)
-            logger.info(
-                "助手消息落库（重新生成开始），conversation=\(DeepTutorChatLog.shortID(conversationID)), messageID=\(DeepTutorChatLog.shortID(assistant.id)), status=\(DeepTutorChatLog.statusLabel(assistant.status))",
-                module: DeepTutorChatLog.module
-            )
+            if DeepTutorDebugFlags.verboseChatStreamLogs {
+                logger.info(
+                    "助手消息落库（重新生成开始），conversation=\(DeepTutorChatLog.shortID(conversationID)), messageID=\(DeepTutorChatLog.shortID(assistant.id)), status=\(DeepTutorChatLog.statusLabel(assistant.status))",
+                    module: DeepTutorChatLog.module
+                )
+            }
         }
 
 	        do {
@@ -573,11 +555,11 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
 	                        let shouldPersist = await session.shouldFlushDatabase(force: forcePersist)
 	                        if shouldPersist {
 	                            _ = try? await repository.upsertMessage(updated)
-	                            await session.markDatabaseFlushed()
-	                            if forcePersist {
-	                                logger.info(
-	                                    "deeptutor.ask_user.persisted conversation=\(DeepTutorChatLog.shortID(updated.conversationID)) message=\(DeepTutorChatLog.shortID(updated.id)) askUserBlocks=\(updated.blocks.filter { $0.kind == .askUser }.count)",
-	                                    module: DeepTutorChatLog.module
+                            await session.markDatabaseFlushed()
+                            if forcePersist, DeepTutorDebugFlags.verboseChatRefreshLogs {
+                                logger.info(
+                                    "deeptutor.ask_user.persisted conversation=\(DeepTutorChatLog.shortID(updated.conversationID)) message=\(DeepTutorChatLog.shortID(updated.id)) askUserBlocks=\(updated.blocks.filter { $0.kind == .askUser }.count)",
+                                    module: DeepTutorChatLog.module
 	                                )
 	                            }
 	                        }
@@ -588,10 +570,12 @@ struct SendDeepTutorAIMessageUseCase: Sendable {
             assistant = finalizeAssistantMessage(assistant)
             _ = try await repository.upsertMessage(assistant)
             await onStreamingUpdate?(assistant)
-            logger.info(
-                "助手消息落库成功，conversation=\(DeepTutorChatLog.shortID(conversationID)), messageID=\(DeepTutorChatLog.shortID(assistant.id)), status=\(DeepTutorChatLog.statusLabel(assistant.status)), content=\(DeepTutorChatLog.contentSnippet(assistant.content))",
-                module: DeepTutorChatLog.module
-            )
+            if DeepTutorDebugFlags.verboseChatStreamLogs {
+                logger.info(
+                    "助手消息落库成功，conversation=\(DeepTutorChatLog.shortID(conversationID)), messageID=\(DeepTutorChatLog.shortID(assistant.id)), status=\(DeepTutorChatLog.statusLabel(assistant.status)), content=\(DeepTutorChatLog.contentSnippet(assistant.content))",
+                    module: DeepTutorChatLog.module
+                )
+            }
             return (userMessage, assistant)
         } catch {
             if let reloaded = await repository.loadMessages(conversationID: conversationID, limit: nil, before: nil)

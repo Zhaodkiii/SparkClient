@@ -599,8 +599,11 @@ final class AppContainer {
                 logger: logger
             ),
             chatOrchestrator: chat.chatOrchestrator,
+            aiRuntimeService: ai.aiRuntimeService,
             aiConfigCenter: ai.aiConfigCenter,
-            toolInteractionCoordinator: chat.toolInteractionCoordinator,
+            loadMemoryArchiveUseCase: ai.loadMemoryArchiveUseCase,
+            saveMemoryUseCase: ai.saveMemoryUseCase,
+            updateMemoryUseCase: ai.updateMemoryUseCase,
             memberContextStore: notification.memberContextStore,
             fileTransferService: fileTransferService,
             logger: logger

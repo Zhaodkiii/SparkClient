@@ -37,6 +37,21 @@ enum DeepTutorMessageReloadMerger: Sendable {
             return memory
         }
 
+        if hasMemberSelectionResolvedRegression(db: db, memory: memory) {
+            DeepTutorChatLog.messagesReloadRejectedRenderRegression(
+                conversationID: conversationID,
+                messageID: memory.id,
+                oldRenderSource: "memory",
+                newRenderSource: "database",
+                oldMarkdownLength: DeepTutorMarkdownPreserver.fidelityScore(memory),
+                newMarkdownLength: DeepTutorMarkdownPreserver.fidelityScore(db),
+                oldTableCount: tableLineCount(in: memory),
+                newTableCount: tableLineCount(in: db),
+                reason: "member_selection_resolved_regression"
+            )
+            return memory
+        }
+
         if hasStructuralBlockRegression(db: db, memory: memory) {
             DeepTutorChatLog.messagesReloadRejectedRenderRegression(
                 conversationID: conversationID,
@@ -94,6 +109,20 @@ enum DeepTutorMessageReloadMerger: Sendable {
         return memoryPending < dbPending && memoryResolvedCount >= dbResolvedCount
     }
 
+    nonisolated private static func hasMemberSelectionResolvedRegression(
+        db: DeepTutorMessage,
+        memory: DeepTutorMessage
+    ) -> Bool {
+        let memoryResolvedCount = resolvedMemberSelectionCount(in: memory)
+        let dbResolvedCount = resolvedMemberSelectionCount(in: db)
+        if memoryResolvedCount > dbResolvedCount {
+            return true
+        }
+        let memoryPending = pendingMemberSelectionCount(in: memory)
+        let dbPending = pendingMemberSelectionCount(in: db)
+        return memoryPending < dbPending && memoryResolvedCount >= dbResolvedCount
+    }
+
     nonisolated private static func resolvedAskUserCount(in message: DeepTutorMessage) -> Int {
         let blockCount = message.blocks.filter { block in
             if case let .askUser(payload) = block.payload { return payload.isResolved }
@@ -109,6 +138,25 @@ enum DeepTutorMessageReloadMerger: Sendable {
     nonisolated private static func pendingAskUserCount(in message: DeepTutorMessage) -> Int {
         message.blocks.filter { block in
             if case let .askUser(payload) = block.payload { return payload.isResolved == false }
+            return false
+        }.count
+    }
+
+    nonisolated private static func resolvedMemberSelectionCount(in message: DeepTutorMessage) -> Int {
+        let blockCount = message.blocks.filter { block in
+            if case let .memberSelection(payload) = block.payload { return payload.isResolved }
+            return false
+        }.count
+        let eventCount = message.events.filter { event in
+            if case .memberSelectionResolved = event { return true }
+            return false
+        }.count
+        return max(blockCount, eventCount)
+    }
+
+    nonisolated private static func pendingMemberSelectionCount(in message: DeepTutorMessage) -> Int {
+        message.blocks.filter { block in
+            if case let .memberSelection(payload) = block.payload { return payload.isResolved == false }
             return false
         }.count
     }

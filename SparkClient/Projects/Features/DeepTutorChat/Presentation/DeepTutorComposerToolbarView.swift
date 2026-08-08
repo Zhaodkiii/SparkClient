@@ -2,11 +2,17 @@ import SwiftUI
 
 struct DeepTutorComposerToolbarView: View {
     @Binding var capability: DeepTutorCapability
+    @Binding var selectedModelName: String?
+    let modelRows: [AIScenarioRemoteModelRow]
     let modelDisplayTitle: String?
     let modelIconName: String
+    let isModelPickerDisabled: Bool
+    let boundMemberDisplayModel: DeepTutorBoundMemberDisplayModel
+    let members: [Member]
     let isStreaming: Bool
     let canSend: Bool
     let canPickAttachments: Bool
+    let onSetMemberBinding: (Int?) -> Void
     let onAttachmentsPicked: ([MedicalUploadLocalFile]) -> Void
     let onSend: () -> Void
     let onStop: () -> Void
@@ -15,6 +21,7 @@ struct DeepTutorComposerToolbarView: View {
         HStack(spacing: 8) {
             capabilityMenu
             modelChip
+            memberChip
             Spacer(minLength: 0)
             attachmentButton
             placeholderButton(systemName: "mic")
@@ -59,9 +66,44 @@ struct DeepTutorComposerToolbarView: View {
     }
 
     private var modelChip: some View {
-        toolbarChip(
-            title: modelDisplayTitle ?? L10n.text("chat.composer.model.default"),
-            systemImage: modelIconName
+        Menu {
+            Button {
+                selectedModelName = nil
+            } label: {
+                modelMenuLabel(
+                    title: L10n.text("chat.composer.model.default"),
+                    systemImage: "sparkles",
+                    isSelected: selectedModelName == nil
+                )
+            }
+
+            ForEach(modelRows) { row in
+                Button {
+                    selectedModelName = row.name
+                } label: {
+                    modelMenuLabel(
+                        title: row.displayTitle,
+                        systemImage: row.composerIconSystemName,
+                        isSelected: selectedModelName == row.name
+                    )
+                }
+            }
+        } label: {
+            toolbarChip(
+                title: modelDisplayTitle ?? L10n.text("chat.composer.model.default"),
+                systemImage: modelIconName
+            )
+        }
+        .disabled(isModelPickerDisabled || modelRows.isEmpty)
+        .opacity(isModelPickerDisabled || modelRows.isEmpty ? 0.55 : 1)
+    }
+
+    private var memberChip: some View {
+        DeepTutorBoundMemberPickerChip(
+            displayModel: boundMemberDisplayModel,
+            members: members,
+            isDisabled: isStreaming,
+            onSelect: onSetMemberBinding
         )
     }
 
@@ -112,5 +154,13 @@ struct DeepTutorComposerToolbarView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .background(Color(.tertiarySystemFill), in: Capsule())
+    }
+
+    private func modelMenuLabel(title: String, systemImage: String, isSelected: Bool) -> some View {
+        Label {
+            Text(title)
+        } icon: {
+            Image(systemName: isSelected ? "checkmark" : systemImage)
+        }
     }
 }

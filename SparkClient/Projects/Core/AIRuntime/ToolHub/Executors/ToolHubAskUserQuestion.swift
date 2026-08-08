@@ -12,17 +12,6 @@ extension ToolHub {
             )
         }
 
-        if context.preferInlineAskUser {
-            return ToolExecutionResult(
-                toolName: SparkToolName.askUserQuestion,
-                outputText: "【系统】已在消息内展示追问卡片，等待用户作答。",
-                sensitive: false,
-                shouldBypassModel: false,
-                isAwaitingUserInput: true,
-                arguments: invocation.arguments
-            )
-        }
-
         guard let toolInteractionCoordinator else {
             return ToolExecutionResult(
                 toolName: SparkToolName.askUserQuestion,

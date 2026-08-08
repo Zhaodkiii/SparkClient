@@ -6,17 +6,6 @@ extension ToolHub {
             return memberSelectionAlreadyResolvedResult(memberID: memberID)
         }
 
-        if context.preferInlineMemberSelection {
-            return ToolExecutionResult(
-                toolName: SparkToolName.requestMemberSelection.rawValue,
-                outputText: "【系统】已在消息内展示成员选择卡片，等待用户选择。",
-                sensitive: false,
-                shouldBypassModel: false,
-                isAwaitingUserInput: true,
-                arguments: invocation.arguments
-            )
-        }
-
         let rawReason = invocation.arguments["reason"]?
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let reason = rawReason?.isEmpty == false ? rawReason : nil

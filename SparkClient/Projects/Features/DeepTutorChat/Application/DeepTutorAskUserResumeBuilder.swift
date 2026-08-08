@@ -154,17 +154,7 @@ enum DeepTutorAskUserResumeBuilder: Sendable {
     }
 
     private nonisolated static func encodeAskUserArguments(_ payload: DeepTutorAskUserPayload) -> String {
-        guard let question = payload.questions.first else { return "{}" }
-        var object: [String: Any] = [
-            "question": question.prompt,
-            "selection_mode": question.multiSelect ? "multiple" : "single",
-            "allows_other": question.allowFreeText,
-        ]
-        if question.options.isEmpty == false {
-            object["options"] = question.options.map(\.label)
-        }
-        guard JSONSerialization.isValidJSONObject(object),
-              let data = try? JSONSerialization.data(withJSONObject: object),
+        guard let data = try? JSONEncoder().encode(payload),
               let json = String(data: data, encoding: .utf8) else {
             return "{}"
         }

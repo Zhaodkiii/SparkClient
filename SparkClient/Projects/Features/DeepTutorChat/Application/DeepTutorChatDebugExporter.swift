@@ -86,8 +86,7 @@ enum DeepTutorChatDebugExporter {
         )
         let schemaNames = DeepTutorToolPolicyResolver.effectiveToolSchemaNames(inference: inference)
 
-        let activePresentation = viewModel.toolInteractionCoordinator.activePresentation
-        let presentationSummary = activePresentationSummary(activePresentation)
+        let presentationSummary = activePresentationSummary()
         let lastError = lastErrorMessage(from: state.phase)
         let turnPlanSummary = turnPlanDebugSummary(turnPlan: turnPlan)
         let consolidatedTurnEvents = consolidatedEvents(from: turnEventReplay)
@@ -100,7 +99,9 @@ enum DeepTutorChatDebugExporter {
         - conversationTitle: \(conversation?.title ?? "-")
         - selectedConversationID: \(viewModel.selectedConversationID?.uuidString ?? "-")
         - currentModelName: \(conversation?.currentModelName ?? "未设置")
+        - conversationMemberID: \(conversation?.memberID.map(String.init) ?? "未绑定")
         - composerSelectedModelName: \(viewModel.composerSelectedModelName ?? "default")
+        - boundMemberDisplayModel: \(viewModel.boundMemberDisplayModel.title)
         - selectedModelIdentity: \(viewModel.selectedModelIdentity?.rawValue ?? "-")
         - selectedModelDisplayTitle: \(viewModel.selectedModelDisplayTitle ?? "-")
         - activeCapability: \(state.activeCapability.rawValue)
@@ -147,7 +148,7 @@ enum DeepTutorChatDebugExporter {
         - latestAllowedTools: \(toolPolicy.allowedToolNames.sorted().joined(separator: ","))
         - latestUseWebSearch: \(toolPolicy.useWebSearch)
         - latestToolSchemaNames: \(schemaNames.sorted().joined(separator: ","))
-        - activePresentationID: \(activePresentation?.id.uuidString ?? "-")
+        - activePresentationID: -
         - activePresentationSnapshot: \(presentationSummary.snapshotLabel)
         - toolQuestionCount: \(presentationSummary.questionCount)
         - lastError: \(lastError)
@@ -178,7 +179,7 @@ enum DeepTutorChatDebugExporter {
         if let presentationSummaryLog = presentationSummary.logPayload(conversationID: conversationID) {
             DeepTutorChatLog.debugActiveToolPresentation(
                 conversationID: conversationID,
-                presentationID: activePresentation?.id,
+                presentationID: nil,
                 snapshot: presentationSummary.snapshotLabel,
                 questionCount: presentationSummary.questionCount
             )
@@ -824,30 +825,8 @@ enum DeepTutorChatDebugExporter {
         }
     }
 
-    private static func activePresentationSummary(
-        _ activePresentation: ToolInteractionCoordinator.ActivePresentation?
-    ) -> ActivePresentationSummary {
-        guard let activePresentation else {
-            return ActivePresentationSummary(snapshotLabel: "none", questionCount: 0)
-        }
-        switch activePresentation.snapshot {
-        case .consent:
-            return ActivePresentationSummary(snapshotLabel: "consent", questionCount: 0)
-        case .question(let prompt):
-            return ActivePresentationSummary(snapshotLabel: "question", questionCount: prompt.questions.count)
-        case .member:
-            return ActivePresentationSummary(snapshotLabel: "member", questionCount: 0)
-        case .toolPreview:
-            return ActivePresentationSummary(snapshotLabel: "toolPreview", questionCount: 0)
-        case .systemMessageSettings:
-            return ActivePresentationSummary(snapshotLabel: "systemMessageSettings", questionCount: 0)
-        case .healthResourceCandidates:
-            return ActivePresentationSummary(snapshotLabel: "healthResourceCandidates", questionCount: 0)
-        case .askReportPicker:
-            return ActivePresentationSummary(snapshotLabel: "askReportPicker", questionCount: 0)
-        case .apiKeysSettings:
-            return ActivePresentationSummary(snapshotLabel: "apiKeysSettings", questionCount: 0)
-        }
+    private static func activePresentationSummary() -> ActivePresentationSummary {
+        ActivePresentationSummary(snapshotLabel: "none", questionCount: 0)
     }
 
     private static func turnPlanDebugSummary(turnPlan: DeepTutorTurnPlan?) -> String {

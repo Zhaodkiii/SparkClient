@@ -95,7 +95,7 @@ nonisolated enum DeepTutorTraceFormatter {
                 currentThinkingCallID = nil
                 return
             }
-            let rowID = currentThinkingCallID ?? "thinking-\(rows.count)"
+            let rowID = "\(currentThinkingCallID ?? "thinking")-\(rows.count)"
             rows.append(
                 DeepTutorTraceRowModel(
                     id: rowID,
@@ -199,7 +199,7 @@ nonisolated enum DeepTutorTraceFormatter {
                 flushThinking()
                 rows.append(
                     DeepTutorTraceRowModel(
-                        id: "error-\(message.hashValue)",
+                        id: DeepTutorStableToolCallID.legacy(prefix: "error", seed: message),
                         kind: .error,
                         icon: DeepTutorTraceGlyph.error.rawValue,
                         verb: "失败",

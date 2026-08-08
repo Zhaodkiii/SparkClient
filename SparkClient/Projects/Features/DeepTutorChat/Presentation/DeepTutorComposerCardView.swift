@@ -10,6 +10,8 @@ struct DeepTutorComposerCardView: View {
     let modelDisplayTitle: String?
     let modelIconName: String
     let isModelPickerDisabled: Bool
+    let boundMemberDisplayModel: DeepTutorBoundMemberDisplayModel
+    let members: [Member]
     let onPersistSelectedModel: (String?) -> Void
     let hasMessages: Bool
     let isStreaming: Bool
@@ -20,11 +22,11 @@ struct DeepTutorComposerCardView: View {
     let onRetryAttachmentUpload: (UUID) -> Void
     let onRemoveAttachment: (UUID) -> Void
     let onPreviewAttachment: (UUID) -> Void
+    let onSetMemberBinding: (Int?) -> Void
     let onSend: () -> Void
     let onStop: () -> Void
 
     @State private var isDragging = false
-    @State private var isKeyboardVisible = false
 
     private var selectedModelBinding: Binding<String?> {
         Binding(
@@ -90,24 +92,21 @@ struct DeepTutorComposerCardView: View {
 
             DeepTutorComposerToolbarView(
                 capability: $capability,
+                selectedModelName: selectedModelBinding,
+                modelRows: modelRows,
                 modelDisplayTitle: modelDisplayTitle,
                 modelIconName: modelIconName,
+                isModelPickerDisabled: isModelPickerDisabled,
+                boundMemberDisplayModel: boundMemberDisplayModel,
+                members: members,
                 isStreaming: isStreaming,
                 canSend: canSend,
                 canPickAttachments: canPickAttachments,
+                onSetMemberBinding: onSetMemberBinding,
                 onAttachmentsPicked: onAttachmentsPicked,
                 onSend: sendWithKeyboardDismiss,
                 onStop: onStop
             )
-
-            if !isKeyboardVisible {
-                ChatComposerModelPickerRow(
-                    models: modelRows,
-                    selectedModelName: selectedModelBinding
-                )
-                .disabled(isModelPickerDisabled)
-                .opacity(isModelPickerDisabled ? 0.55 : 1)
-            }
         }
         .background(
             RoundedRectangle(cornerRadius: DeepTutorPalette.composerCornerRadius, style: .continuous)
@@ -128,15 +127,5 @@ struct DeepTutorComposerCardView: View {
         }
         .deepTutorComposerCardShadow()
         .onDrop(of: [.fileURL], isTargeted: $isDragging) { _ in false }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isKeyboardVisible = true
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isKeyboardVisible = false
-            }
-        }
     }
 }

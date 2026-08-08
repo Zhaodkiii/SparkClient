@@ -6,8 +6,11 @@ extension DeepTutorChatViewModel {
         return DeepTutorChatViewModel(
             repository: repository,
             chatOrchestrator: container.chatOrchestrator,
+            aiRuntimeService: container.aiRuntimeService,
             aiConfigCenter: container.aiConfigCenter,
-            toolInteractionCoordinator: container.toolInteractionCoordinator,
+            loadMemoryArchiveUseCase: container.loadMemoryArchiveUseCase,
+            saveMemoryUseCase: container.saveMemoryUseCase,
+            updateMemoryUseCase: container.updateMemoryUseCase,
             memberContextStore: container.memberContextStore,
             fileTransferService: container.fileTransferService,
             logger: container.logger

@@ -34,6 +34,8 @@ struct DeepTutorChatPage: View {
                     modelDisplayTitle: viewModel.selectedModelDisplayTitle,
                     modelIconName: viewModel.selectedModelIconName,
                     isModelPickerDisabled: viewModel.state.isStreaming,
+                    boundMemberDisplayModel: viewModel.boundMemberDisplayModel,
+                    members: viewModel.availableMembers,
                     onPersistSelectedModel: { modelName in
                         Task { await viewModel.updateConversationModel(modelName, for: conversationID) }
                     },
@@ -46,6 +48,9 @@ struct DeepTutorChatPage: View {
                     onRetryAttachmentUpload: { viewModel.retryComposerAttachmentUpload(id: $0) },
                     onRemoveAttachment: { viewModel.removeComposerAttachment(id: $0) },
                     onPreviewAttachment: { previewComposerAttachment(id: $0) },
+                    onSetMemberBinding: { memberID in
+                        Task { await viewModel.updateConversationMemberBinding(memberID, source: .composerManual) }
+                    },
                     onSend: {
                         Task { await viewModel.sendMessage() }
                     },

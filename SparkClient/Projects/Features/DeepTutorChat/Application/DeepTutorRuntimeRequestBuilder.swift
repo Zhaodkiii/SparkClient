@@ -73,7 +73,8 @@ enum DeepTutorRuntimeRequestBuilder: Sendable {
         )
 
         let healthPromptMode = DeepTutorPromptBuilder.healthPromptMode(
-            allowedToolNames: finalAllowedToolNames
+            allowedToolNames: finalAllowedToolNames,
+            hasBoundMember: conversation?.memberID != nil
         )
         let weatherPromptMode = DeepTutorPromptBuilder.weatherPromptMode(
             allowedToolNames: finalAllowedToolNames

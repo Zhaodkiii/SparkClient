@@ -31,9 +31,11 @@ enum DeepTutorStableToolCallID: Sendable {
     }
 
     private nonisolated static func hexHash(_ seed: String) -> String {
-        var hasher = Hasher()
-        hasher.combine(seed)
-        let value = UInt32(bitPattern: Int32(truncatingIfNeeded: hasher.finalize()))
-        return String(format: "%08X", value)
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in seed.utf8 {
+            hash ^= UInt64(byte)
+            hash &*= 0x100000001b3
+        }
+        return String(format: "%016llX", hash)
     }
 }

@@ -21,7 +21,13 @@ enum DeepTutorPromptBuilder: Sendable {
         let systemPrompt: String
     }
 
-    nonisolated static func healthPromptMode(allowedToolNames: Set<String>) -> DeepTutorHealthPromptMode {
+    nonisolated static func healthPromptMode(
+        allowedToolNames: Set<String>,
+        hasBoundMember: Bool
+    ) -> DeepTutorHealthPromptMode {
+        if hasBoundMember {
+            return .healthFetchAvailable
+        }
         if allowedToolNames.contains(SparkToolName.requestMemberSelection.rawValue) {
             return .memberSelectionRequired
         }
@@ -132,7 +138,7 @@ enum DeepTutorPromptBuilder: Sendable {
                 healthDataInstructions = """
                 Personal health data tools are available for the currently bound member.
                 Use the appropriate fetch tool (for example `fetch_sleep_details` for sleep questions).
-                Do not call `request_member_selection` again unless the user explicitly asks to switch members.
+                If the user explicitly asks to switch members, call `request_member_selection` first.
                 Do not expose tool parameter schemas in the final answer.
                 """
             case .unavailable:
@@ -146,7 +152,7 @@ enum DeepTutorPromptBuilder: Sendable {
             case .cityPromptRequired:
                 weatherInstructions = """
                 Weather tools are available, but the user's city is unclear and location permission is unavailable.
-                1. Call `ask_user_question` first to ask which city they want weather for.
+                1. Call `ask_user` first to ask which city they want weather for.
                 2. Do not invent coordinates or real-time weather.
                 3. After the user answers, call `query_location` then `query_weather`.
                 """
@@ -167,7 +173,7 @@ enum DeepTutorPromptBuilder: Sendable {
             return """
             Mode: general tutoring chat.
             Explain clearly, cite reasoning steps, and ask clarifying questions when needed.
-            You may call `ask_user_question` when you need structured user input.
+            You may call `ask_user` when you need structured user input.
             \(healthDataInstructions)
             \(weatherInstructions)
             """

@@ -289,10 +289,12 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
                 }
             }
             continuation.onTermination = { termination in
-                self.logger.debug(
-                    "AI Runtime 流结束，termination=\(termination), scenario=\(request.scenario.rawValue), source=\(resolved.source.rawValue), model=\(resolved.model)",
-                    module: .aiConfig
-                )
+                if AIRuntimeDebugFlags.verboseStreamLogs {
+                    self.logger.debug(
+                        "AI Runtime 流结束，termination=\(termination), scenario=\(request.scenario.rawValue), source=\(resolved.source.rawValue), model=\(resolved.model)",
+                        module: .aiConfig
+                    )
+                }
                 // 正常完成也会回调 onTermination，不能把 `.finished` 误当用户停止。
                 if case .cancelled = termination {
                     effectiveRequest.cancellationToken?.cancel()

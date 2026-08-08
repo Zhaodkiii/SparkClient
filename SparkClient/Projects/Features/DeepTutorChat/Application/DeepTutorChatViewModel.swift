@@ -35,7 +35,6 @@ final class DeepTutorChatViewModel: ObservableObject {
     private let runtimeAdapter: DeepTutorAIRuntimeAdapter
     private(set) var latestTurnPlan: DeepTutorTurnPlan?
     private let fileTransferService: FileTransferService
-    private let toolInteractionCoordinatorStorage: ToolInteractionCoordinator
     private let memberContextStore: MemberContextStore
     private let logger: Logger
     private var activeConversationID: UUID?
@@ -58,8 +57,22 @@ final class DeepTutorChatViewModel: ObservableObject {
     private let publishGate = DeepTutorPublishGate()
     private var pendingConversationListRefreshTask: Task<Void, Never>?
 
-    var toolInteractionCoordinator: ToolInteractionCoordinator { toolInteractionCoordinatorStorage }
     var availableMembers: [Member] { memberContextStore.context.members }
+
+    var boundMemberDisplayModel: DeepTutorBoundMemberDisplayModel {
+        guard let memberID = conversation?.memberID, memberID > 0 else {
+            return .unbound()
+        }
+        if let member = memberContextStore.context.members.first(where: { $0.id == memberID }) {
+            let subtitle = member.relationship.trimmingCharacters(in: .whitespacesAndNewlines)
+            return .bound(
+                memberID: memberID,
+                title: member.name,
+                subtitle: subtitle.isEmpty ? nil : subtitle
+            )
+        }
+        return .missing(memberID: memberID)
+    }
 
     var displayConversationTitle: String {
         DeepTutorSessionTitle.displayTitle(conversation?.title)
@@ -68,8 +81,11 @@ final class DeepTutorChatViewModel: ObservableObject {
     init(
         repository: any DeepTutorLocalChatRepository,
         chatOrchestrator: ChatOrchestrator,
+        aiRuntimeService: any AIRuntimeServing,
         aiConfigCenter: AIConfigCenter,
-        toolInteractionCoordinator: ToolInteractionCoordinator,
+        loadMemoryArchiveUseCase: LoadMemoryArchiveUseCase,
+        saveMemoryUseCase: SaveMemoryUseCase,
+        updateMemoryUseCase: UpdateMemoryUseCase,
         memberContextStore: MemberContextStore,
         fileTransferService: FileTransferService,
         logger: Logger = ConsoleLogger()
@@ -78,7 +94,6 @@ final class DeepTutorChatViewModel: ObservableObject {
         self.aiConfigCenter = aiConfigCenter
         self.logger = logger
         self.fileTransferService = fileTransferService
-        self.toolInteractionCoordinatorStorage = toolInteractionCoordinator
         self.memberContextStore = memberContextStore
         self.loadMessagesUseCase = LoadDeepTutorMessagesUseCase(repository: repository)
         self.loadConversationsUseCase = LoadDeepTutorConversationsUseCase(repository: repository)
@@ -96,9 +111,26 @@ final class DeepTutorChatViewModel: ObservableObject {
         self.localSendMessageUseCase = SendLocalDeepTutorMessageUseCase(repository: repository, logger: logger)
         let eventBus = DeepTutorTurnEventBus()
         self.turnEventBus = eventBus
+        let toolRegistry = DeepTutorToolRegistry(
+            tools: [
+                DeepTutorAskUserTool(),
+                DeepTutorGetCurrentMemberBindingTool(),
+                DeepTutorMemberSelectionTool(),
+                DeepTutorReadMemoryTool(loadUseCase: loadMemoryArchiveUseCase),
+                DeepTutorWriteMemoryTool(
+                    saveUseCase: saveMemoryUseCase,
+                    updateUseCase: updateMemoryUseCase
+                ),
+            ]
+        )
+        let agenticRuntime = DeepTutorAgenticRuntime(
+            runtimeService: aiRuntimeService,
+            registry: toolRegistry,
+            logger: logger
+        )
         self.runtimeAdapter = DeepTutorAIRuntimeAdapter(
-            orchestrator: chatOrchestrator,
             aiConfigCenter: aiConfigCenter,
+            agenticRuntime: agenticRuntime,
             eventBus: eventBus,
             logger: logger
         )
@@ -111,7 +143,6 @@ final class DeepTutorChatViewModel: ObservableObject {
             adapter: runtimeAdapter,
             turnCoordinator: turnCoordinator,
             eventBus: eventBus,
-            toolInteractionCoordinator: toolInteractionCoordinator,
             logger: logger
         )
         self.attachmentUploadUseCase = DeepTutorAttachmentUploadUseCase(fileTransferService: fileTransferService)
@@ -325,7 +356,7 @@ final class DeepTutorChatViewModel: ObservableObject {
                 let generation = openGenerationByConversationID[conversationID] ?? 0
                 DeepTutorChatLog.conversationOpenJoin(conversationID: conversationID, generation: generation)
                 await existing.value
-            } else {
+            } else if DeepTutorDebugFlags.verboseChatRefreshLogs {
                 logger.debug(
                     "deeptutor.conversation.open.skip conversation=\(DeepTutorChatLog.shortID(conversationID)) reason=already_active phase=\(state.phase)",
                     module: DeepTutorChatLog.module
@@ -536,6 +567,49 @@ final class DeepTutorChatViewModel: ObservableObject {
         }
     }
 
+    func updateConversationMemberBinding(
+        _ memberID: Int?,
+        source: DeepTutorMemberBindingSource = .composerManual
+    ) async {
+        guard state.isStreaming == false else { return }
+        guard let conversationID = activeConversationID else { return }
+
+        let normalizedMemberID = memberID.flatMap { $0 > 0 ? $0 : nil }
+        let currentMemberID = conversation?.memberID
+        guard currentMemberID != normalizedMemberID else { return }
+
+        do {
+            try await repository.updateConversationMemberBinding(
+                conversationID: conversationID,
+                memberID: normalizedMemberID
+            )
+            let updatedConversation = await repository.loadConversation(id: conversationID) ?? conversation
+            guard let updatedConversation else {
+                throw DeepTutorChatError.conversationNotFound
+            }
+            conversation = updatedConversation
+            if let index = conversations.firstIndex(where: { $0.id == conversationID }) {
+                let item = conversations[index]
+                conversations[index] = DeepTutorConversationListItem(
+                    id: item.id,
+                    conversation: updatedConversation,
+                    latestPreview: item.latestPreview,
+                    latestMessageAt: item.latestMessageAt,
+                    latestMessageStatus: item.latestMessageStatus
+                )
+            }
+            logger.info(
+                "DeepTutor 会话成员已更新，conversation=\(DeepTutorChatLog.shortID(conversationID)), source=\(source.rawValue), oldMemberID=\(currentMemberID.map(String.init) ?? "-"), newMemberID=\(normalizedMemberID.map(String.init) ?? "-")",
+                module: DeepTutorChatLog.module
+            )
+        } catch {
+            logger.warning(
+                "更新 DeepTutor 会话成员失败，conversation=\(DeepTutorChatLog.shortID(conversationID)), error=\(error.localizedDescription)",
+                module: DeepTutorChatLog.module
+            )
+        }
+    }
+
     func validateCurrentModelSelection(for conversationID: UUID) async {
         let namesInPicker = Set(chatScenarioModels.map(\.name))
         let trimmed = composerSelectedModelName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -702,7 +776,7 @@ final class DeepTutorChatViewModel: ObservableObject {
             cached: allMessagesCache,
             conversationID: conversationID
         )
-        let recoveredAll = DeepTutorMemberSelectionReloadRecovery.expireStalePendingBlocks(in: mergedAll)
+        let recoveredAll = DeepTutorMemberSelectionReloadRecovery.preservePendingBlocksOnReload(in: mergedAll)
         for message in recoveredAll {
             if let original = mergedAll.first(where: { $0.id == message.id }), original != message {
                 _ = try? await repository.upsertMessage(message)
@@ -970,10 +1044,12 @@ final class DeepTutorChatViewModel: ObservableObject {
             source: "send"
         )
 
-        logger.info(
-            "发送 DeepTutor 对话开始，conversation=\(DeepTutorChatLog.shortID(conversationID)), capability=\(effectiveCapability.rawValue), userContent=\(DeepTutorChatLog.contentSnippet(text))",
-            module: DeepTutorChatLog.module
-        )
+        if DeepTutorDebugFlags.verboseChatStreamLogs {
+            logger.info(
+                "发送 DeepTutor 对话开始，conversation=\(DeepTutorChatLog.shortID(conversationID)), capability=\(effectiveCapability.rawValue), userContent=\(DeepTutorChatLog.contentSnippet(text))",
+                module: DeepTutorChatLog.module
+            )
+        }
 
         state.draftText = ""
         clearComposerAttachments()
@@ -1039,10 +1115,12 @@ final class DeepTutorChatViewModel: ObservableObject {
                 assistantMessageID: result.assistant.id,
                 durationMs: durationMs
             )
-            logger.info(
-                "发送 DeepTutor 对话完成，conversation=\(DeepTutorChatLog.shortID(conversationID)), userMessage=\(DeepTutorChatLog.shortID(result.user.id)), userStatus=\(DeepTutorChatLog.statusLabel(result.user.status)), userContent=\(DeepTutorChatLog.contentSnippet(result.user.content)), assistantMessage=\(DeepTutorChatLog.shortID(result.assistant.id)), assistantStatus=\(DeepTutorChatLog.statusLabel(result.assistant.status)), assistantContent=\(DeepTutorChatLog.contentSnippet(result.assistant.content)), messages=\(state.messages.count), cost=\(DeepTutorChatLog.format(cost))s",
-                module: DeepTutorChatLog.module
-            )
+            if DeepTutorDebugFlags.verboseChatStreamLogs {
+                logger.info(
+                    "发送 DeepTutor 对话完成，conversation=\(DeepTutorChatLog.shortID(conversationID)), userMessage=\(DeepTutorChatLog.shortID(result.user.id)), userStatus=\(DeepTutorChatLog.statusLabel(result.user.status)), userContent=\(DeepTutorChatLog.contentSnippet(result.user.content)), assistantMessage=\(DeepTutorChatLog.shortID(result.assistant.id)), assistantStatus=\(DeepTutorChatLog.statusLabel(result.assistant.status)), assistantContent=\(DeepTutorChatLog.contentSnippet(result.assistant.content)), messages=\(state.messages.count), cost=\(DeepTutorChatLog.format(cost))s",
+                    module: DeepTutorChatLog.module
+                )
+            }
         } catch {
             let cost = Date().timeIntervalSince(start)
             let message = DeepTutorRuntimeRequestBuilder.userFacingConfigError(error)
@@ -1280,11 +1358,8 @@ final class DeepTutorChatViewModel: ObservableObject {
                 session: session,
                 onStreamingUpdate: onStreamingUpdate
             )
+            await updateConversationMemberBinding(memberID, source: .toolSelection)
             memberContextStore.select(memberID: memberID)
-            if var currentConversation = conversation {
-                currentConversation.memberID = memberID
-                conversation = currentConversation
-            }
             state.phase = .ready
             state.isStreaming = false
             await reloadMessagesAfterGeneration(for: conversationID)
@@ -1454,17 +1529,19 @@ final class DeepTutorChatViewModel: ObservableObject {
             ].joined(separator: "|")
             if lastTracePhaseLogByMessageID[message.id] != traceKey {
                 lastTracePhaseLogByMessageID[message.id] = traceKey
-                let blockKinds = message.blocks.map { $0.kind.rawValue }.joined(separator: "|")
                 DeepTutorChatLog.traceFinalPhase(
                     messageID: message.id,
                     isStreaming: message.status == .streaming,
                     hasFinalContent: hasFinalContent,
                     isFinalAnswerPhase: payload.isFinalAnswerPhase
                 )
-                logger.debug(
-                    "deeptutor.trace.state_changed message=\(DeepTutorChatLog.shortID(message.id)) rows=\(payload.rows.count) askUserBlocks=\(askUserCount) blocks=\(blockKinds)",
-                    module: DeepTutorChatLog.module
-                )
+                if DeepTutorDebugFlags.verboseChatStreamLogs {
+                    let blockKinds = message.blocks.map { $0.kind.rawValue }.joined(separator: "|")
+                    logger.debug(
+                        "deeptutor.trace.state_changed message=\(DeepTutorChatLog.shortID(message.id)) rows=\(payload.rows.count) askUserBlocks=\(askUserCount) blocks=\(blockKinds)",
+                        module: DeepTutorChatLog.module
+                    )
+                }
             }
             if hasFinalContent || payload.isFinalAnswerPhase {
                 DeepTutorChatLog.streamReasoningCommit(
@@ -1543,8 +1620,25 @@ final class DeepTutorChatViewModel: ObservableObject {
             || state.isStreaming
             || state.phase == .streaming
             || state.phase == .resolvingAskUser
+            || state.phase == .resolvingMemberSelection
             || state.phase == .loadingLocal
             || generationSession != nil
+            || hasPendingInteractiveToolInput
+    }
+
+    private var hasPendingInteractiveToolInput: Bool {
+        state.messages.contains { message in
+            message.blocks.contains { block in
+                switch block.payload {
+                case .askUser(let payload):
+                    return payload.isResolved == false
+                case .memberSelection(let payload):
+                    return payload.status == .pending || payload.status == .running
+                default:
+                    return false
+                }
+            }
+        }
     }
 
     private func reloadMessagesAfterGeneration(for conversationID: UUID) async {

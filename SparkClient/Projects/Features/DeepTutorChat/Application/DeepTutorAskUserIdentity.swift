@@ -60,10 +60,23 @@ enum DeepTutorAskUserIdentity: Sendable {
         return existingKey == incomingKey
     }
 
+    nonisolated static func payloadsMatch(
+        _ lhs: DeepTutorAskUserPayload,
+        _ rhs: DeepTutorAskUserPayload
+    ) -> Bool {
+        let leftPrompt = lhs.questions.first?.prompt.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let rightPrompt = rhs.questions.first?.prompt.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if leftPrompt.isEmpty == false, leftPrompt == rightPrompt {
+            return true
+        }
+        let leftLabels = lhs.questions.flatMap { $0.options.map(\.label) }
+        let rightLabels = rhs.questions.flatMap { $0.options.map(\.label) }
+        return promptHash(leftPrompt, optionLabels: leftLabels)
+            == promptHash(rightPrompt, optionLabels: rightLabels)
+    }
+
     nonisolated private static func promptHash(_ prompt: String, optionLabels: [String]) -> String {
         let seed = "\(prompt)|\(optionLabels.joined(separator: "|"))"
-        var hasher = Hasher()
-        hasher.combine(seed)
-        return String(format: "%08X", UInt32(bitPattern: Int32(truncatingIfNeeded: hasher.finalize())))
+        return DeepTutorStableToolCallID.legacy(prefix: "ask-user-identity", seed: seed)
     }
 }

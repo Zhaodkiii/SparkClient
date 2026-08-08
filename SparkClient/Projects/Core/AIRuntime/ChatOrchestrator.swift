@@ -79,8 +79,6 @@ struct ChatOrchestrator: Sendable {
         deliverMultimodalImages: Bool = false,                // 是否发送多模态图片
         sendsOriginalImagesToAI: Bool = false,                 // 多模态图片是否使用原图
         providerCompanyUppercased: String? = nil,              // 模型厂商
-        preferInlineAskUser: Bool = false,                     // DeepTutor 消息内 ask_user 卡片
-        preferInlineMemberSelection: Bool = false,             // DeepTutor 消息内成员选择卡片
         resumeLoopMessages: [AIRuntimeMessage]? = nil,        // AskUser 提交后继续同一 turn
         onPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil, // 流式回调
         messageRunActor: MessageRunActor? = nil               // 工具 UI 副作用串行落库
@@ -387,9 +385,7 @@ struct ChatOrchestrator: Sendable {
                     providerCompany: providerCompanyUppercased,
                     modelName: preferredModelName,
                     endpoint: nil,
-                    privacyPolicyURL: nil,
-                    preferInlineAskUser: preferInlineAskUser,
-                    preferInlineMemberSelection: preferInlineMemberSelection
+                    privacyPolicyURL: nil
                 )
 
                 // 工具执行完成 → 前端显示「参数 + 输出」，供气泡与工具详情 Sheet 共用

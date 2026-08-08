@@ -38,10 +38,12 @@ struct SendLocalDeepTutorMessageUseCase: Sendable {
         )
         _ = try await repository.upsertMessage(userMessage)
         await onStreamingUpdate?(userMessage)
-        logger.info(
-            "用户消息落库成功，conversation=\(DeepTutorChatLog.shortID(conversationID)), messageID=\(DeepTutorChatLog.shortID(userMessage.id)), status=\(DeepTutorChatLog.statusLabel(userMessage.status)), content=\(DeepTutorChatLog.contentSnippet(trimmed))",
-            module: DeepTutorChatLog.module
-        )
+        if DeepTutorDebugFlags.verboseChatStreamLogs {
+            logger.info(
+                "用户消息落库成功，conversation=\(DeepTutorChatLog.shortID(conversationID)), messageID=\(DeepTutorChatLog.shortID(userMessage.id)), status=\(DeepTutorChatLog.statusLabel(userMessage.status)), content=\(DeepTutorChatLog.contentSnippet(trimmed))",
+                module: DeepTutorChatLog.module
+            )
+        }
 
         var assistant = DeepTutorMessageReducer.applyBlocks(
             to: DeepTutorMessage(
@@ -56,10 +58,12 @@ struct SendLocalDeepTutorMessageUseCase: Sendable {
         )
         _ = try await repository.upsertMessage(assistant)
         await onStreamingUpdate?(assistant)
-        logger.info(
-            "助手消息落库（流式开始），conversation=\(DeepTutorChatLog.shortID(conversationID)), messageID=\(DeepTutorChatLog.shortID(assistant.id)), status=\(DeepTutorChatLog.statusLabel(assistant.status))",
-            module: DeepTutorChatLog.module
-        )
+        if DeepTutorDebugFlags.verboseChatStreamLogs {
+            logger.info(
+                "助手消息落库（流式开始），conversation=\(DeepTutorChatLog.shortID(conversationID)), messageID=\(DeepTutorChatLog.shortID(assistant.id)), status=\(DeepTutorChatLog.statusLabel(assistant.status))",
+                module: DeepTutorChatLog.module
+            )
+        }
 
         let simulation = DeepTutorLocalReplySimulator.simulate(
             userText: trimmed,
@@ -82,10 +86,12 @@ struct SendLocalDeepTutorMessageUseCase: Sendable {
         await onStreamingUpdate?(assistant)
 
         let cost = Date().timeIntervalSince(start)
-        logger.info(
-            "助手消息落库成功，conversation=\(DeepTutorChatLog.shortID(conversationID)), messageID=\(DeepTutorChatLog.shortID(assistant.id)), status=\(DeepTutorChatLog.statusLabel(assistant.status)), content=\(DeepTutorChatLog.contentSnippet(assistant.content)), cost=\(DeepTutorChatLog.format(cost))s",
-            module: DeepTutorChatLog.module
-        )
+        if DeepTutorDebugFlags.verboseChatStreamLogs {
+            logger.info(
+                "助手消息落库成功，conversation=\(DeepTutorChatLog.shortID(conversationID)), messageID=\(DeepTutorChatLog.shortID(assistant.id)), status=\(DeepTutorChatLog.statusLabel(assistant.status)), content=\(DeepTutorChatLog.contentSnippet(assistant.content)), cost=\(DeepTutorChatLog.format(cost))s",
+                module: DeepTutorChatLog.module
+            )
+        }
         return (userMessage, assistant)
     }
 

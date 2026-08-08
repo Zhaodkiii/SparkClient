@@ -68,7 +68,15 @@ extension DeepTutorMessageCodec {
     }
 
     nonisolated static func encodePayload(_ payload: DeepTutorMessageBlockPayload) throws -> Data {
-        let normalized = try normalizeForEncode(payload)
+        try encodePayload(payload, messageID: nil, blockID: nil)
+    }
+
+    nonisolated static func encodePayload(
+        _ payload: DeepTutorMessageBlockPayload,
+        messageID: UUID?,
+        blockID: UUID?
+    ) throws -> Data {
+        let normalized = try normalizeForEncode(payload, messageID: messageID, blockID: blockID)
         return try DeepTutorMessageCodec.encoder.encode(StoredPayload(schemaVersion: currentSchemaVersion, wrapper: normalized))
     }
 
@@ -78,11 +86,29 @@ extension DeepTutorMessageCodec {
         return decoded == payload
     }
 
-    nonisolated static func validateMessageBlocks(_ blocks: [DeepTutorMessageBlock]) -> (ok: Bool, failedKinds: [String]) {
+    nonisolated static func validateMessageBlocks(
+        _ blocks: [DeepTutorMessageBlock],
+        messageID: UUID? = nil
+    ) -> (ok: Bool, failedKinds: [String]) {
         var failed: [String] = []
         for block in blocks {
             let kind = entityKind(for: block.kind)
-            guard let data = try? encodePayload(block.payload) else {
+            let normalizedPayload: DeepTutorMessageBlockPayload
+            do {
+                normalizedPayload = try normalizeForEncode(
+                    block.payload,
+                    messageID: messageID,
+                    blockID: block.id
+                )
+            } catch {
+                failed.append(kind)
+                continue
+            }
+            guard let data = try? encodePayload(
+                normalizedPayload,
+                messageID: messageID,
+                blockID: block.id
+            ) else {
                 failed.append(kind)
                 continue
             }
@@ -94,12 +120,13 @@ extension DeepTutorMessageCodec {
                 kind: kind,
                 data: data,
                 blockToolCallID: blockToolCallID,
+                messageID: messageID,
                 blockID: block.id
             )?.payload else {
                 failed.append(kind)
                 continue
             }
-            if decoded != block.payload {
+            if payloadsEquivalent(decoded, normalizedPayload) == false {
                 failed.append(kind)
             }
         }
@@ -108,25 +135,72 @@ extension DeepTutorMessageCodec {
 
     // MARK: - Private
 
-    private nonisolated static func normalizeForEncode(_ payload: DeepTutorMessageBlockPayload) throws -> DeepTutorMessageBlockPayload {
+    private nonisolated static func normalizeForEncode(
+        _ payload: DeepTutorMessageBlockPayload,
+        messageID: UUID?,
+        blockID: UUID?
+    ) throws -> DeepTutorMessageBlockPayload {
         switch payload {
         case .envelope(var envelope):
             envelope.events = DeepTutorStreamEventCompatibility.normalizeEvents(
                 envelope.events,
-                messageID: nil
+                messageID: messageID
             )
             return .envelope(envelope)
         case .askUser(var askUser):
             askUser = normalizeAskUserBlock(
                 askUser,
                 blockToolCallID: askUser.toolCallID,
-                messageID: nil,
-                blockID: nil
+                messageID: messageID,
+                blockID: blockID
             )
             return .askUser(askUser)
+        case .memberSelection(let memberSelection):
+            return .memberSelection(
+                normalizeMemberSelectionBlock(
+                    memberSelection,
+                    blockToolCallID: memberSelection.toolCallID,
+                    messageID: messageID,
+                    blockID: blockID
+                )
+            )
         default:
             return payload
         }
+    }
+
+    private nonisolated static func payloadsEquivalent(
+        _ lhs: DeepTutorMessageBlockPayload,
+        _ rhs: DeepTutorMessageBlockPayload
+    ) -> Bool {
+        switch (lhs, rhs) {
+        case let (.envelope(left), .envelope(right)):
+            return left.serverID == right.serverID
+                && left.capability == right.capability
+                && left.events == right.events
+                && left.attachments == right.attachments
+                && left.requestSnapshot == right.requestSnapshot
+                && left.parentMessageID == right.parentMessageID
+                && left.status == right.status
+                && datesEquivalent(left.updatedAt, right.updatedAt)
+        case let (.memberSelection(left), .memberSelection(right)):
+            return left.toolCallID == right.toolCallID
+                && left.toolName == right.toolName
+                && left.reason == right.reason
+                && left.arguments == right.arguments
+                && left.selectedMemberID == right.selectedMemberID
+                && left.selectedMemberName == right.selectedMemberName
+                && left.status == right.status
+                && left.resultText == right.resultText
+                && datesEquivalent(left.createdAt, right.createdAt)
+                && datesEquivalent(left.updatedAt, right.updatedAt)
+        default:
+            return lhs == rhs
+        }
+    }
+
+    private nonisolated static func datesEquivalent(_ lhs: Date, _ rhs: Date) -> Bool {
+        abs(lhs.timeIntervalSince(rhs)) < 1.0
     }
 
     private nonisolated static func normalize(
@@ -147,6 +221,15 @@ extension DeepTutorMessageCodec {
             return .askUser(
                 normalizeAskUserBlock(
                     askUser,
+                    blockToolCallID: blockToolCallID,
+                    messageID: messageID,
+                    blockID: blockID
+                )
+            )
+        case .memberSelection(let memberSelection):
+            return .memberSelection(
+                normalizeMemberSelectionBlock(
+                    memberSelection,
                     blockToolCallID: blockToolCallID,
                     messageID: messageID,
                     blockID: blockID
@@ -190,6 +273,34 @@ extension DeepTutorMessageCodec {
         return copy
     }
 
+    private nonisolated static func normalizeMemberSelectionBlock(
+        _ value: DeepTutorMemberSelectionBlockPayload,
+        blockToolCallID: String?,
+        messageID: UUID?,
+        blockID: UUID?
+    ) -> DeepTutorMemberSelectionBlockPayload {
+        var copy = value
+        if copy.toolCallID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let blockToolCallID,
+           blockToolCallID.isEmpty == false {
+            copy.toolCallID = blockToolCallID
+        }
+        if copy.toolCallID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let seed = "\(messageID?.uuidString ?? "-")|\(blockID?.uuidString ?? "-")|\(copy.reason)"
+            copy.toolCallID = DeepTutorStableToolCallID.legacy(prefix: "member-selection", seed: seed)
+        }
+        if copy.toolName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            copy.toolName = SparkToolName.requestMemberSelection.rawValue
+        }
+        if copy.status != .completed, copy.selectedMemberID != nil {
+            copy.status = .completed
+        }
+        if copy.resultText == nil, copy.status == .completed {
+            copy.resultText = L10n.text("tool.result.request_member_selection.completed")
+        }
+        return copy
+    }
+
     private nonisolated static func compatibilityRepairReason(
         payload: DeepTutorMessageBlockPayload,
         kind: String,
@@ -206,6 +317,13 @@ extension DeepTutorMessageCodec {
                blockToolCallID.isEmpty == false,
                askUser.toolCallID == blockToolCallID {
                 return "askUser_row_toolCallID_backfill"
+            }
+        case .memberSelection(let memberSelection):
+            if memberSelection.toolCallID.hasPrefix("legacy-member-") {
+                return "memberSelection_legacy_toolCallID"
+            }
+            if memberSelection.status == .completed, memberSelection.selectedMemberID != nil {
+                return "memberSelection_resolved_payload"
             }
         case .envelope(let envelope):
             if envelope.events.contains(where: eventUsesLegacyCallID) {
@@ -269,11 +387,63 @@ extension DeepTutorMessageCodec {
             )
         }
 
+        if kind == DeepTutorBlockKindConstants.memberSelection {
+            return repairMemberSelectionWrapper(
+                wrapper,
+                blockToolCallID: blockToolCallID,
+                messageID: messageID,
+                blockID: blockID,
+                originalError: originalError
+            )
+        }
+
         if kind == DeepTutorBlockKindConstants.envelope {
-            return repairEnvelopeWrapper(wrapper, originalError: originalError)
+            return repairEnvelopeWrapper(wrapper, messageID: messageID, originalError: originalError)
         }
 
         return nil
+    }
+
+    private nonisolated static func repairMemberSelectionWrapper(
+        _ wrapper: [String: Any],
+        blockToolCallID: String?,
+        messageID: UUID?,
+        blockID: UUID?,
+        originalError: Error
+    ) -> DecodeResult? {
+        let object = (wrapper["memberSelection"] as? [String: Any])
+            ?? (wrapper["member_selection"] as? [String: Any])
+            ?? wrapper
+        let reason = stringValue(object["reason"]) ?? "需要先确认本次对话对应的家庭成员。"
+        let toolCallID = stringValue(object["toolCallID"])
+            ?? stringValue(object["tool_call_id"])
+            ?? blockToolCallID
+            ?? DeepTutorStableToolCallID.legacy(
+                prefix: "member-selection",
+                seed: "\(messageID?.uuidString ?? "-")|\(blockID?.uuidString ?? "-")|\(reason)"
+            )
+        let selectedMemberID = intValue(object["selectedMemberID"] ?? object["selected_member_id"])
+        let selectedMemberName = stringValue(object["selectedMemberName"] ?? object["selected_member_name"])
+        let status = DeepTutorMemberSelectionBlockPayload.Status(
+            rawValue: stringValue(object["status"]) ?? ""
+        ) ?? (selectedMemberID == nil ? .pending : .completed)
+        let resultText = stringValue(object["resultText"] ?? object["result_text"])
+        let arguments = object["arguments"] as? [String: String] ?? [:]
+        let payload = DeepTutorMemberSelectionBlockPayload(
+            toolCallID: toolCallID,
+            toolName: stringValue(object["toolName"] ?? object["tool_name"]) ?? SparkToolName.requestMemberSelection.rawValue,
+            reason: reason,
+            arguments: arguments,
+            selectedMemberID: selectedMemberID,
+            selectedMemberName: selectedMemberName,
+            status: status,
+            resultText: resultText ?? (status == .completed ? L10n.text("tool.result.request_member_selection.completed") : nil)
+        )
+        return DecodeResult(
+            payload: .memberSelection(payload),
+            repairApplied: true,
+            repairReason: "memberSelection_lossy_payload:\(DeepTutorMessageCodec.decodeErrorSummary(originalError))"
+        )
     }
 
     private nonisolated static func repairAskUserWrapper(
@@ -328,6 +498,7 @@ extension DeepTutorMessageCodec {
 
     private nonisolated static func repairEnvelopeWrapper(
         _ wrapper: [String: Any],
+        messageID: UUID?,
         originalError: Error
     ) -> DecodeResult? {
         guard wrapper["type"] as? String == "envelope",
@@ -338,7 +509,7 @@ extension DeepTutorMessageCodec {
         if let rawEvents = envelopeObject["events"] as? [Any] {
             let repairedEvents: [[String: Any]] = rawEvents.compactMap { item in
                 guard var dict = item as? [String: Any] else { return nil }
-                DeepTutorStreamEventCompatibility.repairEventDictionary(&dict)
+                DeepTutorStreamEventCompatibility.repairEventDictionary(&dict, messageID: messageID)
                 return dict
             }
             envelopeObject["events"] = repairedEvents
@@ -354,6 +525,24 @@ extension DeepTutorMessageCodec {
             repairApplied: true,
             repairReason: "envelope_lossy_events:\(DeepTutorMessageCodec.decodeErrorSummary(originalError))"
         )
+    }
+
+    private nonisolated static func stringValue(_ value: Any?) -> String? {
+        if let value = value as? String {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        if let value = value as? NSNumber {
+            return value.stringValue
+        }
+        return nil
+    }
+
+    private nonisolated static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        if let value = stringValue(value) { return Int(value) }
+        return nil
     }
 
     private nonisolated struct StoredPayload: Codable, Sendable {
@@ -432,6 +621,24 @@ enum DeepTutorStreamEventCompatibility {
                     answers: answers
                 )
 
+            case let .memberSelectionRequested(reason, arguments, toolCallID):
+                let seed = messageID.map { "\($0.uuidString)|member-selection|\(reason)" }
+                    ?? "member-selection|\(reason)"
+                return .memberSelectionRequested(
+                    reason: reason,
+                    arguments: arguments,
+                    toolCallID: normalizedCallID(toolCallID, prefix: "member-selection", seed: seed)
+                )
+
+            case let .memberSelectionResolved(toolCallID, memberID, memberName):
+                let seed = messageID.map { "\($0.uuidString)|member-selection-resolved|\(memberID)" }
+                    ?? "member-selection-resolved|\(memberID)"
+                return .memberSelectionResolved(
+                    toolCallID: normalizedCallID(toolCallID, prefix: "member-resolved", seed: seed),
+                    memberID: memberID,
+                    memberName: memberName
+                )
+
             default:
                 return event
             }
@@ -491,9 +698,10 @@ enum DeepTutorStreamEventCompatibility {
                 let seed = messageID.map { DeepTutorStableToolCallID.toolEvent(messageID: $0, prefix: type, toolName: toolName, callSeed: toolName).description } ?? toolName
                 dict["callID"] = dict["call_id"] ?? dict["toolCallID"] ?? dict["tool_call_id"] ?? DeepTutorStableToolCallID.legacy(prefix: type, seed: seed)
             }
-        case "askUser", "askUserResolved":
+        case "askUser", "askUserResolved", "memberSelectionRequested", "memberSelectionResolved":
             if (dict["toolCallID"] as? String)?.isEmpty != false {
-                dict["toolCallID"] = dict["tool_call_id"] ?? dict["callID"] ?? dict["call_id"] ?? DeepTutorStableToolCallID.legacy(prefix: type, seed: type)
+                let seed = messageID.map { "\($0.uuidString)|\(type)" } ?? type
+                dict["toolCallID"] = dict["tool_call_id"] ?? dict["callID"] ?? dict["call_id"] ?? DeepTutorStableToolCallID.legacy(prefix: type, seed: seed)
             }
         case "content":
             repairWebContentQuizEvent(&dict)

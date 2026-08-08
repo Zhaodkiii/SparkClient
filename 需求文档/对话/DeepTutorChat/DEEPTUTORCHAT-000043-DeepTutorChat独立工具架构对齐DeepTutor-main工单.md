@@ -1590,3 +1590,72 @@ DeepTutorChat 在不依赖 ToolHub + ToolInteraction 的情况下，
 并且 Chat 原有工具链不回归。
 ```
 
+## 18. 2026-08-08 实现偏差复核与修正记录
+
+### 18.1 DeepTutor-main 已核验事实源
+
+```text
+DeepTutor-main/deeptutor/core/tool_protocol.py
+DeepTutor-main/deeptutor/runtime/registry/tool_registry.py
+DeepTutor-main/deeptutor/runtime/registry/scoped_registry.py
+DeepTutor-main/deeptutor/core/agentic/tool_dispatch.py
+DeepTutor-main/deeptutor/core/agentic/loop.py
+DeepTutor-main/deeptutor/tools/ask_user.py
+DeepTutor-main/deeptutor/tools/builtin/__init__.py
+```
+
+核心结论：
+
+```text
+1. ToolResult 标准语义包含 content / sources / metadata / success / terminate_turn / pause_for_user。
+2. ToolRegistry 负责注册、别名、schema、prompt hints、execute；ScopedToolRegistry 负责 per-turn overlay 和 dispatch-time 授权。
+3. dispatch_tool_calls 每批最多 8 个工具调用，批内并行执行，重复调用去重。
+4. ask_user 是 pause_for_user，不是 terminate_turn；用户回复后以同一个 role=tool 结果恢复 loop。
+5. ask_user v2 schema 是 questions[] + intro，legacy {question, options} 只接受不宣传。
+6. ask_user payload 限制：最多 4 问、8 选项、header 16、prompt 800、intro 400、placeholder 120、option label 120、description 200。
+7. ask_user 会去掉模型自己生成的 Other/其他/其它，因为 UI 自动提供自由输入。
+8. read_memory 无参数读取 L3 concat；write_memory 只写 explicit preference，op=add/edit。
+```
+
+### 18.2 已发现并修正的偏差
+
+| 偏差 | 修正位置 | 当前状态 |
+| --- | --- | --- |
+| `ask_user` 工具结果 metadata 只写 `pause=ask_user`，没有 `metadata.ask_user` payload | `Application/Tools/Builtins/DeepTutorAskUserTool.swift` | 已补齐 JSON payload |
+| `ask_user` execute 不接受 DeepTutor-main legacy `{question, options}` 入参 | `DeepTutorAskUserTool.swift` | 已支持并归一化为 `questions[]` |
+| `ask_user` 缺少 Other/其他/其它 去重 | `DeepTutorAskUserTool.swift`、`DeepTutorAskUserNormalizer.swift` | 已补齐 |
+| `ask_user` 缺少 DeepTutor-main 长度与数量边界 | `DeepTutorAskUserTool.swift`、`DeepTutorAskUserNormalizer.swift` | 已补齐主要边界 |
+| resume 时重新编码 ask_user 参数只保留第一问，丢失 v2 多问题 payload | `Application/DeepTutorAskUserResumeBuilder.swift` | 已改为完整 `DeepTutorAskUserPayload` JSON |
+| Agent loop 未限制单批最多 8 个 tool_calls | `Application/Tools/DeepTutorAgenticRuntime.swift` | 已补齐 |
+| Agent loop 未做批内重复 tool_call 去重 | `DeepTutorAgenticRuntime.swift` | 已补齐；`ask_user` 重复调用额外抑制 UI |
+| pause 后直接 break，可能丢失同批后续 tool message | `DeepTutorAgenticRuntime.swift` | 已改为继续补齐本批 tool messages，首个 pause 生效 |
+| 工具结果 metadata 没有透传到 DeepTutor tool result event | `DeepTutorAgenticRuntime.swift`、`DeepTutorAIRuntimeEventMapper.swift` | 已补齐 |
+
+### 18.3 当前仍未完全等价 DeepTutor-main 的差异
+
+这些差异是刻意保留的阶段边界，不应写成“已完整等价”：
+
+| 差异 | DeepTutor-main | 当前 DeepTutorChat | 处理建议 |
+| --- | --- | --- | --- |
+| 工具执行并发 | `asyncio.gather` 并行执行同批工具 | 仍是顺序执行，但已补齐去重、max 8、tool message 回灌 | P2 再做 Swift task group 并发，需确认 memory 写入串行安全 |
+| Label protocol | `THINK/TOOL/FINISH/...` label 驱动，协议违规会 repair retry | 当前复用供应商原生 tool_calls，没有完整 label 协议 | P2 单独引入 label protocol，不和第一阶段工具目录混在一起 |
+| Scoped registry | 支持 overlay、provider allowlist、deferred tools | Phase 1 只有内置四工具，无 provider overlay | P3 接入外部工具/延迟工具时补 |
+| prompt hints | `ToolPromptHints` + 多格式 prompt composer | 当前 prompt manifest 是手写规则 | P2 抽成 `DeepTutorToolPromptManifestBuilder` 正式实现 |
+| sources | `ToolResult.sources` 可被聚合到 stream sources | Phase 1 工具结果尚未承载 sources | 接入 RAG/资料读取时补 |
+| terminate_turn | 协议支持但当前 chat builtins 几乎不用 | iOS Phase 1 未使用 | 保持模型字段预留即可 |
+| Memory Trace | `write_memory` 会写 L1 trace 并由 memory store 去重 | iOS 当前落到既有 Memory usecase，只有医疗事实拦截，无 L1 trace 等价 | 后续对齐 iOS 记忆系统时补 |
+| 成员选择 | DeepTutor-main 无家庭成员选择工具 | iOS 自定义 `request_member_selection`，只复用 pause/resume 语义 | 保留为 LookHealth 专属工具 |
+
+### 18.4 构建与残留验证
+
+```text
+xcodebuild -project SparkClient.xcodeproj -scheme SparkClient -configuration Debug -destination 'generic/platform=iOS Simulator' build
+结果：BUILD SUCCEEDED
+```
+
+残留检索：
+
+```text
+DeepTutorChat 下未发现 ToolHub / ToolInteractionCoordinator / preferInlineAskUser / preferInlineMemberSelection。
+Core AIRuntime 下未发现 preferInlineAskUser / preferInlineMemberSelection。
+```

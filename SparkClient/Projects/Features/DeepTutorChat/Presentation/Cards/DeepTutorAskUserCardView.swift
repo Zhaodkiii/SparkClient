@@ -30,6 +30,21 @@ struct DeepTutorAskUserCardView: View {
         }
         .deepTutorAskUserCardShadow()
         .padding(.top, 12)
+        .onAppear {
+            let draft = DeepTutorAskUserDraftCache.load(key: draftKey)
+            if freeTextAnswers.isEmpty {
+                freeTextAnswers = draft.freeTextAnswers
+            }
+            if expandedFreeTextQuestionIDs.isEmpty {
+                expandedFreeTextQuestionIDs = draft.expandedQuestionIDs
+            }
+        }
+        .onChange(of: freeTextAnswers) { _ in
+            saveDraft()
+        }
+        .onChange(of: expandedFreeTextQuestionIDs) { _ in
+            saveDraft()
+        }
     }
 
     private var interactiveContent: some View {
@@ -265,6 +280,13 @@ struct DeepTutorAskUserCardView: View {
         RoundedRectangle(cornerRadius: DeepTutorPalette.askUserOptionCornerRadius, style: .continuous)
     }
 
+    private var draftKey: String {
+        let prompts = payload.payload.questions
+            .map { "\($0.id)|\($0.prompt)|\($0.options.map(\.label).joined(separator: ","))" }
+            .joined(separator: "||")
+        return "\(payload.toolCallID)|\(DeepTutorStableToolCallID.legacy(prefix: "ask-draft", seed: prompts))"
+    }
+
     private func letter(for index: Int) -> String {
         guard index >= 0, index < 26 else { return "?" }
         return String(UnicodeScalar(65 + index)!)
@@ -294,6 +316,47 @@ struct DeepTutorAskUserCardView: View {
                 )
             )
         }
+        DeepTutorAskUserDraftCache.clear(key: draftKey)
         onSubmit(answers)
+    }
+
+    private func saveDraft() {
+        DeepTutorAskUserDraftCache.save(
+            key: draftKey,
+            freeTextAnswers: freeTextAnswers,
+            expandedQuestionIDs: expandedFreeTextQuestionIDs
+        )
+    }
+}
+
+@MainActor
+private enum DeepTutorAskUserDraftCache {
+    struct Draft {
+        var freeTextAnswers: [String: String]
+        var expandedQuestionIDs: Set<String>
+    }
+
+    private static var freeTextAnswersByKey: [String: [String: String]] = [:]
+    private static var expandedQuestionIDsByKey: [String: Set<String>] = [:]
+
+    static func load(key: String) -> Draft {
+        Draft(
+            freeTextAnswers: freeTextAnswersByKey[key] ?? [:],
+            expandedQuestionIDs: expandedQuestionIDsByKey[key] ?? []
+        )
+    }
+
+    static func save(
+        key: String,
+        freeTextAnswers: [String: String],
+        expandedQuestionIDs: Set<String>
+    ) {
+        freeTextAnswersByKey[key] = freeTextAnswers
+        expandedQuestionIDsByKey[key] = expandedQuestionIDs
+    }
+
+    static func clear(key: String) {
+        freeTextAnswersByKey.removeValue(forKey: key)
+        expandedQuestionIDsByKey.removeValue(forKey: key)
     }
 }

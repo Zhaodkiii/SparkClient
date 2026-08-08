@@ -72,10 +72,12 @@ actor DeepTutorLocalChatStore {
                         )
                     )
                 }
-                self.logger.debug(
-                    "DeepTutor 仓储：loadConversations count=\(items.count), ownerAccountID=\(accountID), scenario=\(DeepTutorScenarioConstants.scenario)",
-                    module: DeepTutorChatLog.module
-                )
+                if DeepTutorDebugFlags.verboseConversationListRefreshLogs {
+                    self.logger.debug(
+                        "DeepTutor 仓储：loadConversations count=\(items.count), ownerAccountID=\(accountID), scenario=\(DeepTutorScenarioConstants.scenario)",
+                        module: DeepTutorChatLog.module
+                    )
+                }
                 return items
             }
         } catch {
@@ -197,10 +199,12 @@ actor DeepTutorLocalChatStore {
         let now = Date()
         let trimmed = currentModelName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let persisted = (trimmed?.isEmpty == false) ? trimmed : nil
-        logger.info(
-            "DeepTutor 仓储：updateConversationModel conversation=\(DeepTutorChatLog.shortID(conversationID)) model=\(persisted ?? "default")",
-            module: DeepTutorChatLog.module
-        )
+        if DeepTutorDebugFlags.verboseChatRefreshLogs {
+            logger.info(
+                "DeepTutor 仓储：updateConversationModel conversation=\(DeepTutorChatLog.shortID(conversationID)) model=\(persisted ?? "default")",
+                module: DeepTutorChatLog.module
+            )
+        }
         try await kernel.writeWithoutNotification { context, accountID in
             guard let object = try Self.fetchThread(context: context, ownerAccountID: accountID, threadID: conversationID) else {
                 throw DeepTutorChatError.conversationNotFound
@@ -309,10 +313,12 @@ actor DeepTutorLocalChatStore {
                     )
                 }
             }
-            self.logger.debug(
-                "deeptutor.messages.load.rows conversation=\(DeepTutorChatLog.shortID(conversationID)) fetchedRows=\(rows.count) decoded=\(messages.count) skippedMessages=\(skippedMessages) ownerAccountID=\(accountID)",
-                module: DeepTutorChatLog.module
-            )
+            if DeepTutorDebugFlags.verboseChatRefreshLogs {
+                self.logger.debug(
+                    "deeptutor.messages.load.rows conversation=\(DeepTutorChatLog.shortID(conversationID)) fetchedRows=\(rows.count) decoded=\(messages.count) skippedMessages=\(skippedMessages) ownerAccountID=\(accountID)",
+                    module: DeepTutorChatLog.module
+                )
+            }
             return (messages.reversed(), repairMessages, droppedBlocks, recoveredBlocks)
             }
             let messages = readResult.messages
@@ -403,14 +409,19 @@ actor DeepTutorLocalChatStore {
             threadObject.setValue(Date(), forKey: "updatedAt")
             return didInsert
         }
-        let validation = DeepTutorMessageCodec.validateMessageBlocks(message.blocks)
+        let validation = DeepTutorMessageCodec.validateMessageBlocks(
+            message.blocks,
+            messageID: message.id
+        )
         let askUserCount = message.blocks.filter { $0.kind == .askUser }.count
+        let memberSelectionCount = message.blocks.filter { $0.kind == .memberSelection }.count
         if validation.ok {
             DeepTutorChatLog.messagePersistRoundtripOK(
                 conversationID: message.conversationID,
                 messageID: message.id,
                 blockCount: message.blocks.count,
-                askUserBlockCount: askUserCount
+                askUserBlockCount: askUserCount,
+                memberSelectionBlockCount: memberSelectionCount
             )
         } else {
             DeepTutorChatLog.messagePersistRoundtripFailed(
@@ -434,6 +445,7 @@ actor DeepTutorLocalChatStore {
             status: message.status,
             blockCount: message.blocks.count,
             askUserBlockCount: askUserCount,
+            memberSelectionBlockCount: memberSelectionCount,
             contentLength: message.content.count
         )
         await postChange(
@@ -661,7 +673,7 @@ actor DeepTutorLocalChatStore {
                 "deeptutor.messages.load.message_without_decodable_blocks conversation=\(DeepTutorChatLog.shortID(threadID)) message=\(DeepTutorChatLog.shortID(id)) role=\(role.rawValue) blockRows=\(blockRows.count)",
                 module: DeepTutorChatLog.module
             )
-        } else if blocks.count < blockRows.count {
+        } else if blocks.count < blockRows.count, DeepTutorDebugFlags.verboseChatRefreshLogs {
             logger.warning(
                 "deeptutor.messages.load.partial_blocks conversation=\(DeepTutorChatLog.shortID(threadID)) message=\(DeepTutorChatLog.shortID(id)) decodedBlocks=\(blocks.count) blockRows=\(blockRows.count) contentLength=\(text.count) dropped=\(stats.droppedBlocks) recovered=\(stats.recoveredBlocks)",
                 module: DeepTutorChatLog.module
@@ -801,16 +813,21 @@ actor DeepTutorLocalChatStore {
                 kind: kindRaw,
                 payloadBytes: payloadData.count
             )
-            logger.error(
-                "deeptutor.messages.load.block_decode_failed conversation=\(DeepTutorChatLog.shortID(threadID)) message=\(DeepTutorChatLog.shortID(messageID)) block=\(DeepTutorChatLog.shortID(id)) kind=\(kindRaw) payloadBytes=\(payloadData.count) error=repair_failed",
-                module: DeepTutorChatLog.module
-            )
+            if DeepTutorDebugFlags.verboseChatRefreshLogs {
+                logger.error(
+                    "deeptutor.messages.load.block_decode_failed conversation=\(DeepTutorChatLog.shortID(threadID)) message=\(DeepTutorChatLog.shortID(messageID)) block=\(DeepTutorChatLog.shortID(id)) kind=\(kindRaw) payloadBytes=\(payloadData.count) error=repair_failed",
+                    module: DeepTutorChatLog.module
+                )
+            }
             return nil
         }
 
         var resolvedToolCallID = rowToolCallID
         if case .askUser(let askUser) = payload, resolvedToolCallID?.isEmpty != false {
             resolvedToolCallID = askUser.toolCallID
+        }
+        if case .memberSelection(let memberSelection) = payload, resolvedToolCallID?.isEmpty != false {
+            resolvedToolCallID = memberSelection.toolCallID
         }
 
         return DeepTutorMessageBlock(
@@ -870,7 +887,14 @@ actor DeepTutorLocalChatStore {
             row.setValue(false, forKey: "isPendingSync")
             row.setValue(block.createdAt, forKey: "createdAt")
             row.setValue(block.updatedAt, forKey: "updatedAt")
-            row.setValue(try DeepTutorMessageCodec.encodePayload(block.payload), forKey: "payloadData")
+            row.setValue(
+                try DeepTutorMessageCodec.encodePayload(
+                    block.payload,
+                    messageID: clientMessageID,
+                    blockID: block.id
+                ),
+                forKey: "payloadData"
+            )
         }
     }
 

@@ -5,9 +5,11 @@ struct DeepTutorMemberSelectionCardView: View {
     let members: [Member]
     let onSelectMember: (Int) -> Void
 
+    @State private var optimisticSelectedMemberID: Int?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            if payload.isResolved {
+            if payload.isResolved || optimisticSelectedMemberID != nil {
                 resolvedSummary
             } else if members.isEmpty {
                 emptyState
@@ -73,11 +75,12 @@ struct DeepTutorMemberSelectionCardView: View {
     }
 
     private func memberRow(_ member: Member) -> some View {
-        let isSelected = payload.selectedMemberID == member.id
-        let isDisabled = payload.status == .running || payload.status == .completed
+        let isSelected = effectiveSelectedMemberID == member.id
+        let isDisabled = payload.status == .running || payload.status == .completed || optimisticSelectedMemberID != nil
 
         return Button {
             guard isDisabled == false else { return }
+            optimisticSelectedMemberID = member.id
             onSelectMember(member.id)
         } label: {
             HStack(spacing: 12) {
@@ -140,10 +143,10 @@ struct DeepTutorMemberSelectionCardView: View {
 
     private var resolvedSummary: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("已选择成员", systemImage: "checkmark.circle.fill")
+            Label(payload.isResolved ? "已选择成员" : "已选择成员，正在继续", systemImage: "checkmark.circle.fill")
                 .font(.system(size: DeepTutorPalette.askUserHeaderFontSize, weight: .semibold))
                 .foregroundStyle(.green)
-            if let name = payload.selectedMemberName ?? members.first(where: { $0.id == payload.selectedMemberID })?.name {
+            if let name = payload.selectedMemberName ?? members.first(where: { $0.id == effectiveSelectedMemberID })?.name {
                 Text("已选择：\(name)")
                     .font(.system(size: DeepTutorPalette.bodyFontSize, weight: .medium))
                     .foregroundStyle(.primary)
@@ -152,6 +155,10 @@ struct DeepTutorMemberSelectionCardView: View {
                 .font(.system(size: DeepTutorPalette.askUserFooterFontSize))
                 .foregroundStyle(DeepTutorPalette.traceMutedText)
         }
+    }
+
+    private var effectiveSelectedMemberID: Int? {
+        payload.selectedMemberID ?? optimisticSelectedMemberID
     }
 
     private var emptyState: some View {

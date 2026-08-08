@@ -1,36 +1,46 @@
 import Foundation
 
 enum DeepTutorMemberSelectionReloadRecovery: Sendable {
-    nonisolated static func expireStalePendingBlocks(in messages: [DeepTutorMessage]) -> [DeepTutorMessage] {
-        messages.map { expireStalePendingBlocks(in: $0) }
+    nonisolated static func preservePendingBlocksOnReload(in messages: [DeepTutorMessage]) -> [DeepTutorMessage] {
+        messages.map { preservePendingBlocksOnReload(in: $0) }
     }
 
-    nonisolated static func expireStalePendingBlocks(in message: DeepTutorMessage) -> DeepTutorMessage {
+    nonisolated static func preservePendingBlocksOnReload(in message: DeepTutorMessage) -> DeepTutorMessage {
         guard message.role == .assistant else { return message }
 
-        let hasPendingMemberSelection = message.blocks.contains { block in
+        let pendingMemberSelectionBlocks = message.blocks.filter { block in
             guard block.kind == .memberSelection,
                   case let .memberSelection(payload) = block.payload else { return false }
             return payload.status == .pending || payload.status == .running
         }
-        guard hasPendingMemberSelection else { return message }
-
-        // 流式进行中保留 pending；重载后无 continuation，只能标记为中断态。
-        guard message.status != .streaming else { return message }
+        guard pendingMemberSelectionBlocks.isEmpty == false else { return message }
 
         var events = message.events
         var didChange = false
-        for index in events.indices {
-            if case let .memberSelectionRequested(reason, arguments, toolCallID) = events[index] {
-                let resolved = message.blocks.contains { block in
-                    guard block.kind == .memberSelection,
-                          case let .memberSelection(payload) = block.payload else { return false }
-                    return payload.toolCallID == toolCallID && payload.status == .completed
+
+        for block in pendingMemberSelectionBlocks {
+            guard case let .memberSelection(payload) = block.payload else { continue }
+            let hasRequestedEvent = events.contains { event in
+                if case let .memberSelectionRequested(_, _, toolCallID) = event {
+                    return toolCallID == payload.toolCallID
                 }
-                if resolved == false {
-                    events[index] = .memberSelectionRequested(reason: reason, arguments: arguments, toolCallID: toolCallID)
-                    didChange = true
-                }
+                return false
+            }
+            if hasRequestedEvent == false {
+                events.append(
+                    .memberSelectionRequested(
+                        reason: payload.reason,
+                        arguments: payload.arguments,
+                        toolCallID: payload.toolCallID
+                    )
+                )
+                DeepTutorChatLog.memberSelectionReloadRecoveredPending(
+                    conversationID: message.conversationID,
+                    assistantMessageID: message.id,
+                    blockID: block.id,
+                    action: "event_restored"
+                )
+                didChange = true
             }
         }
 
@@ -38,25 +48,26 @@ enum DeepTutorMemberSelectionReloadRecovery: Sendable {
             guard block.kind == .memberSelection,
                   case var .memberSelection(payload) = block.payload else { return block }
             guard payload.status == .pending || payload.status == .running else { return block }
-            payload.status = .expired
-            payload.resultText = "本次成员选择已中断，请重新发送问题。"
-            payload.updatedAt = Date()
-            DeepTutorChatLog.memberSelectionReloadRecoveredPending(
-                conversationID: message.conversationID,
-                assistantMessageID: message.id,
-                blockID: block.id,
-                action: "expired"
-            )
-            didChange = true
+            if payload.status == .running {
+                payload.status = .pending
+                payload.updatedAt = Date()
+                DeepTutorChatLog.memberSelectionReloadRecoveredPending(
+                    conversationID: message.conversationID,
+                    assistantMessageID: message.id,
+                    blockID: block.id,
+                    action: "running_to_pending"
+                )
+                didChange = true
+            }
             return DeepTutorMessageBlock(
                 id: block.id,
                 kind: block.kind,
                 payload: .memberSelection(payload),
-                toolCallID: block.toolCallID,
+                toolCallID: block.toolCallID ?? payload.toolCallID,
                 revision: block.revision,
                 orderKey: block.orderKey,
                 createdAt: block.createdAt,
-                updatedAt: Date()
+                updatedAt: didChange ? Date() : block.updatedAt
             )
         }
 

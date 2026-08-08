@@ -136,7 +136,7 @@ enum DeepTutorMemberSelectionResumeBuilder: Sendable {
         ].joined(separator: "\n")
     }
 
-    nonisolated private static func canonicalToolCallID(
+    nonisolated static func canonicalToolCallID(
         in message: DeepTutorMessage,
         submittedToolCallID: String
     ) -> String {
