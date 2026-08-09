@@ -7,6 +7,7 @@ import UIKit
 struct DeepTutorChatPage: View {
     let conversationID: UUID
     @ObservedObject var viewModel: DeepTutorChatViewModel
+    @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     @ObservedObject private var toolInteractionCoordinator: DeepTutorToolInteractionCoordinator
     @StateObject private var refreshCoordinator: DeepTutorRefreshCoordinator
     @State private var isComposerFocused = false
@@ -20,9 +21,10 @@ struct DeepTutorChatPage: View {
     @State private var showCapturePhotoPicker = false
     @State private var capturePhotoItems: [PhotosPickerItem] = []
 
-    init(conversationID: UUID, viewModel: DeepTutorChatViewModel) {
+    init(conversationID: UUID, viewModel: DeepTutorChatViewModel, aiSettingsViewModel: AISettingsViewModel) {
         self.conversationID = conversationID
         self.viewModel = viewModel
+        self.aiSettingsViewModel = aiSettingsViewModel
         _toolInteractionCoordinator = ObservedObject(wrappedValue: viewModel.toolInteractionCoordinator)
         _refreshCoordinator = StateObject(wrappedValue: DeepTutorRefreshCoordinator(conversationID: conversationID, viewModel: viewModel))
     }
@@ -280,6 +282,7 @@ struct DeepTutorChatPage: View {
                 viewModel: viewModel,
                 refreshCoordinator: refreshCoordinator,
                 fileTransferService: viewModel.composerFileTransferService,
+                conversationAppearance: aiSettingsViewModel.snapshot.deepTutorConversationAppearance,
                 onCaptureCardAction: handleCaptureCardAction
             )
         case .error(let message):
@@ -297,6 +300,7 @@ struct DeepTutorChatPage: View {
 
 struct DeepTutorConversationListPage: View {
     @ObservedObject var viewModel: DeepTutorChatViewModel
+    @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     @State private var hasLoaded = false
     @State private var showsCreationError = false
     @State private var hasDismissedKeyboardInCurrentDrag = false
@@ -346,7 +350,11 @@ struct DeepTutorConversationListPage: View {
             }
         }
         .navigationDestination(item: $viewModel.selectedConversationID) { conversationID in
-            DeepTutorChatPage(conversationID: conversationID, viewModel: viewModel)
+            DeepTutorChatPage(
+                conversationID: conversationID,
+                viewModel: viewModel,
+                aiSettingsViewModel: aiSettingsViewModel
+            )
         }
         .task {
             guard hasLoaded == false else { return }

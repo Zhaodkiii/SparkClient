@@ -41,6 +41,7 @@ struct ConversationMessageListRepresentable: UIViewControllerRepresentable {
     let taskManager: TaskManager
     let logger: Logger
     let actionStateHandle: ChatMessageActionStateHandle
+    let conversationAppearance: ChatConversationAppearancePreferences
 
     var visibleMessages: [ChatMessage]
     var hasMoreMessages: Bool
@@ -108,5 +109,6 @@ struct ConversationMessageListRepresentable: UIViewControllerRepresentable {
         vc.taskManager = taskManager
         vc.logger = logger
         vc.actionState = actionStateHandle.state
+        vc.conversationAppearance = conversationAppearance
     }
 }

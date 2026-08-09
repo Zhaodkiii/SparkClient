@@ -72,6 +72,14 @@ struct AISettingsView: View {
                 }
             }
 
+            Section("Chat 对话外观") {
+                ChatConversationAppearanceSettingsSection(viewModel: viewModel)
+            }
+
+            Section("DeepTutorChat 对话外观") {
+                DeepTutorConversationAppearanceSettingsSection(viewModel: viewModel)
+            }
+
             // 当前版本 功能不完善 ，暂时关闭
             Section(L10n.text("ai_settings.section.personalization")) {
                 NavigationLink {
@@ -150,5 +158,81 @@ private struct SettingNavRow: View {
                     .foregroundStyle(.secondary)
             }
         }
+    }
+}
+
+private struct ChatConversationAppearanceSettingsSection: View {
+    @ObservedObject var viewModel: AISettingsViewModel
+
+    var body: some View {
+        Picker("对话卡片样式", selection: Binding(
+            get: { viewModel.snapshot.chatConversationAppearance.cardStyle },
+            set: { newValue in
+                viewModel.snapshot.chatConversationAppearance.cardStyle = newValue
+                Task { await viewModel.persistSnapshotNow() }
+            }
+        )) {
+            ForEach(ChatConversationCardStyle.allCases, id: \.self) { style in
+                Text(style.displayName).tag(style)
+            }
+        }
+
+        Picker("工具调用展示", selection: Binding(
+            get: { viewModel.snapshot.chatConversationAppearance.toolTraceDisplayMode },
+            set: { newValue in
+                viewModel.snapshot.chatConversationAppearance.toolTraceDisplayMode = newValue
+                Task { await viewModel.persistSnapshotNow() }
+            }
+        )) {
+            ForEach(ChatToolTraceDisplayMode.allCases, id: \.self) { mode in
+                Text(mode.displayName).tag(mode)
+            }
+        }
+
+        Toggle("流式过程也折叠", isOn: Binding(
+            get: { viewModel.snapshot.chatConversationAppearance.collapseToolsWhileStreaming },
+            set: { newValue in
+                viewModel.snapshot.chatConversationAppearance.collapseToolsWhileStreaming = newValue
+                Task { await viewModel.persistSnapshotNow() }
+            }
+        ))
+    }
+}
+
+private struct DeepTutorConversationAppearanceSettingsSection: View {
+    @ObservedObject var viewModel: AISettingsViewModel
+
+    var body: some View {
+        Picker("对话卡片样式", selection: Binding(
+            get: { viewModel.snapshot.deepTutorConversationAppearance.cardStyle },
+            set: { newValue in
+                viewModel.snapshot.deepTutorConversationAppearance.cardStyle = newValue
+                Task { await viewModel.persistSnapshotNow() }
+            }
+        )) {
+            ForEach(DeepTutorConversationCardStyle.allCases, id: \.self) { style in
+                Text(style.displayName).tag(style)
+            }
+        }
+
+        Picker("工具调用展示", selection: Binding(
+            get: { viewModel.snapshot.deepTutorConversationAppearance.toolTraceDisplayMode },
+            set: { newValue in
+                viewModel.snapshot.deepTutorConversationAppearance.toolTraceDisplayMode = newValue
+                Task { await viewModel.persistSnapshotNow() }
+            }
+        )) {
+            ForEach(DeepTutorToolTraceDisplayMode.allCases, id: \.self) { mode in
+                Text(mode.displayName).tag(mode)
+            }
+        }
+
+        Toggle("流式过程也折叠", isOn: Binding(
+            get: { viewModel.snapshot.deepTutorConversationAppearance.collapseToolsWhileStreaming },
+            set: { newValue in
+                viewModel.snapshot.deepTutorConversationAppearance.collapseToolsWhileStreaming = newValue
+                Task { await viewModel.persistSnapshotNow() }
+            }
+        ))
     }
 }

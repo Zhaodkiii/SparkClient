@@ -54,6 +54,7 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
     var taskManager: TaskManager?
     var logger: Logger?
     var actionState: ChatMessageActionState?
+    var conversationAppearance: ChatConversationAppearancePreferences = .default
     
     // MARK: - 回调
     var onCommand: ((ConversationListCommand) -> Void)?
@@ -556,6 +557,7 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
                     speechHelper: speechHelper,
                     memberContextStore: memberContextStore,
                     actionState: actionState,
+                    conversationAppearance: conversationAppearance,
                     taskManager: taskManager,
                     logger: logger,
                     onCaptureOpenFiles: { [weak self] in

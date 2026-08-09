@@ -13,6 +13,7 @@ struct DeepTutorAssistantBubble: View {
     let onQuizFollowUp: (String) -> Void
     let onQuizJudge: (DeepTutorQuizQuestion, String) async -> String?
     let onQuizInlineInputFocusChanged: (Bool) -> Void
+    let conversationAppearance: DeepTutorConversationAppearancePreferences
 
     init(
         message: DeepTutorMessage,
@@ -26,7 +27,8 @@ struct DeepTutorAssistantBubble: View {
         onToolPreview: @escaping (DeepTutorToolPreviewPrompt) -> Void = { _ in },
         onQuizFollowUp: @escaping (String) -> Void = { _ in },
         onQuizJudge: @escaping (DeepTutorQuizQuestion, String) async -> String? = { _, _ in nil },
-        onQuizInlineInputFocusChanged: @escaping (Bool) -> Void = { _ in }
+        onQuizInlineInputFocusChanged: @escaping (Bool) -> Void = { _ in },
+        conversationAppearance: DeepTutorConversationAppearancePreferences = .default
     ) {
         self.message = message
         self.members = members
@@ -40,9 +42,15 @@ struct DeepTutorAssistantBubble: View {
         self.onQuizFollowUp = onQuizFollowUp
         self.onQuizJudge = onQuizJudge
         self.onQuizInlineInputFocusChanged = onQuizInlineInputFocusChanged
+        self.conversationAppearance = conversationAppearance
     }
 
     var body: some View {
+        content
+            .modifier(DeepTutorAssistantBubbleChrome(style: conversationAppearance.cardStyle))
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: 12) {
             ForEach(displayBlocks) { block in
                 blockView(block)
@@ -66,6 +74,8 @@ struct DeepTutorAssistantBubble: View {
             DeepTutorTracePanelView(
                 message: message,
                 payload: payload,
+                displayMode: conversationAppearance.toolTraceDisplayMode,
+                collapseToolsWhileStreaming: conversationAppearance.collapseToolsWhileStreaming,
                 onToolPreview: onToolPreview
             )
         case .askUser(let payload):
@@ -139,5 +149,29 @@ struct DeepTutorAssistantBubble: View {
                 .background(Color(.tertiarySystemFill), in: Circle())
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct DeepTutorAssistantBubbleChrome: ViewModifier {
+    let style: DeepTutorConversationCardStyle
+
+    func body(content: Content) -> some View {
+        switch style {
+        case .standard:
+            content
+                .padding(.horizontal, DeepTutorPalette.bubbleHorizontalPadding)
+                .padding(.vertical, DeepTutorPalette.bubbleVerticalPadding)
+                .background(DeepTutorPalette.cardBackground, in: cardShape)
+                .overlay {
+                    cardShape.strokeBorder(DeepTutorPalette.borderColor, lineWidth: 1)
+                }
+                .deepTutorBubbleShadow()
+        case .bodyFocused:
+            content
+        }
+    }
+
+    private var cardShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: DeepTutorPalette.bubbleCornerRadius, style: .continuous)
     }
 }

@@ -81,7 +81,10 @@ struct MainTabCoordinatorView: View {
             .tag(AppRouteStore.RootTab.chat)
 
             CompatibleRouteNavigationContainer(path: routePath(.deepTutor)) {
-                DeepTutorConversationListPage(viewModel: deepTutorChatViewModel)
+                DeepTutorConversationListPage(
+                    viewModel: deepTutorChatViewModel,
+                    aiSettingsViewModel: aiSettingsViewModel
+                )
             } destination: { route in
                 destinationBuilder.destination(route)
             }

@@ -16,6 +16,7 @@ struct ChatConversationMessageRow: View {
     @ObservedObject var speechHelper: ChatSpeechHelper
     @ObservedObject var memberContextStore: MemberContextStore
     let actionState: ChatMessageActionState
+    let conversationAppearance: ChatConversationAppearancePreferences
     let taskManager: TaskManager
     let logger: Logger
     let onCaptureOpenFiles: () -> Void
@@ -155,6 +156,9 @@ struct ChatConversationMessageRow: View {
             translatedText: translatedText(for: message, metadata: metadata),
             combinedKnowledgeCards: combinedKnowledgeCards(for: message, metadata: metadata),
             isMathMode: uiStateStore.isMathMode(message.id),
+            conversationCardStyle: conversationAppearance.cardStyle,
+            toolTraceDisplayMode: conversationAppearance.toolTraceDisplayMode,
+            collapseToolsWhileStreaming: conversationAppearance.collapseToolsWhileStreaming,
             isTranslating: false,
             isSavingMessage: false,
             isSavedMessage: false,
@@ -204,6 +208,9 @@ struct ChatConversationMessageRow: View {
             translatedText: translatedText(for: message, metadata: metadata),
             combinedKnowledgeCards: combinedKnowledgeCards(for: message, metadata: metadata),
             isMathMode: uiStateStore.isMathMode(message.id),
+            conversationCardStyle: conversationAppearance.cardStyle,
+            toolTraceDisplayMode: conversationAppearance.toolTraceDisplayMode,
+            collapseToolsWhileStreaming: conversationAppearance.collapseToolsWhileStreaming,
             isTranslating: uiStateStore.isTranslating(message.id),
             isSavingMessage: uiStateStore.isMessageSaving(message.id),
             isSavedMessage: uiStateStore.isMessageSaved(message.id),

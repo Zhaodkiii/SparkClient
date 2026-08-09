@@ -423,6 +423,7 @@ struct ChatView: View {
             taskManager: taskManager,
             logger: logger,
             actionStateHandle: actionStateHandle,
+            conversationAppearance: aiSettingsViewModel.snapshot.chatConversationAppearance,
             visibleMessages: visibleMessages,
             hasMoreMessages: hasMoreMessages,
             isLoadingMoreMessages: isLoadingMoreMessages,
@@ -813,6 +814,7 @@ private struct ChatConversationMessageListContainer: View {
     let taskManager: TaskManager
     let logger: Logger
     let actionStateHandle: ChatMessageActionStateHandle
+    let conversationAppearance: ChatConversationAppearancePreferences
     let visibleMessages: [ChatMessage]
     let hasMoreMessages: Bool
     let isLoadingMoreMessages: Bool
@@ -832,6 +834,7 @@ private struct ChatConversationMessageListContainer: View {
         taskManager: TaskManager,
         logger: Logger,
         actionStateHandle: ChatMessageActionStateHandle,
+        conversationAppearance: ChatConversationAppearancePreferences,
         visibleMessages: [ChatMessage],
         hasMoreMessages: Bool,
         isLoadingMoreMessages: Bool,
@@ -848,6 +851,7 @@ private struct ChatConversationMessageListContainer: View {
         self.taskManager = taskManager
         self.logger = logger
         self.actionStateHandle = actionStateHandle
+        self.conversationAppearance = conversationAppearance
         self.visibleMessages = visibleMessages
         self.hasMoreMessages = hasMoreMessages
         self.isLoadingMoreMessages = isLoadingMoreMessages
@@ -873,6 +877,7 @@ private struct ChatConversationMessageListContainer: View {
             taskManager: taskManager,
             logger: logger,
             actionStateHandle: actionStateHandle,
+            conversationAppearance: conversationAppearance,
             visibleMessages: visibleMessages,
             hasMoreMessages: hasMoreMessages,
             isLoadingMoreMessages: isLoadingMoreMessages,

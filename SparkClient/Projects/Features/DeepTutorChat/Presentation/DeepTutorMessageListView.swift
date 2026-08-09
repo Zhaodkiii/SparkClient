@@ -28,6 +28,7 @@ final class DeepTutorMessageListViewController: UIViewController, UICollectionVi
     var rowActions: DeepTutorMessageRowActions?
     var rowMembers: [Member] = []
     var fileTransferService: FileTransferService?
+    var conversationAppearance: DeepTutorConversationAppearancePreferences = .default
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -217,7 +218,8 @@ final class DeepTutorMessageListViewController: UIViewController, UICollectionVi
                         model: rowModel,
                         actions: actions,
                         members: self.rowMembers,
-                        fileTransferService: self.fileTransferService
+                        fileTransferService: self.fileTransferService,
+                        conversationAppearance: self.conversationAppearance
                     )
                 }
             } else {
@@ -278,6 +280,7 @@ struct DeepTutorMessageListRepresentable: UIViewControllerRepresentable {
     @ObservedObject var viewModel: DeepTutorChatViewModel
     @ObservedObject var refreshCoordinator: DeepTutorRefreshCoordinator
     let fileTransferService: FileTransferService
+    let conversationAppearance: DeepTutorConversationAppearancePreferences
     let onCaptureCardAction: (DeepTutorCaptureCardType, DeepTutorCaptureCardAction) -> Void
 
     func makeUIViewController(context: Context) -> DeepTutorMessageListViewController {
@@ -299,6 +302,7 @@ struct DeepTutorMessageListRepresentable: UIViewControllerRepresentable {
         context.coordinator.appliedLayoutNonce = refreshCoordinator.layoutNonce
         uiViewController.rowMembers = viewModel.availableMembers
         uiViewController.fileTransferService = fileTransferService
+        uiViewController.conversationAppearance = conversationAppearance
         uiViewController.apply(conversationID: conversationID, payload: payload)
     }
 
@@ -319,6 +323,7 @@ struct DeepTutorMessageListRepresentable: UIViewControllerRepresentable {
         }
         controller.rowMembers = viewModel.availableMembers
         controller.fileTransferService = fileTransferService
+        controller.conversationAppearance = conversationAppearance
         controller.rowActions = DeepTutorMessageRowActions(
             onCopy: { messageID in
                 viewModel.handleRowCopy(messageID: messageID)

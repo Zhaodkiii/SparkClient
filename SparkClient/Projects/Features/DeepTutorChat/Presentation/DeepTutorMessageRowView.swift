@@ -5,6 +5,7 @@ struct DeepTutorMessageRowView: View {
     let actions: DeepTutorMessageRowActions
     let members: [Member]
     let fileTransferService: FileTransferService?
+    let conversationAppearance: DeepTutorConversationAppearancePreferences
 
     private var bubbleMaxWidth: CGFloat {
         DeepTutorPalette.bubbleMaxWidth(for: UIScreen.main.bounds.width)
@@ -47,7 +48,8 @@ struct DeepTutorMessageRowView: View {
                     onToolPreview: actions.onToolPreview,
                     onQuizFollowUp: actions.onQuizFollowUp,
                     onQuizJudge: actions.onQuizJudge,
-                    onQuizInlineInputFocusChanged: actions.onQuizInlineInputFocusChanged
+                    onQuizInlineInputFocusChanged: actions.onQuizInlineInputFocusChanged,
+                    conversationAppearance: conversationAppearance
                 )
                 .frame(maxWidth: bubbleMaxWidth, alignment: .leading)
                 Spacer(minLength: 0)

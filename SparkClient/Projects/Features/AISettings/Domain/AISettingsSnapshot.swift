@@ -15,6 +15,10 @@ nonisolated struct AISettingsSnapshot: Codable, Equatable, Sendable {
     var searchConfigRevision: SearchRuntimeConfigRevision
     /// 本地天气配置版本；仅用于客户端内缓存失效、审计与工具消费，不参与服务端同步。
     var weatherConfigRevision: WeatherRuntimeConfigRevision
+    /// Chat 对话外观偏好。禁止与 DeepTutorChat 共用字段。
+    var chatConversationAppearance: ChatConversationAppearancePreferences
+    /// DeepTutorChat 对话外观偏好。禁止与 Chat 共用字段。
+    var deepTutorConversationAppearance: DeepTutorConversationAppearancePreferences
     /// 场景级模型来源选择（`AIScenario.rawValue` -> `AIModelSelectionSource.rawValue`）。
     var scenarioModelSources: [String: AIModelSelectionSource]
     /// 输入栏中隐藏的试用模型名（仅本地偏好）。
@@ -37,6 +41,8 @@ nonisolated struct AISettingsSnapshot: Codable, Equatable, Sendable {
         weatherToolPreferences: AIWeatherToolPreferences = AISettingsDefaults.weatherToolPreferences,
         searchConfigRevision: SearchRuntimeConfigRevision = SearchRuntimeConfigRevision(),
         weatherConfigRevision: WeatherRuntimeConfigRevision = WeatherRuntimeConfigRevision(),
+        chatConversationAppearance: ChatConversationAppearancePreferences = .default,
+        deepTutorConversationAppearance: DeepTutorConversationAppearancePreferences = .default,
         scenarioModelSources: [String: AIModelSelectionSource] = [:],
         trialChatPickerDisabledModelNames: [String] = [],
         trial: AITrialState = .inactive,
@@ -55,6 +61,8 @@ nonisolated struct AISettingsSnapshot: Codable, Equatable, Sendable {
         self.weatherToolPreferences = weatherToolPreferences
         self.searchConfigRevision = searchConfigRevision
         self.weatherConfigRevision = weatherConfigRevision
+        self.chatConversationAppearance = chatConversationAppearance
+        self.deepTutorConversationAppearance = deepTutorConversationAppearance
         self.scenarioModelSources = scenarioModelSources
         self.trialChatPickerDisabledModelNames = trialChatPickerDisabledModelNames
         self.trial = trial
@@ -76,6 +84,8 @@ nonisolated struct AISettingsSnapshot: Codable, Equatable, Sendable {
         weatherToolPreferences: AISettingsDefaults.weatherToolPreferences,
         searchConfigRevision: SearchRuntimeConfigRevision(),
         weatherConfigRevision: WeatherRuntimeConfigRevision(),
+        chatConversationAppearance: .default,
+        deepTutorConversationAppearance: .default,
         scenarioModelSources: [:],
         trialChatPickerDisabledModelNames: [],
         trial: .inactive,
@@ -211,6 +221,8 @@ nonisolated extension AISettingsSnapshot {
         var weatherToolPreferences: AIWeatherToolPreferences
         var searchConfigRevision: SearchRuntimeConfigRevision
         var weatherConfigRevision: WeatherRuntimeConfigRevision
+        var chatConversationAppearance: ChatConversationAppearancePreferences
+        var deepTutorConversationAppearance: DeepTutorConversationAppearancePreferences
         var scenarioModelSources: [String: AIModelSelectionSource]
         var trialChatPickerDisabledModelNames: [String]
         var trial: AITrialState
@@ -225,6 +237,8 @@ nonisolated extension AISettingsSnapshot {
             weatherToolPreferences: AISettingsDefaults.weatherToolPreferences,
             searchConfigRevision: SearchRuntimeConfigRevision(),
             weatherConfigRevision: WeatherRuntimeConfigRevision(),
+            chatConversationAppearance: .default,
+            deepTutorConversationAppearance: .default,
             scenarioModelSources: [:],
             trialChatPickerDisabledModelNames: [],
             trial: .inactive,
@@ -240,6 +254,8 @@ nonisolated extension AISettingsSnapshot {
             weatherToolPreferences: AIWeatherToolPreferences,
             searchConfigRevision: SearchRuntimeConfigRevision,
             weatherConfigRevision: WeatherRuntimeConfigRevision,
+            chatConversationAppearance: ChatConversationAppearancePreferences,
+            deepTutorConversationAppearance: DeepTutorConversationAppearancePreferences,
             scenarioModelSources: [String: AIModelSelectionSource],
             trialChatPickerDisabledModelNames: [String],
             trial: AITrialState,
@@ -253,6 +269,8 @@ nonisolated extension AISettingsSnapshot {
             self.weatherToolPreferences = weatherToolPreferences
             self.searchConfigRevision = searchConfigRevision
             self.weatherConfigRevision = weatherConfigRevision
+            self.chatConversationAppearance = chatConversationAppearance
+            self.deepTutorConversationAppearance = deepTutorConversationAppearance
             self.scenarioModelSources = scenarioModelSources
             self.trialChatPickerDisabledModelNames = trialChatPickerDisabledModelNames
             self.trial = trial
@@ -298,6 +316,10 @@ nonisolated extension AISettingsSnapshot {
                 ?? SearchRuntimeConfigRevision()
             weatherConfigRevision = try container.decodeIfPresent(WeatherRuntimeConfigRevision.self, forKey: .key("weatherConfigRevision"))
                 ?? WeatherRuntimeConfigRevision()
+            chatConversationAppearance = try container.decodeIfPresent(ChatConversationAppearancePreferences.self, forKey: .key("chatConversationAppearance"))
+                ?? .default
+            deepTutorConversationAppearance = try container.decodeIfPresent(DeepTutorConversationAppearancePreferences.self, forKey: .key("deepTutorConversationAppearance"))
+                ?? .default
 
             scenarioModelSources = try container.decodeIfPresent([String: AIModelSelectionSource].self, forKey: .key("scenarioModelSources")) ?? [:]
             trialChatPickerDisabledModelNames = try container.decodeIfPresent([String].self, forKey: .key("trialChatPickerDisabledModelNames")) ?? []
@@ -315,6 +337,8 @@ nonisolated extension AISettingsSnapshot {
             try container.encode(weatherToolPreferences, forKey: .key("weatherToolPreferences"))
             try container.encode(searchConfigRevision, forKey: .key("searchConfigRevision"))
             try container.encode(weatherConfigRevision, forKey: .key("weatherConfigRevision"))
+            try container.encode(chatConversationAppearance, forKey: .key("chatConversationAppearance"))
+            try container.encode(deepTutorConversationAppearance, forKey: .key("deepTutorConversationAppearance"))
             try container.encode(scenarioModelSources, forKey: .key("scenarioModelSources"))
             try container.encode(trialChatPickerDisabledModelNames, forKey: .key("trialChatPickerDisabledModelNames"))
             try container.encode(trial, forKey: .key("trial"))
@@ -333,6 +357,8 @@ nonisolated extension AISettingsSnapshot {
             weatherToolPreferences: weatherToolPreferences,
             searchConfigRevision: searchConfigRevision,
             weatherConfigRevision: weatherConfigRevision,
+            chatConversationAppearance: chatConversationAppearance,
+            deepTutorConversationAppearance: deepTutorConversationAppearance,
             scenarioModelSources: scenarioModelSources,
             trialChatPickerDisabledModelNames: trialChatPickerDisabledModelNames,
             trial: trial,
@@ -362,6 +388,8 @@ nonisolated extension AISettingsSnapshot {
             weatherToolPreferences: preferences.weatherToolPreferences,
             searchConfigRevision: preferences.searchConfigRevision,
             weatherConfigRevision: preferences.weatherConfigRevision,
+            chatConversationAppearance: preferences.chatConversationAppearance,
+            deepTutorConversationAppearance: preferences.deepTutorConversationAppearance,
             scenarioModelSources: preferences.scenarioModelSources,
             trialChatPickerDisabledModelNames: preferences.trialChatPickerDisabledModelNames,
             trial: preferences.trial,

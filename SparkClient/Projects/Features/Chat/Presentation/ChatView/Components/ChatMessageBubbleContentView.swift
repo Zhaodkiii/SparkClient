@@ -11,6 +11,9 @@ struct ChatMessageBubbleContentView: View {
     let translatedText: String?
     let combinedKnowledgeCards: [ChatKnowledgeCard]
     let isMathMode: Bool
+    let conversationCardStyle: ChatConversationCardStyle
+    let toolTraceDisplayMode: ChatToolTraceDisplayMode
+    let collapseToolsWhileStreaming: Bool
     let isTranslating: Bool
     let isSavingMessage: Bool
     let isSavedMessage: Bool
@@ -51,8 +54,26 @@ struct ChatMessageBubbleContentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ForEach(effectiveTimeline) { node in
-                node.render(context: renderContext)
+            if shouldUseBodyFocusedLayout {
+                if chatToolTracePayload.rows.isEmpty == false {
+                    ChatToolTraceDisclosureView(
+                        payload: chatToolTracePayload,
+                        displayMode: toolTraceDisplayMode,
+                        collapseToolsWhileStreaming: collapseToolsWhileStreaming
+                    ) {
+                        ForEach(chatToolTraceTimelineNodes) { node in
+                            node.render(context: renderContext)
+                        }
+                    }
+                }
+
+                ForEach(bodyFocusedTimelineNodes) { node in
+                    node.render(context: renderContext)
+                }
+            } else {
+                ForEach(effectiveTimeline) { node in
+                    node.render(context: renderContext)
+                }
             }
         }
         .padding(.horizontal, 12)
@@ -64,6 +85,9 @@ struct ChatMessageBubbleContentView: View {
             message: message,
             isLastAssistantMessage: isLastAssistantMessage,
             isMathMode: isMathMode,
+            conversationCardStyle: conversationCardStyle,
+            toolTraceDisplayMode: toolTraceDisplayMode,
+            collapseToolsWhileStreaming: collapseToolsWhileStreaming,
             taskCardLoadingIDs: taskCardLoadingIDs,
             savingKnowledgeCardIDs: savingKnowledgeCardIDs,
             savedKnowledgeCardIDs: savedKnowledgeCardIDs,
@@ -108,6 +132,57 @@ struct ChatMessageBubbleContentView: View {
 
     private var effectiveTimeline: [ChatMessageTimelineNode] {
         ChatMessageTimelineProjector.project(blocks: effectiveBlocks, messageRole: message.role)
+    }
+
+    private var shouldUseBodyFocusedLayout: Bool {
+        message.role != .user && conversationCardStyle == .bodyFocused
+    }
+
+    private var chatToolTraceBlocks: [ChatMessageBlock] {
+        effectiveTimeline.flatMap { node in
+            switch node.content {
+            case .block(let block) where block.kind == .deepThought:
+                return [block]
+            case .tool(let toolNode):
+                return ([toolNode.toolBlock].compactMap { $0 } + toolNode.presentations)
+            default:
+                return []
+            }
+        }
+    }
+
+    private var chatToolTraceTimelineNodes: [ChatMessageTimelineNode] {
+        effectiveTimeline.filter { node in
+            switch node.content {
+            case .block(let block):
+                return block.kind == .deepThought
+            case .tool:
+                return true
+            case .healthResourceReferenceGroup:
+                return false
+            }
+        }
+    }
+
+    private var bodyFocusedTimelineNodes: [ChatMessageTimelineNode] {
+        effectiveTimeline.filter { node in
+            switch node.content {
+            case .block(let block):
+                return block.kind != .deepThought
+            case .tool:
+                return false
+            case .healthResourceReferenceGroup:
+                return true
+            }
+        }
+    }
+
+    private var chatToolTracePayload: ChatToolTracePresentationModel {
+        ChatToolTracePresentationModel(
+            message: message,
+            blocks: chatToolTraceBlocks,
+            metadata: metadata
+        )
     }
 
     var actionButtonsHStack: some View {
@@ -586,3 +661,214 @@ struct ChatAssistantStatusCardView: View {
 }
 
 typealias ChatMessageErrorCard = ChatAssistantStatusCardView
+
+private struct ChatToolTracePresentationModel {
+    let title: String
+    let rows: [ChatToolTraceRowModel]
+    let isStreaming: Bool
+    let isFinalAnswerPhase: Bool
+    let elapsedSeconds: Double?
+
+    init(message: ChatMessage, blocks: [ChatMessageBlock], metadata: ChatMessageMetadata) {
+        rows = blocks.map(ChatToolTraceRowModel.init(block:))
+        isStreaming = message.deliveryState == .sending
+        let hasText = message.blocks.contains { block in
+            guard block.kind == .text else { return false }
+            return block.text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        }
+        isFinalAnswerPhase = message.deliveryState != .sending || hasText
+        elapsedSeconds = Self.estimatedDuration(from: blocks)
+
+        let hasFailure = rows.contains { $0.status == .failed }
+        if isStreaming {
+            title = rows.contains(where: { $0.status == .running }) ? "调用工具中…" : "AI 思考中…"
+        } else if hasFailure || message.deliveryState == .failed {
+            title = "失败"
+        } else {
+            title = "已完成"
+        }
+
+        _ = metadata
+    }
+
+    var toolCallCount: Int {
+        rows.filter { $0.kind == .tool }.count
+    }
+
+    var durationText: String? {
+        guard let elapsedSeconds, elapsedSeconds > 0 else { return nil }
+        let total = Int(elapsedSeconds.rounded())
+        let minutes = total / 60
+        let seconds = total % 60
+        if minutes > 0 {
+            return "\(minutes)m \(seconds)s"
+        }
+        return "\(seconds)s"
+    }
+
+    private static func estimatedDuration(from blocks: [ChatMessageBlock]) -> Double? {
+        guard blocks.isEmpty == false else { return nil }
+        let earliest = blocks.map(\.createdAt).min()
+        let latest = blocks.map(\.updatedAt).max()
+        if let earliest, let latest {
+            let measured = latest.timeIntervalSince(earliest)
+            if measured > 0.5 {
+                return measured
+            }
+        }
+        return max(1, Double(blocks.count) * 0.4)
+    }
+}
+
+private struct ChatToolTraceRowModel: Identifiable {
+    enum Kind {
+        case thinking
+        case tool
+    }
+
+    enum Status {
+        case running
+        case completed
+        case failed
+    }
+
+    let id: UUID
+    let kind: Kind
+    let title: String
+    let chip: String?
+    let status: Status
+
+    init(block: ChatMessageBlock) {
+        id = block.id
+        switch block.payload {
+        case .deepThought(let card):
+            kind = .thinking
+            title = "AI 思考"
+            chip = card.reasoningContent?.trimmingCharacters(in: .whitespacesAndNewlines)
+            status = block.status == .streaming ? .running : .completed
+        case .tool(let tool):
+            kind = .tool
+            title = ChatToolRuntimeAttachmentBuilder.localizedDisplayName(for: tool.name)
+            if let meta = ChatToolRuntimeAttachmentBuilder.makeOperationalMeta(
+                toolName: tool.name,
+                toolContent: tool.content
+            ) {
+                chip = meta.description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : meta.description
+            } else {
+                chip = tool.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : tool.content
+            }
+            switch block.status {
+            case .pending, .streaming:
+                status = .running
+            case .failed:
+                status = .failed
+            default:
+                status = .completed
+            }
+        default:
+            kind = .tool
+            title = "工具调用"
+            chip = block.text
+            status = block.status == .failed ? .failed : .completed
+        }
+    }
+}
+
+private struct ChatToolTraceDisclosureView<Content: View>: View {
+    let payload: ChatToolTracePresentationModel
+    let displayMode: ChatToolTraceDisplayMode
+    let collapseToolsWhileStreaming: Bool
+    let content: () -> Content
+    @State private var userPinnedExpansion: Bool?
+
+    init(
+        payload: ChatToolTracePresentationModel,
+        displayMode: ChatToolTraceDisplayMode,
+        collapseToolsWhileStreaming: Bool,
+        @ViewBuilder content: @escaping () -> Content
+    ) {
+        self.payload = payload
+        self.displayMode = displayMode
+        self.collapseToolsWhileStreaming = collapseToolsWhileStreaming
+        self.content = content
+    }
+
+    private var effectiveExpanded: Bool {
+        if let userPinnedExpansion { return userPinnedExpansion }
+        switch displayMode {
+        case .expanded:
+            return true
+        case .collapsedAlways:
+            return false
+        case .collapsedAfterCompletion:
+            if payload.isStreaming && collapseToolsWhileStreaming == false {
+                return true
+            }
+            return !payload.isFinalAnswerPhase
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+
+            if effectiveExpanded {
+                VStack(alignment: .leading, spacing: 6) {
+                    content()
+                }
+                .padding(.leading, 12)
+                .padding(.top, 8)
+                .overlay(alignment: .leading) {
+                    Rectangle()
+                        .fill(Color(.separator).opacity(0.35))
+                        .frame(width: 1)
+                }
+                .padding(.leading, 12)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(.bottom, 4)
+        .accessibilityElement(children: .contain)
+    }
+
+    private var header: some View {
+        Button {
+            withAnimation(.easeOut(duration: 0.25)) {
+                userPinnedExpansion = !effectiveExpanded
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: payload.isStreaming ? "sparkles" : "checkmark.circle")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.accentColor.opacity(0.85))
+
+                Text(payload.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.secondary)
+
+                if let durationText = payload.durationText {
+                    Text("· \(durationText)")
+                        .font(.system(size: 12, weight: .medium))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary.opacity(0.6))
+                }
+
+                if payload.toolCallCount > 0 {
+                    Text("· \(payload.toolCallCount) 次调用")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.secondary.opacity(0.6))
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary.opacity(0.45))
+                    .rotationEffect(.degrees(effectiveExpanded ? 0 : -90))
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("工具调用")
+        .accessibilityValue(effectiveExpanded ? "已展开" : "已折叠")
+    }
+}

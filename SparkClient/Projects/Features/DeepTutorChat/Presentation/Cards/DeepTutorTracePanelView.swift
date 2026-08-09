@@ -3,6 +3,8 @@ import SwiftUI
 struct DeepTutorTracePanelView: View {
     let message: DeepTutorMessage
     let payload: DeepTutorTraceBlockPayload
+    let displayMode: DeepTutorToolTraceDisplayMode
+    let collapseToolsWhileStreaming: Bool
     let onToolPreview: (DeepTutorToolPreviewPrompt) -> Void
     @State private var userPinnedExpansion: Bool?
     @State private var expandedToolIDs: Set<String> = []
@@ -13,7 +15,20 @@ struct DeepTutorTracePanelView: View {
 
     private var effectiveExpanded: Bool {
         guard hasTrace else { return false }
-        return userPinnedExpansion ?? !payload.isFinalAnswerPhase
+        if let userPinnedExpansion {
+            return userPinnedExpansion
+        }
+        switch displayMode {
+        case .expanded:
+            return true
+        case .collapsedAlways:
+            return false
+        case .collapsedAfterCompletion:
+            if isStreaming, collapseToolsWhileStreaming == false {
+                return true
+            }
+            return !payload.isFinalAnswerPhase
+        }
     }
 
     private var isStreaming: Bool {

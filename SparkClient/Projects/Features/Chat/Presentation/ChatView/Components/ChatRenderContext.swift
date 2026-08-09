@@ -7,6 +7,9 @@ struct ChatRenderContext {
     let message: ChatMessage                               // 当前要渲染的聊天消息本体
     let isLastAssistantMessage: Bool                       // 是否是最后一条助手消息（用于控制样式/展开逻辑）
     let isMathMode: Bool                                   // 是否为数学公式模式（渲染等宽文本）
+    let conversationCardStyle: ChatConversationCardStyle
+    let toolTraceDisplayMode: ChatToolTraceDisplayMode
+    let collapseToolsWhileStreaming: Bool
     
     // MARK: - 加载/保存状态 ID 集合
     let taskCardLoadingIDs: Set<Int>                       // 正在加载中的任务卡片 ID 集合
@@ -55,6 +58,9 @@ extension ChatRenderContext {
             message: message,
             isLastAssistantMessage: isLastAssistantMessage,
             isMathMode: isMathMode,
+            conversationCardStyle: conversationCardStyle,
+            toolTraceDisplayMode: toolTraceDisplayMode,
+            collapseToolsWhileStreaming: collapseToolsWhileStreaming,
             taskCardLoadingIDs: taskCardLoadingIDs,
             savingKnowledgeCardIDs: savingKnowledgeCardIDs,
             savedKnowledgeCardIDs: savedKnowledgeCardIDs,

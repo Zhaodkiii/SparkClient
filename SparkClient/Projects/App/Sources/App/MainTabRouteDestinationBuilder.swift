@@ -33,7 +33,11 @@ struct MainTabRouteDestinationBuilder {
                 await chatDetailViewModel.loadMessagesIfNeeded(for: threadID, lockBottomViewport: true)
             }
         case .deepTutorThread(let conversationID):
-            DeepTutorChatPage(conversationID: conversationID, viewModel: deepTutorChatViewModel)
+            DeepTutorChatPage(
+                conversationID: conversationID,
+                viewModel: deepTutorChatViewModel,
+                aiSettingsViewModel: aiSettingsViewModel
+            )
         case .aiSettings:
             AISettingsView(viewModel: aiSettingsViewModel)
         case .accountManagement:
