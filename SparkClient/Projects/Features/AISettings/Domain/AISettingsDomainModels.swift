@@ -266,23 +266,6 @@ nonisolated enum ChatConversationUIArchitecture: String, Codable, CaseIterable, 
     }
 }
 
-nonisolated enum ChatSwiftUIConversationCardStyle: String, Codable, CaseIterable, Sendable {
-    case standard
-    case bodyFocused
-    case compact
-
-    var displayName: String {
-        switch self {
-        case .standard:
-            return "标准"
-        case .bodyFocused:
-            return "正文优先"
-        case .compact:
-            return "紧凑"
-        }
-    }
-}
-
 nonisolated enum ChatSwiftUIRefreshBehavior: String, Codable, CaseIterable, Sendable {
     case stable
     case followBottom
@@ -302,16 +285,13 @@ nonisolated enum ChatSwiftUIRefreshBehavior: String, Codable, CaseIterable, Send
 
 nonisolated struct ChatConversationUIPreferences: Codable, Equatable, Sendable {
     var architecture: ChatConversationUIArchitecture
-    var swiftUICardStyle: ChatSwiftUIConversationCardStyle
     var swiftUIRefreshBehavior: ChatSwiftUIRefreshBehavior
 
     init(
         architecture: ChatConversationUIArchitecture,
-        swiftUICardStyle: ChatSwiftUIConversationCardStyle,
         swiftUIRefreshBehavior: ChatSwiftUIRefreshBehavior
     ) {
         self.architecture = architecture
-        self.swiftUICardStyle = swiftUICardStyle
         self.swiftUIRefreshBehavior = swiftUIRefreshBehavior
     }
 
@@ -320,8 +300,6 @@ nonisolated struct ChatConversationUIPreferences: Codable, Equatable, Sendable {
         let fallback = ChatConversationUIPreferences.fallback
         architecture = try container.decodeIfPresent(ChatConversationUIArchitecture.self, forKey: .key("architecture"))
             ?? fallback.architecture
-        swiftUICardStyle = try container.decodeIfPresent(ChatSwiftUIConversationCardStyle.self, forKey: .key("swiftUICardStyle"))
-            ?? fallback.swiftUICardStyle
         swiftUIRefreshBehavior = try container.decodeIfPresent(ChatSwiftUIRefreshBehavior.self, forKey: .key("swiftUIRefreshBehavior"))
             ?? fallback.swiftUIRefreshBehavior
     }
@@ -329,13 +307,11 @@ nonisolated struct ChatConversationUIPreferences: Codable, Equatable, Sendable {
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodableKey.self)
         try container.encode(architecture, forKey: .key("architecture"))
-        try container.encode(swiftUICardStyle, forKey: .key("swiftUICardStyle"))
         try container.encode(swiftUIRefreshBehavior, forKey: .key("swiftUIRefreshBehavior"))
     }
 
     static let fallback = ChatConversationUIPreferences(
-        architecture: .swiftUI,
-        swiftUICardStyle: .bodyFocused,
+        architecture: .uiKit,
         swiftUIRefreshBehavior: .stable
     )
 
@@ -375,10 +351,61 @@ nonisolated enum ChatToolInteractionPresentationMode: String, Codable, CaseItera
 nonisolated struct ChatToolInteractionPreferences: Codable, Equatable, Sendable {
     var memberSelectionPresentationMode: ChatToolInteractionPresentationMode
     var questionPresentationMode: ChatToolInteractionPresentationMode
+    var memberProfilePresentationMode: ChatToolInteractionPresentationMode
+    var consentPresentationMode: ChatToolInteractionPresentationMode
+
+    private enum CodingKeys: String, CodingKey {
+        case memberSelectionPresentationMode
+        case questionPresentationMode
+        case memberProfilePresentationMode
+        case consentPresentationMode
+    }
+
+    init(
+        memberSelectionPresentationMode: ChatToolInteractionPresentationMode,
+        questionPresentationMode: ChatToolInteractionPresentationMode,
+        memberProfilePresentationMode: ChatToolInteractionPresentationMode,
+        consentPresentationMode: ChatToolInteractionPresentationMode
+    ) {
+        self.memberSelectionPresentationMode = memberSelectionPresentationMode
+        self.questionPresentationMode = questionPresentationMode
+        self.memberProfilePresentationMode = memberProfilePresentationMode
+        self.consentPresentationMode = consentPresentationMode
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        memberSelectionPresentationMode = try container.decodeIfPresent(
+            ChatToolInteractionPresentationMode.self,
+            forKey: .memberSelectionPresentationMode
+        ) ?? .inlineCard
+        questionPresentationMode = try container.decodeIfPresent(
+            ChatToolInteractionPresentationMode.self,
+            forKey: .questionPresentationMode
+        ) ?? .inlineCard
+        memberProfilePresentationMode = try container.decodeIfPresent(
+            ChatToolInteractionPresentationMode.self,
+            forKey: .memberProfilePresentationMode
+        ) ?? .inlineCard
+        consentPresentationMode = try container.decodeIfPresent(
+            ChatToolInteractionPresentationMode.self,
+            forKey: .consentPresentationMode
+        ) ?? .inlineCard
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(memberSelectionPresentationMode, forKey: .memberSelectionPresentationMode)
+        try container.encode(questionPresentationMode, forKey: .questionPresentationMode)
+        try container.encode(memberProfilePresentationMode, forKey: .memberProfilePresentationMode)
+        try container.encode(consentPresentationMode, forKey: .consentPresentationMode)
+    }
 
     static let fallback = ChatToolInteractionPreferences(
         memberSelectionPresentationMode: .inlineCard,
-        questionPresentationMode: .inlineCard
+        questionPresentationMode: .inlineCard,
+        memberProfilePresentationMode: .inlineCard,
+        consentPresentationMode: .inlineCard
     )
 
     static var `default`: ChatToolInteractionPreferences {

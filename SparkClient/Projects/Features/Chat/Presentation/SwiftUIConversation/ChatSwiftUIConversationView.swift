@@ -116,7 +116,7 @@ struct ChatSwiftUIConversationView: View {
                             speechHelper: speechHelper,
                             memberContextStore: memberContextStore,
                             actionState: actionStateHandle.state,
-                            conversationAppearance: effectiveConversationAppearance,
+                            conversationAppearance: conversationAppearance,
                             taskManager: taskManager,
                             logger: logger,
                             onCaptureOpenFiles: { showCaptureFileImporter = true },
@@ -174,9 +174,7 @@ struct ChatSwiftUIConversationView: View {
     }
 
     private var rowSpacing: CGFloat {
-        switch uiPreferences.swiftUICardStyle {
-        case .compact:
-            return 2
+        switch conversationAppearance.cardStyle {
         case .standard:
             return 6
         case .bodyFocused:
@@ -185,18 +183,7 @@ struct ChatSwiftUIConversationView: View {
     }
 
     private var verticalContentPadding: CGFloat {
-        uiPreferences.swiftUICardStyle == .compact ? 6 : 10
-    }
-
-    private var effectiveConversationAppearance: ChatConversationAppearancePreferences {
-        var appearance = conversationAppearance
-        switch uiPreferences.swiftUICardStyle {
-        case .standard:
-            appearance.cardStyle = .standard
-        case .bodyFocused, .compact:
-            appearance.cardStyle = .bodyFocused
-        }
-        return appearance
+        conversationAppearance.cardStyle == .bodyFocused ? 10 : 12
     }
 
     @ViewBuilder

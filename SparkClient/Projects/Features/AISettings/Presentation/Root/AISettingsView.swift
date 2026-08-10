@@ -83,11 +83,8 @@ struct AISettingsView: View {
                 }
             }
 
-            Section("Chat 会话 UI 架构") {
+            Section("Chat 会话设置") {
                 ChatConversationUIArchitectureSettingsSection(viewModel: viewModel)
-            }
-
-            Section("Chat 对话外观") {
                 ChatConversationAppearanceSettingsSection(viewModel: viewModel)
             }
 
@@ -194,19 +191,6 @@ private struct ChatConversationUIArchitectureSettingsSection: View {
         }
 
         if viewModel.snapshot.chatConversationUIPreferences.architecture == .swiftUI {
-            Picker("SwiftUI 卡片样式", selection: Binding(
-                get: { viewModel.snapshot.chatConversationUIPreferences.swiftUICardStyle },
-                set: { newValue in
-                    viewModel.snapshot.chatConversationUIPreferences.swiftUICardStyle = newValue
-                    ChatConversationUIDevicePreferencesStore.save(viewModel.snapshot.chatConversationUIPreferences)
-                    Task { await viewModel.persistSnapshotNow() }
-                }
-            )) {
-                ForEach(ChatSwiftUIConversationCardStyle.allCases, id: \.self) { style in
-                    Text(style.displayName).tag(style)
-                }
-            }
-
             Picker("SwiftUI 刷新策略", selection: Binding(
                 get: { viewModel.snapshot.chatConversationUIPreferences.swiftUIRefreshBehavior },
                 set: { newValue in
@@ -220,9 +204,21 @@ private struct ChatConversationUIArchitectureSettingsSection: View {
                 }
             }
         }
+
+        Picker("数据授权", selection: Binding(
+            get: { viewModel.snapshot.chatToolInteractionPreferences.consentPresentationMode },
+            set: { newValue in
+                viewModel.snapshot.chatToolInteractionPreferences.consentPresentationMode = newValue
+                ChatToolInteractionDevicePreferencesStore.save(viewModel.snapshot.chatToolInteractionPreferences)
+                Task { await viewModel.persistSnapshotNow() }
+            }
+        )) {
+            ForEach(ChatToolInteractionPresentationMode.allCases, id: \.self) { mode in
+                Text(mode.displayName).tag(mode)
+            }
+        }
     }
 }
-
 private struct ChatConversationAppearanceSettingsSection: View {
     @ObservedObject var viewModel: AISettingsViewModel
 

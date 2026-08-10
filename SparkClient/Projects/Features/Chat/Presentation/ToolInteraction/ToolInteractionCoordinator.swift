@@ -126,7 +126,8 @@ final class ToolInteractionCoordinator: ObservableObject {
             endpoint: endpoint,
             privacyPolicyURL: privacyPolicyURL
         )
-        if let inlineCardSink {
+        if interactionPreferences.consentPresentationMode == .inlineCard,
+           let inlineCardSink {
             return await requestInlineConsentDecision(
                 threadID: threadID,
                 prompt: prompt,
@@ -186,9 +187,11 @@ final class ToolInteractionCoordinator: ObservableObject {
     func requestMemberSelection(
         threadID: UUID?,
         prompt: ToolMemberSelectionPrompt,
-        toolCallID: String? = nil
+        toolCallID: String? = nil,
+        sourceToolName: String? = nil
     ) async -> InteractionResult<Int> {
-        if interactionPreferences.memberSelectionPresentationMode == .inlineCard,
+        let presentationMode = memberSelectionPresentationMode(for: sourceToolName)
+        if presentationMode == .inlineCard,
            let inlineCardSink {
             return await requestInlineMemberSelection(
                 threadID: threadID,
@@ -206,6 +209,17 @@ final class ToolInteractionCoordinator: ObservableObject {
                     completion: .member(continuation)
                 )
             )
+        }
+    }
+
+    private func memberSelectionPresentationMode(
+        for sourceToolName: String?
+    ) -> ChatToolInteractionPresentationMode {
+        switch sourceToolName {
+        case SparkToolName.queryMemberProfile.rawValue:
+            return interactionPreferences.memberProfilePresentationMode
+        default:
+            return interactionPreferences.memberSelectionPresentationMode
         }
     }
 

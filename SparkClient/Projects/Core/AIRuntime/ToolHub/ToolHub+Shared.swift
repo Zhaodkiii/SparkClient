@@ -706,7 +706,8 @@ extension ToolHub {
         switch await toolInteractionCoordinator.requestMemberSelection(
             threadID: context.threadID,
             prompt: prompt,
-            toolCallID: context.pendingToolCallID
+            toolCallID: context.pendingToolCallID,
+            sourceToolName: invocation.name
         ) {
         case .success(let memberID):
             return memberID

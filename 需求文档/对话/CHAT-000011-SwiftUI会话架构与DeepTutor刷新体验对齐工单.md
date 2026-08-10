@@ -150,7 +150,6 @@ nonisolated enum ChatConversationUIArchitecture: String, Codable, CaseIterable, 
 
 nonisolated struct ChatConversationUIPreferences: Codable, Equatable, Sendable {
     var architecture: ChatConversationUIArchitecture
-    var swiftUICardStyle: ChatSwiftUIConversationCardStyle
     var swiftUIRefreshBehavior: ChatSwiftUIRefreshBehavior
 }
 ```
@@ -170,8 +169,12 @@ chatConversationUIPreferences
 ```text
 Chat 会话 UI
   架构：UIKit / SwiftUI
-  SwiftUI 卡片样式：标准 / 正文优先 / 紧凑
   SwiftUI 刷新策略：稳定优先 / 跟随底部 / 手动优先
+
+Chat 对话外观
+  对话卡片样式：标准 / 正文优先
+  工具调用展示：默认展开 / 完成后折叠 / 始终折叠
+  流式过程也折叠：开 / 关
 ```
 
 默认值：
@@ -179,8 +182,8 @@ Chat 会话 UI
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
 | 架构 | UIKit | 保持线上体验稳定 |
-| SwiftUI 卡片样式 | 正文优先 | 新架构启用时默认更接近 DeepTutor 体验 |
 | SwiftUI 刷新策略 | 稳定优先 | 用户滚动时不抢位置 |
+| 对话卡片样式 | 标准 | UIKit 与 SwiftUI 共用，避免同一视觉项出现两处配置 |
 
 ### 5.3 切换生效策略
 
@@ -468,11 +471,11 @@ ChatSwiftUIStreamingEvent.swift
 | `ChatSwiftUIFrameScheduler` | 合批高频 token，控制 SwiftUI 发布频率 |
 | `ChatSwiftUIStreamingMessageState` | 单条 assistant 消息的流式 UI 状态，避免全列表重算 |
 
-## 7. 新 SwiftUI 卡片样式要求
+## 7. Chat 统一卡片样式要求
 
 ### 7.1 视觉方向
 
-SwiftUI 新架构新增一套 Chat 专属卡片样式：
+Chat 卡片样式由 `ChatConversationAppearancePreferences.cardStyle` 统一控制，UIKit 与 SwiftUI 两套会话架构都读取同一个字段，禁止再新增 SwiftUI 专属卡片样式开关。
 
 ```text
 标准卡片
@@ -484,11 +487,6 @@ SwiftUI 新架构新增一套 Chat 专属卡片样式：
   - 工具过程在正文上方独立折叠
   - Markdown 正文宽松排版
   - 卡片和结构化结果使用轻边框
-
-紧凑
-  - 缩小垂直间距
-  - 工具过程默认折叠
-  - 适合长对话快速浏览
 ```
 
 可参考 DeepTutorChat 的视觉事实：
@@ -593,12 +591,12 @@ SwiftUI 新架构必须覆盖现有 Chat 常用能力：
 5. 实现 done 后 targeted reconciliation，避免为了拿持久化状态全量 reload 会话。
 6. 增加断线 / 前后台切换后保持已接收内容的 UI 状态。
 
-### 阶段四：新卡片样式
+### 阶段四：统一卡片样式
 
 1. 实现 `ChatSwiftUIPalette`。
 2. 实现 `ChatSwiftUIAssistantBubble` / `ChatSwiftUIUserBubble`。
 3. 实现 `ChatSwiftUIToolTracePanelView`。
-4. 实现标准、正文优先、紧凑三种样式。
+4. SwiftUI 读取 `ChatConversationAppearancePreferences.cardStyle`，与 UIKit 共用标准、正文优先两种样式。
 
 ### 阶段五：刷新与滚动体验
 
@@ -834,12 +832,6 @@ nonisolated enum ChatConversationUIArchitecture: String, Codable, CaseIterable, 
     }
 }
 
-nonisolated enum ChatSwiftUIConversationCardStyle: String, Codable, CaseIterable, Sendable {
-    case standard
-    case bodyFocused
-    case compact
-}
-
 nonisolated enum ChatSwiftUIRefreshBehavior: String, Codable, CaseIterable, Sendable {
     case stable
     case followBottom
@@ -848,12 +840,10 @@ nonisolated enum ChatSwiftUIRefreshBehavior: String, Codable, CaseIterable, Send
 
 nonisolated struct ChatConversationUIPreferences: Codable, Equatable, Sendable {
     var architecture: ChatConversationUIArchitecture
-    var swiftUICardStyle: ChatSwiftUIConversationCardStyle
     var swiftUIRefreshBehavior: ChatSwiftUIRefreshBehavior
 
     static let `default` = ChatConversationUIPreferences(
         architecture: .uiKit,
-        swiftUICardStyle: .bodyFocused,
         swiftUIRefreshBehavior: .stable
     )
 }
@@ -1228,7 +1218,7 @@ VStack(alignment: .leading, spacing: style.blockSpacing) {
     if state.toolTraceItems.isEmpty == false || state.reasoningText.isEmpty == false {
         ChatSwiftUIToolTracePanelView(
             state: state,
-            style: preferences.swiftUICardStyle,
+            style: conversationAppearance.cardStyle,
             displayMode: conversationAppearance.toolTraceDisplayMode,
             collapseToolsWhileStreaming: conversationAppearance.collapseToolsWhileStreaming
         )
@@ -1338,7 +1328,7 @@ SparkClient/Projects/Features/Chat/Presentation/ChatView.swift
 1. 设置内新增 `Chat 会话 UI 架构`，支持 `UIKit 经典` / `SwiftUI 新架构` 切换。
 2. 默认值保持 `UIKit 经典`，避免影响现有 Chat 线上行为。
 3. SwiftUI 模式独立使用 `ChatConversationUIPreferences`，不复用 DeepTutorChat 的 View、Palette、Domain、Preference。
-4. SwiftUI 模式支持 `SwiftUI 卡片样式`：标准、正文优先、紧凑。
+4. SwiftUI 模式复用 `Chat 对话外观 / 对话卡片样式`，不再提供重复的 SwiftUI 专属卡片样式配置。
 5. SwiftUI 模式支持 `SwiftUI 刷新策略`：稳定刷新、跟随底部、手动优先。
 6. SwiftUI 会话列表使用 `ScrollViewReader + ScrollView + LazyVStack + refreshable`。
 7. SwiftUI 会话列表保留 Chat 自身消息行能力：复制、删除、重试、朗读、翻译、工具预览、附件导入、健康资源跳转。

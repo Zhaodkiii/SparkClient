@@ -532,6 +532,8 @@ private struct AIToolDetailView: View {
             return .memberSelection
         case SparkToolName.askUserQuestion.rawValue:
             return .question
+        case SparkToolName.queryMemberProfile.rawValue:
+            return .memberProfile
         default:
             return nil
         }
@@ -546,6 +548,8 @@ private struct AIToolDetailView: View {
                 return viewModel.snapshot.chatToolInteractionPreferences.memberSelectionPresentationMode
             case .question:
                 return viewModel.snapshot.chatToolInteractionPreferences.questionPresentationMode
+            case .memberProfile:
+                return viewModel.snapshot.chatToolInteractionPreferences.memberProfilePresentationMode
             }
         } set: { newValue in
             switch target {
@@ -553,6 +557,8 @@ private struct AIToolDetailView: View {
                 viewModel.snapshot.chatToolInteractionPreferences.memberSelectionPresentationMode = newValue
             case .question:
                 viewModel.snapshot.chatToolInteractionPreferences.questionPresentationMode = newValue
+            case .memberProfile:
+                viewModel.snapshot.chatToolInteractionPreferences.memberProfilePresentationMode = newValue
             }
             ChatToolInteractionDevicePreferencesStore.save(viewModel.snapshot.chatToolInteractionPreferences)
             Task { await viewModel.persistSnapshotNow() }
@@ -575,11 +581,12 @@ private struct AIToolDetailView: View {
 private enum ChatToolInteractionPreferenceTarget {
     case memberSelection
     case question
+    case memberProfile
 
     var title: String {
         switch self {
-        case .memberSelection, .question:
-            return "提问方式"
+        case .memberSelection, .question, .memberProfile:
+            return "交互方式"
         }
     }
 
@@ -589,6 +596,8 @@ private enum ChatToolInteractionPreferenceTarget {
             return "控制 Chat 运行时 request_member_selection 请求用户选择成员时，使用 Sheet 弹窗，还是在当前对话中插入阻塞式会话卡片。"
         case .question:
             return "控制 Chat 运行时 ask_user_question 请求用户补充信息时，使用 Sheet 弹窗，还是在当前对话中插入阻塞式会话卡片。"
+        case .memberProfile:
+            return "控制 Chat 运行时 query_member_profile 在缺少成员上下文时，使用 Sheet 弹窗，还是在当前对话中插入阻塞式会话卡片来完成成员选择。"
         }
     }
 }
