@@ -72,6 +72,10 @@ struct AISettingsView: View {
                 }
             }
 
+            Section("Chat 会话 UI 架构") {
+                ChatConversationUIArchitectureSettingsSection(viewModel: viewModel)
+            }
+
             Section("Chat 对话外观") {
                 ChatConversationAppearanceSettingsSection(viewModel: viewModel)
             }
@@ -156,6 +160,53 @@ private struct SettingNavRow: View {
                 Text(subtitle)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+private struct ChatConversationUIArchitectureSettingsSection: View {
+    @ObservedObject var viewModel: AISettingsViewModel
+
+    var body: some View {
+        Picker("UI 架构", selection: Binding(
+            get: { viewModel.snapshot.chatConversationUIPreferences.architecture },
+            set: { newValue in
+                viewModel.snapshot.chatConversationUIPreferences.architecture = newValue
+                ChatConversationUIDevicePreferencesStore.save(viewModel.snapshot.chatConversationUIPreferences)
+                Task { await viewModel.persistSnapshotNow() }
+            }
+        )) {
+            ForEach(ChatConversationUIArchitecture.allCases, id: \.self) { architecture in
+                Text(architecture.displayName).tag(architecture)
+            }
+        }
+
+        if viewModel.snapshot.chatConversationUIPreferences.architecture == .swiftUI {
+            Picker("SwiftUI 卡片样式", selection: Binding(
+                get: { viewModel.snapshot.chatConversationUIPreferences.swiftUICardStyle },
+                set: { newValue in
+                    viewModel.snapshot.chatConversationUIPreferences.swiftUICardStyle = newValue
+                    ChatConversationUIDevicePreferencesStore.save(viewModel.snapshot.chatConversationUIPreferences)
+                    Task { await viewModel.persistSnapshotNow() }
+                }
+            )) {
+                ForEach(ChatSwiftUIConversationCardStyle.allCases, id: \.self) { style in
+                    Text(style.displayName).tag(style)
+                }
+            }
+
+            Picker("SwiftUI 刷新策略", selection: Binding(
+                get: { viewModel.snapshot.chatConversationUIPreferences.swiftUIRefreshBehavior },
+                set: { newValue in
+                    viewModel.snapshot.chatConversationUIPreferences.swiftUIRefreshBehavior = newValue
+                    ChatConversationUIDevicePreferencesStore.save(viewModel.snapshot.chatConversationUIPreferences)
+                    Task { await viewModel.persistSnapshotNow() }
+                }
+            )) {
+                ForEach(ChatSwiftUIRefreshBehavior.allCases, id: \.self) { behavior in
+                    Text(behavior.displayName).tag(behavior)
+                }
             }
         }
     }

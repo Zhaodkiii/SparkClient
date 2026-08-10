@@ -187,6 +187,7 @@ final class AISettingsViewModel: ObservableObject {
             try await performPersistToRepository()
             // 更新最后保存的快照
             lastPersistedSnapshot = snapshot
+            ChatConversationUIDevicePreferencesStore.save(snapshot.chatConversationUIPreferences)
             hasUnsavedChanges = false
             // 重建运行时缓存
             await aiConfigCenter?.rebuildRuntimeCache(from: snapshot)
@@ -1176,6 +1177,7 @@ final class AISettingsViewModel: ObservableObject {
             snapshot.refreshWeatherConfigRevision(previous: lastPersistedSnapshot)
             try await performPersistToRepository()
             lastPersistedSnapshot = snapshot
+            ChatConversationUIDevicePreferencesStore.save(snapshot.chatConversationUIPreferences)
             hasUnsavedChanges = false
             await aiConfigCenter?.rebuildRuntimeCache(from: snapshot)
             await refreshEffectiveSmallTasks()

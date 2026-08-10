@@ -412,25 +412,49 @@ struct ChatView: View {
             }
     }
     
+    @ViewBuilder
     private var messageList: some View {
-        ChatConversationMessageListContainer(
-            threadID: threadID,
-            stateStore: stateStore,
-            detailViewModel: detailViewModel,
-            uiStateStore: uiStateStore,
-            speechHelper: speechHelper,
-            memberContextStore: homeViewModel.memberContextStoreForBinding,
-            taskManager: taskManager,
-            logger: logger,
-            actionStateHandle: actionStateHandle,
-            conversationAppearance: aiSettingsViewModel.snapshot.chatConversationAppearance,
-            visibleMessages: visibleMessages,
-            hasMoreMessages: hasMoreMessages,
-            isLoadingMoreMessages: isLoadingMoreMessages,
-            lockBottomViewport: stateStore.isBottomViewportLocked(for: threadID),
-            scrollToBottomRequestGeneration: stateStore.scrollToBottomRequestGeneration(for: threadID),
-            showCaptureFileImporter: $showCaptureFileImporter
-        )
+        switch aiSettingsViewModel.snapshot.chatConversationUIPreferences.architecture {
+        case .uiKit:
+            ChatConversationMessageListContainer(
+                threadID: threadID,
+                stateStore: stateStore,
+                detailViewModel: detailViewModel,
+                uiStateStore: uiStateStore,
+                speechHelper: speechHelper,
+                memberContextStore: homeViewModel.memberContextStoreForBinding,
+                taskManager: taskManager,
+                logger: logger,
+                actionStateHandle: actionStateHandle,
+                conversationAppearance: aiSettingsViewModel.snapshot.chatConversationAppearance,
+                visibleMessages: visibleMessages,
+                hasMoreMessages: hasMoreMessages,
+                isLoadingMoreMessages: isLoadingMoreMessages,
+                lockBottomViewport: stateStore.isBottomViewportLocked(for: threadID),
+                scrollToBottomRequestGeneration: stateStore.scrollToBottomRequestGeneration(for: threadID),
+                showCaptureFileImporter: $showCaptureFileImporter
+            )
+        case .swiftUI:
+            ChatSwiftUIConversationView(
+                threadID: threadID,
+                stateStore: stateStore,
+                detailViewModel: detailViewModel,
+                uiStateStore: uiStateStore,
+                speechHelper: speechHelper,
+                memberContextStore: homeViewModel.memberContextStoreForBinding,
+                taskManager: taskManager,
+                logger: logger,
+                actionStateHandle: actionStateHandle,
+                conversationAppearance: aiSettingsViewModel.snapshot.chatConversationAppearance,
+                uiPreferences: aiSettingsViewModel.snapshot.chatConversationUIPreferences,
+                visibleMessages: visibleMessages,
+                hasMoreMessages: hasMoreMessages,
+                isLoadingMoreMessages: isLoadingMoreMessages,
+                lockBottomViewport: stateStore.isBottomViewportLocked(for: threadID),
+                scrollToBottomRequestGeneration: stateStore.scrollToBottomRequestGeneration(for: threadID),
+                showCaptureFileImporter: $showCaptureFileImporter
+            )
+        }
     }
     
     private var cardActionSnapshotStorageKey: String {

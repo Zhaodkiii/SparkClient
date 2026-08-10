@@ -252,6 +252,112 @@ nonisolated struct ChatConversationAppearancePreferences: Codable, Equatable, Se
     )
 }
 
+nonisolated enum ChatConversationUIArchitecture: String, Codable, CaseIterable, Sendable {
+    case uiKit
+    case swiftUI
+
+    var displayName: String {
+        switch self {
+        case .uiKit:
+            return "UIKit 经典"
+        case .swiftUI:
+            return "SwiftUI 新架构"
+        }
+    }
+}
+
+nonisolated enum ChatSwiftUIConversationCardStyle: String, Codable, CaseIterable, Sendable {
+    case standard
+    case bodyFocused
+    case compact
+
+    var displayName: String {
+        switch self {
+        case .standard:
+            return "标准"
+        case .bodyFocused:
+            return "正文优先"
+        case .compact:
+            return "紧凑"
+        }
+    }
+}
+
+nonisolated enum ChatSwiftUIRefreshBehavior: String, Codable, CaseIterable, Sendable {
+    case stable
+    case followBottom
+    case manualFirst
+
+    var displayName: String {
+        switch self {
+        case .stable:
+            return "稳定刷新"
+        case .followBottom:
+            return "跟随底部"
+        case .manualFirst:
+            return "手动优先"
+        }
+    }
+}
+
+nonisolated struct ChatConversationUIPreferences: Codable, Equatable, Sendable {
+    var architecture: ChatConversationUIArchitecture
+    var swiftUICardStyle: ChatSwiftUIConversationCardStyle
+    var swiftUIRefreshBehavior: ChatSwiftUIRefreshBehavior
+
+    init(
+        architecture: ChatConversationUIArchitecture,
+        swiftUICardStyle: ChatSwiftUIConversationCardStyle,
+        swiftUIRefreshBehavior: ChatSwiftUIRefreshBehavior
+    ) {
+        self.architecture = architecture
+        self.swiftUICardStyle = swiftUICardStyle
+        self.swiftUIRefreshBehavior = swiftUIRefreshBehavior
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodableKey.self)
+        let fallback = ChatConversationUIPreferences.fallback
+        architecture = try container.decodeIfPresent(ChatConversationUIArchitecture.self, forKey: .key("architecture"))
+            ?? fallback.architecture
+        swiftUICardStyle = try container.decodeIfPresent(ChatSwiftUIConversationCardStyle.self, forKey: .key("swiftUICardStyle"))
+            ?? fallback.swiftUICardStyle
+        swiftUIRefreshBehavior = try container.decodeIfPresent(ChatSwiftUIRefreshBehavior.self, forKey: .key("swiftUIRefreshBehavior"))
+            ?? fallback.swiftUIRefreshBehavior
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodableKey.self)
+        try container.encode(architecture, forKey: .key("architecture"))
+        try container.encode(swiftUICardStyle, forKey: .key("swiftUICardStyle"))
+        try container.encode(swiftUIRefreshBehavior, forKey: .key("swiftUIRefreshBehavior"))
+    }
+
+    static let fallback = ChatConversationUIPreferences(
+        architecture: .uiKit,
+        swiftUICardStyle: .bodyFocused,
+        swiftUIRefreshBehavior: .stable
+    )
+
+    static var `default`: ChatConversationUIPreferences {
+        ChatConversationUIDevicePreferencesStore.load() ?? fallback
+    }
+}
+
+nonisolated enum ChatConversationUIDevicePreferencesStore {
+    private static let defaultsKey = "cn.Zhaodk.Health.chat.conversation.uiPreferences"
+
+    static func load(defaults: UserDefaults = .standard) -> ChatConversationUIPreferences? {
+        guard let data = defaults.data(forKey: defaultsKey) else { return nil }
+        return try? JSONDecoder.default.decode(ChatConversationUIPreferences.self, from: data)
+    }
+
+    static func save(_ preferences: ChatConversationUIPreferences, defaults: UserDefaults = .standard) {
+        guard let data = try? JSONEncoder.default.encode(preferences) else { return }
+        defaults.set(data, forKey: defaultsKey)
+    }
+}
+
 nonisolated enum DeepTutorConversationCardStyle: String, Codable, CaseIterable, Sendable {
     case standard
     case bodyFocused
