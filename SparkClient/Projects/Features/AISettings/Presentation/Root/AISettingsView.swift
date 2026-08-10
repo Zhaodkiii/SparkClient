@@ -62,6 +62,17 @@ struct AISettingsView: View {
                 }
 
                 MainNavigationLink {
+                    AIToolSettingsView(viewModel: viewModel)
+                        .hidesMainTabBarWhenPushed()
+                } label: {
+                    SettingNavRow(
+                        title: L10n.text("ai_settings.row.ai_tools", fallback: "AI 工具"),
+                        subtitle: L10n.text("ai_settings.row.ai_tools.subtitle", fallback: "查看 DeepTutorChat 与 Chat 可调用工具"),
+                        icon: "wrench.and.screwdriver"
+                    )
+                }
+
+                MainNavigationLink {
                     AIWeatherToolSettingsView(viewModel: viewModel)
                 } label: {
                     SettingNavRow(
