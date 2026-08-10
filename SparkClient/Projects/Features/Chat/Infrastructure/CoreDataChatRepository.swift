@@ -72,8 +72,8 @@ actor CoreDataChatRepository: ChatRepository {
         await store.softDeleteMessage(clientMessageID: clientMessageID)
     }
 
-    func updateMessageDeliveryState(clientMessageID: UUID, state: ChatDeliveryState) async {
-        await store.updateMessageDeliveryState(clientMessageID: clientMessageID, state: state)
+    func updateMessageDeliveryState(clientMessageID: UUID, state: ChatDeliveryState, notifyUI: Bool) async {
+        await store.updateMessageDeliveryState(clientMessageID: clientMessageID, state: state, notifyUI: notifyUI)
     }
 
     func updateMessageBlocks(
@@ -175,12 +175,14 @@ actor CoreDataChatRepository: ChatRepository {
     func applyPushMessageAck(
         clientMessageID: UUID,
         serverMessageID: String?,
-        serverUpdatedAt: Date
+        serverUpdatedAt: Date,
+        notifyUI: Bool
     ) async {
         await store.applyPushMessageAck(
             clientMessageID: clientMessageID,
             serverMessageID: serverMessageID,
-            serverUpdatedAt: serverUpdatedAt
+            serverUpdatedAt: serverUpdatedAt,
+            notifyUI: notifyUI
         )
     }
 

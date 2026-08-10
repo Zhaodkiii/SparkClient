@@ -48,8 +48,10 @@ struct IOS26TabBarView: View {
         IOS26HomeDashboardActionHandler(
             routeStore: routeStore,
             homeViewModel: homeViewModel,
+            chatListViewModel: chatListViewModel,
             deepTutorChatViewModel: deepTutorChatViewModel,
-            notificationClient: homeDependencies.notificationClient
+            notificationClient: homeDependencies.notificationClient,
+            quickStartPreferenceStore: .shared
         )
     }
 
@@ -108,6 +110,7 @@ struct IOS26TabBarView: View {
                 launchIntentCoordinator: launchIntentCoordinator,
                 session: session,
                 actionHandler: homeDashboardActionHandler,
+                chatListViewModel: chatListViewModel,
                 deepTutorChatViewModel: deepTutorChatViewModel
             )
         } destination: { route in

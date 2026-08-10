@@ -4,11 +4,13 @@ struct GeneralSettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var versionUpdateCoordinator: AppVersionUpdateCoordinator
     @ObservedObject private var preferencesStore = HomeNutritionEntryPreferencesStore.shared
+    @ObservedObject private var quickStartPreferenceStore = HomeQuickStartConversationPreferenceStore.shared
     @ObservedObject private var medicationPreferencesStore = MedicationReminderPreferencesStore.shared
 
     var body: some View {
         List {
             versionSection
+            homeAIConversationSection
             homeNutritionEntrySection
             medicalSection
             MedicalExtractionRetrySettingsSection()
@@ -30,6 +32,21 @@ struct GeneralSettingsView: View {
         }
         .onChange(of: medicationPreferencesStore.showsDrugNameInNotification) { _ in
             postMedicationPreferencesChanged()
+        }
+    }
+
+    private var homeAIConversationSection: some View {
+        Section {
+            Picker(
+                L10n.text("settings.general.home_quick_start_target.title"),
+                selection: $quickStartPreferenceStore.target
+            ) {
+                ForEach(HomeQuickStartConversationTarget.allCases) { target in
+                    Text(L10n.text(target.localizationKey)).tag(target)
+                }
+            }
+        } footer: {
+            Text(L10n.text("settings.general.home_quick_start_target.footer"))
         }
     }
 

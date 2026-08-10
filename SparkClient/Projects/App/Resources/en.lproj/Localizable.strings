@@ -1251,6 +1251,10 @@
 "settings.general.home_nutrition_entry.compact" = "Compact";
 "settings.general.home_nutrition_entry.full" = "Full";
 "settings.general.home_nutrition_entry.footer" = "Compact shows a single card; Full embeds summary and meal dashboard on Home.";
+"settings.general.home_quick_start_target.title" = "Home AI chat entry";
+"settings.general.home_quick_start_target.chat" = "Chat";
+"settings.general.home_quick_start_target.deep_tutor_chat" = "DeepTutor Chat";
+"settings.general.home_quick_start_target.footer" = "Controls whether Home quick actions open regular Chat or DeepTutor Chat.";
 "settings.general.medical.section" = "Medical";
 "settings.general.medical.show_drug_name_in_notification" = "Show drug names in notifications";
 "settings.general.medical.show_drug_name_in_notification.footer" = "When enabled, medication reminders may show drug names on the lock screen, Notification Center, Apple Watch, or in-car displays.";

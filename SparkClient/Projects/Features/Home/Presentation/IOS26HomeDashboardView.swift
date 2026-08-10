@@ -33,6 +33,7 @@ struct IOS26HomeDashboardView: View {
     @ObservedObject var taskManager: TaskManager
     let session: UserSession
     let actionHandler: IOS26HomeDashboardActionHandler
+    @ObservedObject var chatListViewModel: ChatListViewModel
     @ObservedObject var deepTutorChatViewModel: DeepTutorChatViewModel
 
     @State private var loadingAction: IOS26HomeActionItem.Kind?
@@ -74,6 +75,11 @@ struct IOS26HomeDashboardView: View {
         }
         .background(Color(uiColor: .systemGroupedBackground))
         .onChange(of: deepTutorChatViewModel.isCreatingConversation) { _, isCreating in
+            if isCreating == false {
+                loadingAction = nil
+            }
+        }
+        .onChange(of: chatListViewModel.isCreatingQuickStartThread) { _, isCreating in
             if isCreating == false {
                 loadingAction = nil
             }
@@ -269,7 +275,7 @@ struct IOS26HomeDashboardView: View {
     private func actionCard(for item: IOS26HomeActionItem) -> some View {
         IOS26HomeActionCard(
             item: item,
-            isLoading: loadingAction == item.id && deepTutorChatViewModel.isCreatingConversation,
+            isLoading: loadingAction == item.id && isCreatingQuickStartConversation,
             action: {
                 guard item.isEnabled else { return }
                 triggerHaptic(style: .light)
@@ -279,6 +285,10 @@ struct IOS26HomeDashboardView: View {
                 actionHandler.handle(item.id)
             }
         )
+    }
+
+    private var isCreatingQuickStartConversation: Bool {
+        deepTutorChatViewModel.isCreatingConversation || chatListViewModel.isCreatingQuickStartThread
     }
 
     @ViewBuilder

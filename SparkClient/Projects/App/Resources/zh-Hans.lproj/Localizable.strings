@@ -1251,6 +1251,10 @@
 "settings.general.home_nutrition_entry.compact" = "简约版";
 "settings.general.home_nutrition_entry.full" = "通用版";
 "settings.general.home_nutrition_entry.footer" = "简约版仅显示单卡片入口；通用版在首页展示总结与营养看板。";
+"settings.general.home_quick_start_target.title" = "首页 AI 对话入口";
+"settings.general.home_quick_start_target.chat" = "对话";
+"settings.general.home_quick_start_target.deep_tutor_chat" = "DeepTutor 对话";
+"settings.general.home_quick_start_target.footer" = "控制首页「制定体检计划」和「报告解读」打开普通对话还是 DeepTutor 对话。";
 "settings.general.medical.section" = "医疗";
 "settings.general.medical.show_drug_name_in_notification" = "通知中显示药品名称";
 "settings.general.medical.show_drug_name_in_notification.footer" = "开启后，用药提醒可能会在锁屏、通知中心、手表或车机中显示药品名称。";

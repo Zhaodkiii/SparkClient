@@ -4,15 +4,17 @@ import SwiftUI
 struct IOS26HomeDashboardActionHandler {
     let routeStore: AppRouteStore
     let homeViewModel: HomeViewModel
+    let chatListViewModel: ChatListViewModel
     let deepTutorChatViewModel: DeepTutorChatViewModel
     let notificationClient: any NotificationClient
+    let quickStartPreferenceStore: HomeQuickStartConversationPreferenceStore
 
     func handle(_ action: IOS26HomeActionItem.Kind) {
         switch action {
         case .checkupPlan:
-            Task { await openDeepTutor(mode: .checkupPlan) }
+            Task { await openQuickStart(mode: .checkupPlan) }
         case .reportInterpretation:
-            Task { await openDeepTutor(mode: .reportInterpretation) }
+            Task { await openQuickStart(mode: .reportInterpretation) }
         case .medication:
             homeViewModel.logMedicalListNavigation(kind: .medicationPlans)
             routeStore.route(to: .homeMedicalList(.medicationPlans, nil))
@@ -29,6 +31,28 @@ struct IOS26HomeDashboardActionHandler {
         case .familyArchive:
             homeViewModel.openFamilyArchiveEntry()
         }
+    }
+
+    private func openQuickStart(mode: DeepTutorQuickStartMode) async {
+        switch quickStartPreferenceStore.target {
+        case .chat:
+            await openChat(mode: ChatQuickStartMode(deepTutorMode: mode))
+        case .deepTutorChat:
+            await openDeepTutor(mode: mode)
+        }
+    }
+
+    private func openChat(mode: ChatQuickStartMode) async {
+        guard let threadID = await chatListViewModel.createQuickStartThread(
+            mode: mode,
+            source: "ios26_home_\(mode.rawValue)"
+        ) else {
+            if let error = chatListViewModel.quickStartCreationError {
+                notificationClient.error(error, title: mode.title, source: "ios26_home")
+            }
+            return
+        }
+        routeStore.route(to: .chatThread(threadID))
     }
 
     private func openDeepTutor(mode: DeepTutorQuickStartMode) async {

@@ -334,7 +334,7 @@ nonisolated struct ChatConversationUIPreferences: Codable, Equatable, Sendable {
     }
 
     static let fallback = ChatConversationUIPreferences(
-        architecture: .uiKit,
+        architecture: .swiftUI,
         swiftUICardStyle: .bodyFocused,
         swiftUIRefreshBehavior: .stable
     )

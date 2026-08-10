@@ -235,7 +235,8 @@ struct ChatOutboxPipeline: Sendable {
             await repository.applyPushMessageAck(
                 clientMessageID: message.clientMessageID,
                 serverMessageID: meta.serverMessageId,
-                serverUpdatedAt: meta.serverUpdatedAt
+                serverUpdatedAt: meta.serverUpdatedAt,
+                notifyUI: false
             )
         }
 
@@ -252,7 +253,8 @@ struct ChatOutboxPipeline: Sendable {
             await repository.applyPushMessageAck(
                 clientMessageID: item.clientMessageID,
                 serverMessageID: nil,
-                serverUpdatedAt: meta.serverUpdatedAt
+                serverUpdatedAt: meta.serverUpdatedAt,
+                notifyUI: false
             )
             latestByThread[item.threadID] = max(latestByThread[item.threadID] ?? .distantPast, meta.serverUpdatedAt)
         }

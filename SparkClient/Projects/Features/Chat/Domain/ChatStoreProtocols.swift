@@ -56,11 +56,12 @@ protocol ChatMessageStoring: Sendable {
     func appendMessage(_ message: ChatMessage) async throws -> ChatMessage
     func upsertLocalMessage(_ message: ChatMessage) async throws -> ChatMessage
     func softDeleteMessage(clientMessageID: UUID) async
-    func updateMessageDeliveryState(clientMessageID: UUID, state: ChatDeliveryState) async
+    func updateMessageDeliveryState(clientMessageID: UUID, state: ChatDeliveryState, notifyUI: Bool) async
     func applyPushMessageAck(
         clientMessageID: UUID,
         serverMessageID: String?,
-        serverUpdatedAt: Date
+        serverUpdatedAt: Date,
+        notifyUI: Bool
     ) async
     func updateMessageBlocks(clientMessageID: UUID, blocks: [ChatMessageBlock], markPendingForSync: Bool) async
     @discardableResult
@@ -69,6 +70,25 @@ protocol ChatMessageStoring: Sendable {
     func loadOutboxMessages(limit: Int) async -> [ChatMessage]
     func loadPendingMessageBlocks(limit: Int) async -> [ChatPendingMessageBlock]
     func markMessageBlocksSynced(ids: [UUID]) async
+}
+
+extension ChatMessageStoring {
+    func updateMessageDeliveryState(clientMessageID: UUID, state: ChatDeliveryState) async {
+        await updateMessageDeliveryState(clientMessageID: clientMessageID, state: state, notifyUI: true)
+    }
+
+    func applyPushMessageAck(
+        clientMessageID: UUID,
+        serverMessageID: String?,
+        serverUpdatedAt: Date
+    ) async {
+        await applyPushMessageAck(
+            clientMessageID: clientMessageID,
+            serverMessageID: serverMessageID,
+            serverUpdatedAt: serverUpdatedAt,
+            notifyUI: true
+        )
+    }
 }
 
 protocol ChatSyncMetadataStoring: Sendable {

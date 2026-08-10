@@ -576,7 +576,7 @@ actor CoreDataChatStore {
         return message
     }
 
-    func updateMessageDeliveryState(clientMessageID: UUID, state: ChatDeliveryState) async {
+    func updateMessageDeliveryState(clientMessageID: UUID, state: ChatDeliveryState, notifyUI: Bool = true) async {
         let change = try? await kernel.writeWithoutNotification { context, accountID in
             guard let object = try Self.fetchMessage(
                 context: context,
@@ -596,7 +596,7 @@ actor CoreDataChatStore {
             // 用户消息送达态变化不改变列表预览/未读角标；助手消息可能改变未读等展示。
             return (threadID, role == .assistant)
         }
-        if let change {
+        if notifyUI, let change {
             await kernel.postChangeNotification(
                 ChatConversationChangeEvent(
                     threadID: change.0,
@@ -611,7 +611,8 @@ actor CoreDataChatStore {
     func applyPushMessageAck(
         clientMessageID: UUID,
         serverMessageID: String?,
-        serverUpdatedAt: Date
+        serverUpdatedAt: Date,
+        notifyUI: Bool = true
     ) async {
         let change = try? await kernel.writeWithoutNotification { context, accountID in
             guard let object = try Self.fetchMessage(
@@ -628,7 +629,7 @@ actor CoreDataChatStore {
             object.setValue(serverUpdatedAt, forKey: "serverUpdatedAt")
             return object.value(forKey: "threadID") as? UUID
         }
-        if let threadID = change {
+        if notifyUI, let threadID = change {
             await kernel.postChangeNotification(
                 ChatConversationChangeEvent(
                     threadID: threadID,

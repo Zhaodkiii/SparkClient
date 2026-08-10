@@ -14,6 +14,7 @@ struct IOS26HomeView: View {
     @ObservedObject var launchIntentCoordinator: LaunchIntentCoordinator
     let session: UserSession
     let actionHandler: IOS26HomeDashboardActionHandler
+    @ObservedObject var chatListViewModel: ChatListViewModel
     @ObservedObject var deepTutorChatViewModel: DeepTutorChatViewModel
 
     @State private var hasLoaded = false
@@ -38,6 +39,7 @@ private extension IOS26HomeView {
             taskManager: taskManager,
             session: session,
             actionHandler: actionHandler,
+            chatListViewModel: chatListViewModel,
             deepTutorChatViewModel: deepTutorChatViewModel
         )
         .refreshable {

@@ -20,7 +20,11 @@ actor ChatOutboxStore {
     }
 
     func markSending(_ message: ChatMessage) async {
-        await repository.updateMessageDeliveryState(clientMessageID: message.clientMessageID, state: .sending)
+        await repository.updateMessageDeliveryState(
+            clientMessageID: message.clientMessageID,
+            state: .sending,
+            notifyUI: false
+        )
     }
 
     func markFailed(_ message: ChatMessage) async {
@@ -28,7 +32,11 @@ actor ChatOutboxStore {
     }
 
     func markSent(_ message: ChatMessage, syncedBlockIDs: [UUID]) async {
-        await repository.updateMessageDeliveryState(clientMessageID: message.clientMessageID, state: .sent)
+        await repository.updateMessageDeliveryState(
+            clientMessageID: message.clientMessageID,
+            state: .sent,
+            notifyUI: false
+        )
         guard syncedBlockIDs.isEmpty == false else { return }
         await repository.markMessageBlocksSynced(ids: syncedBlockIDs)
     }

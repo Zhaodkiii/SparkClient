@@ -23,6 +23,8 @@ final class ChatListViewModel: ObservableObject {
 
     @Published private(set) var hasFinishedInitialLocalLoad = false
     @Published private(set) var isRefreshingEmptyListFallback = false
+    @Published private(set) var isCreatingQuickStartThread = false
+    @Published private(set) var quickStartCreationError: String?
 
     init(
         stateStore: ChatStateStore,
@@ -129,6 +131,33 @@ final class ChatListViewModel: ObservableObject {
         stateStore.setSelectedThreadID(thread.id)
     }
 
+    @discardableResult
+    func createQuickStartThread(
+        mode: ChatQuickStartMode,
+        source: String
+    ) async -> UUID? {
+        logger.info(
+            "Chat 快捷建会话开始 mode=\(mode.rawValue) source=\(source)",
+            module: .general
+        )
+        isCreatingQuickStartThread = true
+        quickStartCreationError = nil
+        defer { isCreatingQuickStartThread = false }
+
+        let thread = await createThreadUseCase.execute(
+            memberID: nil,
+            title: mode.title
+        )
+        await reloadThreads(selectFirstIfNeeded: false)
+        stateStore.setSelectedThreadID(thread.id)
+        stateStore.setDraft(mode.initialDraft, for: thread.id)
+        logger.info(
+            "Chat 快捷建会话完成 thread=\(thread.id.uuidString.prefix(8)) source=\(source)",
+            module: .general
+        )
+        return thread.id
+    }
+
     func selectThread(_ threadID: UUID) {
         stateStore.setSelectedThreadID(threadID)
     }
@@ -184,6 +213,8 @@ final class ChatListViewModel: ObservableObject {
         hasFinishedInitialLocalLoad = false
         didAttemptEmptyListRemoteRefresh = false
         isRefreshingEmptyListFallback = false
+        isCreatingQuickStartThread = false
+        quickStartCreationError = nil
     }
 
     private func reloadThreads(selectFirstIfNeeded: Bool) async {
