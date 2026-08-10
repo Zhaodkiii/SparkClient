@@ -105,7 +105,10 @@ extension ToolHub {
                 candidates: listed.candidates,
                 maxSelectable: HealthResourceSendValidator.maxRefs
             )
-            let selectionResult = await coordinator.requestHealthResourceCandidateSelection(prompt: prompt)
+            let selectionResult = await coordinator.requestHealthResourceCandidateSelection(
+                prompt: prompt,
+                toolCallID: context.pendingToolCallID
+            )
             switch selectionResult {
             case .success(let selected):
                 let outputText = appendUnrecognizedHealthResourceTypesNotice(

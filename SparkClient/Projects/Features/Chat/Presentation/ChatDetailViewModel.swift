@@ -1390,11 +1390,13 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
     func presentInlineQuestionCard(
         threadID: UUID?,
         prompt: ToolQuestionPrompt,
-        completionID: UUID
+        completionID: UUID,
+        toolCallID: String?
     ) async -> Bool {
         guard let target = await inlineToolInteractionTargetMessage(threadID: threadID) else {
             return false
         }
+        let associationID = inlineToolAssociationID(toolCallID: toolCallID, completionID: completionID)
         let card = ChatToolQuestionCard(
             completionID: completionID,
             prompt: prompt
@@ -1402,12 +1404,13 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         let block = ChatMessageBlock(
             id: ChatStableBlockID.rich(
                 messageID: target.clientMessageID,
-                toolCallID: completionID.uuidString,
+                toolCallID: associationID,
                 kind: .toolQuestionCards
             ),
-            anchor: .toolCall(completionID.uuidString),
+            anchor: .toolCall(associationID),
             kind: .toolQuestionCards,
-            toolCallID: completionID.uuidString,
+            toolCallID: associationID,
+            parentToolCallID: associationID,
             nodeRole: .toolPresentation,
             toolQuestionCards: [card],
             orderKey: nextInlineToolCardOrderKey(for: target),
@@ -1421,11 +1424,13 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
     func presentInlineMemberSelectionCard(
         threadID: UUID?,
         prompt: ToolMemberSelectionPrompt,
-        completionID: UUID
+        completionID: UUID,
+        toolCallID: String?
     ) async -> Bool {
         guard let target = await inlineToolInteractionTargetMessage(threadID: threadID) else {
             return false
         }
+        let associationID = inlineToolAssociationID(toolCallID: toolCallID, completionID: completionID)
         let card = ChatToolMemberSelectionCard(
             completionID: completionID,
             prompt: prompt
@@ -1433,14 +1438,83 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         let block = ChatMessageBlock(
             id: ChatStableBlockID.rich(
                 messageID: target.clientMessageID,
-                toolCallID: completionID.uuidString,
+                toolCallID: associationID,
                 kind: .toolMemberSelectionCards
             ),
-            anchor: .toolCall(completionID.uuidString),
+            anchor: .toolCall(associationID),
             kind: .toolMemberSelectionCards,
-            toolCallID: completionID.uuidString,
+            toolCallID: associationID,
+            parentToolCallID: associationID,
             nodeRole: .toolPresentation,
             toolMemberSelectionCards: [card],
+            orderKey: nextInlineToolCardOrderKey(for: target),
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        await persistInlineToolInteractionBlock(threadID: target.threadID, message: target, block: block)
+        return true
+    }
+
+    func presentInlineHealthResourceCandidateCard(
+        threadID: UUID?,
+        prompt: HealthResourceToolCandidatePrompt,
+        completionID: UUID,
+        toolCallID: String?
+    ) async -> Bool {
+        guard let target = await inlineToolInteractionTargetMessage(threadID: threadID ?? prompt.threadID) else {
+            return false
+        }
+        let associationID = inlineToolAssociationID(toolCallID: toolCallID, completionID: completionID)
+        let card = ChatHealthResourceCandidateSelectionCard(
+            completionID: completionID,
+            prompt: prompt
+        )
+        let block = ChatMessageBlock(
+            id: ChatStableBlockID.rich(
+                messageID: target.clientMessageID,
+                toolCallID: associationID,
+                kind: .healthResourceCandidateCards
+            ),
+            anchor: .toolCall(associationID),
+            kind: .healthResourceCandidateCards,
+            toolCallID: associationID,
+            parentToolCallID: associationID,
+            nodeRole: .toolPresentation,
+            healthResourceCandidateCards: [card],
+            orderKey: nextInlineToolCardOrderKey(for: target),
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        await persistInlineToolInteractionBlock(threadID: target.threadID, message: target, block: block)
+        return true
+    }
+
+    func presentInlineToolConsentCard(
+        threadID: UUID?,
+        prompt: ExternalToolDataSharePrompt,
+        completionID: UUID,
+        toolCallID: String?
+    ) async -> Bool {
+        guard let target = await inlineToolInteractionTargetMessage(threadID: threadID) else {
+            return false
+        }
+        let associationID = inlineToolAssociationID(toolCallID: toolCallID, completionID: completionID)
+        let card = ChatToolConsentCard(
+            completionID: completionID,
+            prompt: prompt
+        )
+        let block = ChatMessageBlock(
+            id: ChatStableBlockID.rich(
+                messageID: target.clientMessageID,
+                toolCallID: associationID,
+                kind: .toolConsentCards
+            ),
+            anchor: .toolCall(associationID),
+            kind: .toolConsentCards,
+            toolCallID: associationID,
+            parentToolCallID: associationID,
+            nodeRole: .toolPresentation,
+            toolConsentCards: [card],
             orderKey: nextInlineToolCardOrderKey(for: target),
             createdAt: Date(),
             updatedAt: Date()
@@ -1511,6 +1585,109 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         toolInteractionCoordinator.completeInlineMemberSelection(id: card.completionID, memberID: memberID)
     }
 
+    func skipInlineHealthResourceCandidateCard(
+        threadID: UUID,
+        message: ChatMessage,
+        card: ChatHealthResourceCandidateSelectionCard
+    ) async {
+        guard card.status == .pending else { return }
+        guard let updatedBlocks = replacingInlineHealthResourceCandidateCard(
+            in: message.blocks,
+            cardID: card.id,
+            mutate: {
+                $0.selectedCandidates = []
+                $0.status = .cancelled
+                $0.resultText = "用户已跳过健康资料选择。"
+                $0.updatedAt = Date()
+            }
+        ) else { return }
+        guard let updatedBlock = updatedBlocks.first(where: {
+            $0.healthResourceCandidateCards.contains(where: { $0.id == card.id })
+        }) else { return }
+        await persistInlineToolInteractionBlock(threadID: threadID, message: message, block: updatedBlock)
+        stateStore.updateMessages([message.replacingBlocks(updatedBlocks)], for: threadID)
+        toolInteractionCoordinator.completeInlineHealthResourceCandidates(id: card.completionID, selected: [])
+    }
+
+    func chooseInlineHealthResourceCandidateCard(
+        threadID: UUID,
+        message: ChatMessage,
+        card: ChatHealthResourceCandidateSelectionCard
+    ) async {
+        guard card.status == .pending else { return }
+        let selectionResult = await toolInteractionCoordinator.requestHealthResourceCandidateSelectionSheet(prompt: card.prompt)
+        guard case .success(let selected) = selectionResult else {
+            return
+        }
+        guard let updatedBlocks = replacingInlineHealthResourceCandidateCard(
+            in: message.blocks,
+            cardID: card.id,
+            mutate: {
+                $0.selectedCandidates = selected
+                $0.status = selected.isEmpty ? .cancelled : .submitted
+                $0.resultText = selected.isEmpty
+                    ? "用户未选择健康资料。"
+                    : "用户已选择 \(selected.count) 份健康资料。"
+                $0.updatedAt = Date()
+            }
+        ) else { return }
+        guard let updatedBlock = updatedBlocks.first(where: {
+            $0.healthResourceCandidateCards.contains(where: { $0.id == card.id })
+        }) else { return }
+        await persistInlineToolInteractionBlock(threadID: threadID, message: message, block: updatedBlock)
+        stateStore.updateMessages([message.replacingBlocks(updatedBlocks)], for: threadID)
+        toolInteractionCoordinator.completeInlineHealthResourceCandidates(id: card.completionID, selected: selected)
+    }
+
+    func resolveInlineToolConsentCard(
+        threadID: UUID,
+        message: ChatMessage,
+        card: ChatToolConsentCard,
+        decision: ToolConsentDecision
+    ) async {
+        guard card.status == .pending else { return }
+        guard let updatedBlocks = replacingInlineToolConsentCard(
+            in: message.blocks,
+            cardID: card.id,
+            mutate: {
+                $0.decision = decision
+                $0.status = decision.allowed ? .submitted : .cancelled
+                $0.resultText = decision.allowed ? "用户已授权发送工具结果。" : "用户已拒绝发送工具结果。"
+                $0.updatedAt = Date()
+            }
+        ) else { return }
+        guard let updatedBlock = updatedBlocks.first(where: {
+            $0.toolConsentCards.contains(where: { $0.id == card.id })
+        }) else { return }
+        await persistInlineToolInteractionBlock(threadID: threadID, message: message, block: updatedBlock)
+        stateStore.updateMessages([message.replacingBlocks(updatedBlocks)], for: threadID)
+        toolInteractionCoordinator.completeInlineConsent(id: card.completionID, decision: decision)
+    }
+
+    func showInlineToolConsentDetails(
+        threadID: UUID,
+        message: ChatMessage,
+        card: ChatToolConsentCard
+    ) async {
+        guard card.status == .pending else { return }
+        let result = await toolInteractionCoordinator.requestConsentDecisionSheet(prompt: card.prompt)
+        guard case .success(let decision) = result else {
+            await resolveInlineToolConsentCard(
+                threadID: threadID,
+                message: message,
+                card: card,
+                decision: ToolConsentDecision(allowed: false, rememberTool: false)
+            )
+            return
+        }
+        await resolveInlineToolConsentCard(
+            threadID: threadID,
+            message: message,
+            card: card,
+            decision: decision
+        )
+    }
+
     private func updatePendingMemberToolCard(
         threadID: UUID,
         message: ChatMessage,
@@ -1568,6 +1745,11 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         return maxOrderKey + 100
     }
 
+    private func inlineToolAssociationID(toolCallID: String?, completionID: UUID) -> String {
+        let trimmed = toolCallID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? completionID.uuidString : trimmed
+    }
+
     private func messageByAppendingOrReplacingBlock(
         _ block: ChatMessageBlock,
         to message: ChatMessage
@@ -1621,6 +1803,12 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
             markPendingForSync: true
         )
         if didApply {
+            if message.deliveryState != .sending {
+                await chatRepository.updateMessageDeliveryState(
+                    clientMessageID: message.clientMessageID,
+                    state: .pending
+                )
+            }
             stateStore.updateMessages([updatedMessage], for: threadID)
             stateStore.requestScrollToBottom(for: threadID)
         }
@@ -1662,6 +1850,50 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
             var next = blocks
             next[index] = block.replacingPayload(
                 .toolMemberSelectionCards(cards),
+                status: .ready,
+                revision: block.revision + 1,
+                updatedAt: Date()
+            )
+            return next
+        }
+        return nil
+    }
+
+    private func replacingInlineHealthResourceCandidateCard(
+        in blocks: [ChatMessageBlock],
+        cardID: UUID,
+        mutate: (inout ChatHealthResourceCandidateSelectionCard) -> Void
+    ) -> [ChatMessageBlock]? {
+        for (index, block) in blocks.enumerated() {
+            guard block.kind == .healthResourceCandidateCards else { continue }
+            var cards = block.healthResourceCandidateCards
+            guard let cardIndex = cards.firstIndex(where: { $0.id == cardID }) else { continue }
+            mutate(&cards[cardIndex])
+            var next = blocks
+            next[index] = block.replacingPayload(
+                .healthResourceCandidateCards(cards),
+                status: .ready,
+                revision: block.revision + 1,
+                updatedAt: Date()
+            )
+            return next
+        }
+        return nil
+    }
+
+    private func replacingInlineToolConsentCard(
+        in blocks: [ChatMessageBlock],
+        cardID: UUID,
+        mutate: (inout ChatToolConsentCard) -> Void
+    ) -> [ChatMessageBlock]? {
+        for (index, block) in blocks.enumerated() {
+            guard block.kind == .toolConsentCards else { continue }
+            var cards = block.toolConsentCards
+            guard let cardIndex = cards.firstIndex(where: { $0.id == cardID }) else { continue }
+            mutate(&cards[cardIndex])
+            var next = blocks
+            next[index] = block.replacingPayload(
+                .toolConsentCards(cards),
                 status: .ready,
                 revision: block.revision + 1,
                 updatedAt: Date()

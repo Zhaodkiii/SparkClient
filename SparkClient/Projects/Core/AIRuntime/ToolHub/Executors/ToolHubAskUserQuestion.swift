@@ -24,7 +24,8 @@ extension ToolHub {
         let prompt = ToolQuestionPrompt(questions: questions)
         let answerResult = await toolInteractionCoordinator.requestQuestionAnswer(
             threadID: context.threadID,
-            prompt: prompt
+            prompt: prompt,
+            toolCallID: context.pendingToolCallID
         )
         let answer: ToolQuestionAnswer
         switch answerResult {

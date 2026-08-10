@@ -703,7 +703,11 @@ extension ToolHub {
             reason: reason,
             arguments: arguments
         )
-        switch await toolInteractionCoordinator.requestMemberSelection(threadID: context.threadID, prompt: prompt) {
+        switch await toolInteractionCoordinator.requestMemberSelection(
+            threadID: context.threadID,
+            prompt: prompt,
+            toolCallID: context.pendingToolCallID
+        ) {
         case .success(let memberID):
             return memberID
         case .cancelled, .conflict:

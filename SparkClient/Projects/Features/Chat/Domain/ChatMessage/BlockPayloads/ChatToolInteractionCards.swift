@@ -71,3 +71,65 @@ nonisolated struct ChatToolMemberSelectionCard: Codable, Equatable, Identifiable
         self.updatedAt = updatedAt
     }
 }
+
+nonisolated struct ChatHealthResourceCandidateSelectionCard: Codable, Equatable, Identifiable, Sendable {
+    let id: UUID
+    let completionID: UUID
+    let prompt: HealthResourceToolCandidatePrompt
+    var selectedCandidates: [HealthResourceToolCandidateDTO]
+    var status: ChatInlineToolCardStatus
+    var resultText: String?
+    let createdAt: Date
+    var updatedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        completionID: UUID,
+        prompt: HealthResourceToolCandidatePrompt,
+        selectedCandidates: [HealthResourceToolCandidateDTO] = [],
+        status: ChatInlineToolCardStatus = .pending,
+        resultText: String? = nil,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.completionID = completionID
+        self.prompt = prompt
+        self.selectedCandidates = selectedCandidates
+        self.status = status
+        self.resultText = resultText
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+nonisolated struct ChatToolConsentCard: Codable, Equatable, Identifiable, Sendable {
+    let id: UUID
+    let completionID: UUID
+    let prompt: ExternalToolDataSharePrompt
+    var decision: ToolConsentDecision?
+    var status: ChatInlineToolCardStatus
+    var resultText: String?
+    let createdAt: Date
+    var updatedAt: Date
+
+    init(
+        id: UUID = UUID(),
+        completionID: UUID,
+        prompt: ExternalToolDataSharePrompt,
+        decision: ToolConsentDecision? = nil,
+        status: ChatInlineToolCardStatus = .pending,
+        resultText: String? = nil,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.completionID = completionID
+        self.prompt = prompt
+        self.decision = decision
+        self.status = status
+        self.resultText = resultText
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}

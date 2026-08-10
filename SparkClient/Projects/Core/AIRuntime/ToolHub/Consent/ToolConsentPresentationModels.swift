@@ -1,7 +1,7 @@
 import Foundation
 
 /// 单块工具数据在同意弹窗/内联卡中的展示（完整文本由 UI 决定是否截断）。
-struct ExternalToolDataSharePayloadBlock: Identifiable, Equatable, Codable, Sendable {
+nonisolated struct ExternalToolDataSharePayloadBlock: Identifiable, Equatable, Codable, Sendable {
     let id: UUID
     let toolAPIName: String
     let friendlyTitle: String
@@ -55,7 +55,7 @@ struct ExternalToolDataSharePayloadBlock: Identifiable, Equatable, Codable, Send
     }
 }
 
-struct ExternalToolDataSharePrompt: Identifiable, Equatable, Codable, Sendable {
+nonisolated struct ExternalToolDataSharePrompt: Identifiable, Equatable, Codable, Sendable {
     let id: UUID
     let providerCompany: String
     let endpointLine: String

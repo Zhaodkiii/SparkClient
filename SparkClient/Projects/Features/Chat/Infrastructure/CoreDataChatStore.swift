@@ -1369,7 +1369,8 @@ actor CoreDataChatStore {
         switch block.kind {
         case .structuredHealthCards, .sleepVisualization, .workoutVisualization, .nutritionCards, .medicalRiskNotice,
              .healthResourceReference, .knowledgeCards, .taskCards, .captureCard, .html,
-             .pendingMemberToolCards, .toolQuestionCards, .toolMemberSelectionCards:
+             .pendingMemberToolCards, .toolQuestionCards, .toolMemberSelectionCards,
+             .healthResourceCandidateCards, .toolConsentCards:
             return true
         case .medicalDisclaimerCard:
             return false
@@ -1527,7 +1528,8 @@ actor CoreDataChatStore {
         switch block.kind {
         case .structuredHealthCards, .sleepVisualization, .workoutVisualization, .nutritionCards, .medicalRiskNotice,
              .healthResourceReference, .knowledgeCards, .taskCards, .captureCard, .html,
-             .pendingMemberToolCards, .toolQuestionCards, .toolMemberSelectionCards:
+             .pendingMemberToolCards, .toolQuestionCards, .toolMemberSelectionCards,
+             .healthResourceCandidateCards, .toolConsentCards:
             return true
         default:
             return false

@@ -31,6 +31,11 @@ struct ChatRenderContext {
     let onPendingMemberToolSelect: (PendingMemberToolCard, Int?) -> Void  // 待处理成员工具选择
     let onToolQuestionCardSubmit: (ChatToolQuestionCard, [ToolQuestionResponse]) -> Void
     let onToolMemberSelectionCardSubmit: (ChatToolMemberSelectionCard, Int) -> Void
+    let onHealthResourceCandidateCardChoose: (ChatHealthResourceCandidateSelectionCard) -> Void
+    let onHealthResourceCandidateCardSkip: (ChatHealthResourceCandidateSelectionCard) -> Void
+    let onToolConsentCardAllow: (ChatToolConsentCard) -> Void
+    let onToolConsentCardDeny: (ChatToolConsentCard) -> Void
+    let onToolConsentCardShowDetails: (ChatToolConsentCard) -> Void
     let onStructuredHealthCardAction: (ChatStructuredHealthCardAction) -> Void  // 健康卡片操作
     let onNutritionCardAction: (ChatNutritionCardAction) -> Void                // 营养卡片操作
     let onCaptureOpenCamera: () -> Void                    // 打开相机
@@ -76,6 +81,11 @@ extension ChatRenderContext {
             onPendingMemberToolSelect: onPendingMemberToolSelect,
             onToolQuestionCardSubmit: onToolQuestionCardSubmit,
             onToolMemberSelectionCardSubmit: onToolMemberSelectionCardSubmit,
+            onHealthResourceCandidateCardChoose: onHealthResourceCandidateCardChoose,
+            onHealthResourceCandidateCardSkip: onHealthResourceCandidateCardSkip,
+            onToolConsentCardAllow: onToolConsentCardAllow,
+            onToolConsentCardDeny: onToolConsentCardDeny,
+            onToolConsentCardShowDetails: onToolConsentCardShowDetails,
             onStructuredHealthCardAction: onStructuredHealthCardAction,
             onNutritionCardAction: onNutritionCardAction,
             onCaptureOpenCamera: onCaptureOpenCamera,

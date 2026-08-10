@@ -912,7 +912,8 @@ actor MessageRunActor: ChatSideEffectSink {
             return 2_100
         case .sleepVisualization, .workoutVisualization, .nutritionCards, .healthResourceReference,
                 .captureCard, .knowledgeCards, .html, .taskCards,
-                .pendingMemberToolCards, .toolQuestionCards, .toolMemberSelectionCards:
+                .pendingMemberToolCards, .toolQuestionCards, .toolMemberSelectionCards,
+                .healthResourceCandidateCards, .toolConsentCards:
             return 2_100
         case .medicalRiskNotice:
             return 2_900
@@ -1071,6 +1072,8 @@ private extension ChatMessageBlock {
             pendingMemberToolCards: pendingMemberToolCards,
             toolQuestionCards: toolQuestionCards,
             toolMemberSelectionCards: toolMemberSelectionCards,
+            healthResourceCandidateCards: healthResourceCandidateCards,
+            toolConsentCards: toolConsentCards,
             locations: locations,
             routes: routes,
             events: events,

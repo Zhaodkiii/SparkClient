@@ -7,7 +7,7 @@ enum InteractionResult<Success: Sendable>: Sendable {
     case conflict
 }
 
-struct ToolConsentDecision: Equatable, Sendable {
+nonisolated struct ToolConsentDecision: Codable, Equatable, Sendable {
     let allowed: Bool
     let rememberTool: Bool
 }

@@ -495,3 +495,312 @@ struct ChatToolMemberSelectionMessageCardView: View {
         RoundedRectangle(cornerRadius: ChatToolInteractionCardStyle.optionCornerRadius, style: .continuous)
     }
 }
+
+struct ChatHealthResourceCandidateMessageCardView: View {
+    let card: ChatHealthResourceCandidateSelectionCard
+    let onChoose: (ChatHealthResourceCandidateSelectionCard) -> Void
+    let onSkip: (ChatHealthResourceCandidateSelectionCard) -> Void
+
+    private var isResolved: Bool {
+        card.status != .pending
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            cardHeader
+
+            if isResolved {
+                resolvedSummary
+                    .padding(.top, 12)
+            } else {
+                candidatePreview
+                    .padding(.top, 12)
+                footerActions
+                    .padding(.top, 12)
+            }
+        }
+        .padding(ChatToolInteractionCardStyle.cardPadding)
+        .background(ChatToolInteractionCardStyle.cardBackground, in: cardShape)
+        .overlay {
+            cardShape.strokeBorder(ChatToolInteractionCardStyle.borderColor, lineWidth: 1)
+        }
+        .shadow(color: Color.black.opacity(0.04), radius: 12, x: 0, y: 6)
+        .padding(.top, 8)
+    }
+
+    private var cardHeader: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "doc.text.magnifyingglass")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: ChatToolInteractionCardStyle.badgeSize, height: ChatToolInteractionCardStyle.badgeSize)
+                .background(Color.accentColor.opacity(0.12), in: Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(isResolved ? resolvedTitle : "选择健康资料以继续")
+                    .font(.system(size: ChatToolInteractionCardStyle.headerFontSize, weight: .medium))
+                    .foregroundStyle(.primary)
+                Text(isResolved ? resolvedSubtitle : "AI 找到多份可能相关的资料，你可以选择本次解读范围。")
+                    .font(.system(size: ChatToolInteractionCardStyle.subtitleFontSize))
+                    .foregroundStyle(ChatToolInteractionCardStyle.mutedText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var candidatePreview: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(card.prompt.candidates.prefix(3)) { candidate in
+                candidateRow(candidate)
+            }
+            if card.prompt.candidates.count > 3 {
+                Text("还有 \(card.prompt.candidates.count - 3) 份资料可选")
+                    .font(.system(size: ChatToolInteractionCardStyle.footerFontSize))
+                    .foregroundStyle(ChatToolInteractionCardStyle.mutedText)
+            }
+        }
+    }
+
+    private func candidateRow(_ candidate: HealthResourceToolCandidateDTO) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(candidate.title)
+                .font(.system(size: ChatToolInteractionCardStyle.optionTitleFontSize, weight: .medium))
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+            HStack(spacing: 6) {
+                if let occurredAt = candidate.occurredAt, occurredAt.isEmpty == false {
+                    Text(occurredAt)
+                }
+                if let institution = candidate.institution, institution.isEmpty == false {
+                    Text(institution)
+                }
+            }
+            .font(.system(size: ChatToolInteractionCardStyle.optionDescriptionFontSize))
+            .foregroundStyle(.secondary)
+            Text(candidate.matchReason)
+                .font(.system(size: ChatToolInteractionCardStyle.optionDescriptionFontSize))
+                .foregroundStyle(ChatToolInteractionCardStyle.mutedText)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(Color(.systemBackground).opacity(0.6), in: optionShape)
+        .overlay {
+            optionShape.strokeBorder(ChatToolInteractionCardStyle.borderColor, lineWidth: 1)
+        }
+    }
+
+    private var footerActions: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Text("选择或跳过后，AI 会继续回答。")
+                .font(.system(size: ChatToolInteractionCardStyle.footerFontSize))
+                .foregroundStyle(ChatToolInteractionCardStyle.mutedText)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button("跳过") {
+                onSkip(card)
+            }
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .buttonStyle(.plain)
+
+            Button("选择资料") {
+                onChoose(card)
+            }
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(Color.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .buttonStyle(.plain)
+        }
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(ChatToolInteractionCardStyle.borderColor.opacity(0.6))
+                .frame(height: 1)
+        }
+        .padding(.top, 12)
+    }
+
+    private var resolvedSummary: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(resolvedTitle, systemImage: card.status == .submitted ? "checkmark.circle.fill" : "forward.circle.fill")
+                .font(.system(size: ChatToolInteractionCardStyle.headerFontSize, weight: .semibold))
+                .foregroundStyle(card.status == .submitted ? .green : .secondary)
+
+            if card.selectedCandidates.isEmpty {
+                Text(card.resultText ?? "已跳过资料选择。")
+                    .font(.system(size: ChatToolInteractionCardStyle.bodyFontSize))
+                    .foregroundStyle(.primary)
+            } else {
+                ForEach(card.selectedCandidates) { candidate in
+                    Text(candidate.title)
+                        .font(.system(size: ChatToolInteractionCardStyle.bodyFontSize))
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                }
+            }
+        }
+    }
+
+    private var resolvedTitle: String {
+        switch card.status {
+        case .submitted:
+            return "已选择健康资料"
+        case .cancelled:
+            return "已跳过资料选择"
+        case .expired:
+            return "本次等待已失效"
+        case .pending:
+            return "等待选择健康资料"
+        }
+    }
+
+    private var resolvedSubtitle: String {
+        if card.selectedCandidates.isEmpty {
+            return "AI 将在未限定资料范围的情况下继续。"
+        }
+        return "AI 将基于已选资料继续。"
+    }
+
+    private var cardShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: ChatToolInteractionCardStyle.cardCornerRadius, style: .continuous)
+    }
+
+    private var optionShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: ChatToolInteractionCardStyle.optionCornerRadius, style: .continuous)
+    }
+}
+
+struct ChatToolConsentMessageCardView: View {
+    let card: ChatToolConsentCard
+    let onAllow: (ChatToolConsentCard) -> Void
+    let onDeny: (ChatToolConsentCard) -> Void
+    let onShowDetails: (ChatToolConsentCard) -> Void
+
+    private var isResolved: Bool {
+        card.status != .pending
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(card.prompt.dataLines, id: \.self) { line in
+                    Text(line)
+                        .font(.system(size: ChatToolInteractionCardStyle.optionDescriptionFontSize))
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                providerLine
+            }
+            .padding(.top, 12)
+
+            if isResolved {
+                resolvedSummary
+                    .padding(.top, 12)
+            } else {
+                actions
+                    .padding(.top, 12)
+            }
+        }
+        .padding(ChatToolInteractionCardStyle.cardPadding)
+        .background(ChatToolInteractionCardStyle.cardBackground, in: cardShape)
+        .overlay {
+            cardShape.strokeBorder(ChatToolInteractionCardStyle.borderColor, lineWidth: 1)
+        }
+        .shadow(color: Color.black.opacity(0.04), radius: 12, x: 0, y: 6)
+        .padding(.top, 8)
+    }
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "checkmark.shield")
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: ChatToolInteractionCardStyle.badgeSize, height: ChatToolInteractionCardStyle.badgeSize)
+                .background(Color.accentColor.opacity(0.12), in: Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(isResolved ? resolvedTitle : "将工具结果发送至 AI")
+                    .font(.system(size: ChatToolInteractionCardStyle.headerFontSize, weight: .medium))
+                    .foregroundStyle(.primary)
+                Text("工具已在本地完成，继续前需要确认是否发送结果给模型。")
+                    .font(.system(size: ChatToolInteractionCardStyle.subtitleFontSize))
+                    .foregroundStyle(ChatToolInteractionCardStyle.mutedText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var providerLine: some View {
+        HStack(spacing: 6) {
+            Text(card.prompt.providerCompany)
+            Text(card.prompt.modelLine)
+        }
+        .font(.system(size: ChatToolInteractionCardStyle.footerFontSize))
+        .foregroundStyle(ChatToolInteractionCardStyle.mutedText)
+    }
+
+    private var actions: some View {
+        HStack(alignment: .center, spacing: 8) {
+            Button("拒绝") {
+                onDeny(card)
+            }
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .buttonStyle(.plain)
+
+            Button("查看详情") {
+                onShowDetails(card)
+            }
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .buttonStyle(.plain)
+
+            Button("授权") {
+                onAllow(card)
+            }
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(Color.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .buttonStyle(.plain)
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill(ChatToolInteractionCardStyle.borderColor.opacity(0.6))
+                .frame(height: 1)
+        }
+        .padding(.top, 12)
+    }
+
+    private var resolvedSummary: some View {
+        Label(card.resultText ?? resolvedTitle, systemImage: card.decision?.allowed == true ? "checkmark.circle.fill" : "xmark.circle.fill")
+            .font(.system(size: ChatToolInteractionCardStyle.headerFontSize, weight: .semibold))
+            .foregroundStyle(card.decision?.allowed == true ? .green : .secondary)
+    }
+
+    private var resolvedTitle: String {
+        if card.decision?.allowed == true { return "已授权发送" }
+        return "已拒绝发送"
+    }
+
+    private var cardShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: ChatToolInteractionCardStyle.cardCornerRadius, style: .continuous)
+    }
+}

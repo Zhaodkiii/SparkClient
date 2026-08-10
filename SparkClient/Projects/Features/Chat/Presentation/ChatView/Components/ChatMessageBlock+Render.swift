@@ -109,6 +109,25 @@ extension ChatMessageBlock {
                     onSubmit: context.onToolMemberSelectionCardSubmit
                 )
             }
+
+        case .healthResourceCandidateCards(let cards):
+            ForEach(cards) { card in
+                ChatHealthResourceCandidateMessageCardView(
+                    card: card,
+                    onChoose: context.onHealthResourceCandidateCardChoose,
+                    onSkip: context.onHealthResourceCandidateCardSkip
+                )
+            }
+
+        case .toolConsentCards(let cards):
+            ForEach(cards) { card in
+                ChatToolConsentMessageCardView(
+                    card: card,
+                    onAllow: context.onToolConsentCardAllow,
+                    onDeny: context.onToolConsentCardDeny,
+                    onShowDetails: context.onToolConsentCardShowDetails
+                )
+            }
             
             // 11. 结构化健康卡片
         case .structuredHealthCards(let blob):
@@ -294,6 +313,10 @@ extension ChatMessageBlock {
             return "等待用户回答..."
         case .toolMemberSelectionCards:
             return "等待选择成员..."
+        case .healthResourceCandidateCards:
+            return "等待选择健康资料..."
+        case .toolConsentCards:
+            return "等待数据授权..."
         default:
             return "正在整理结果..."
         }

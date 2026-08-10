@@ -183,6 +183,11 @@ struct ChatConversationMessageRow: View {
             onPendingMemberToolSelect: { _, _ in },
             onToolQuestionCardSubmit: { _, _ in },
             onToolMemberSelectionCardSubmit: { _, _ in },
+            onHealthResourceCandidateCardChoose: { _ in },
+            onHealthResourceCandidateCardSkip: { _ in },
+            onToolConsentCardAllow: { _ in },
+            onToolConsentCardDeny: { _ in },
+            onToolConsentCardShowDetails: { _ in },
             savingStructuredHealthCardIDs: [],
             savingNutritionCardIDs: [],
             onStructuredHealthCardAction: { _ in },
@@ -288,6 +293,53 @@ struct ChatConversationMessageRow: View {
                         message: message,
                         card: card,
                         memberID: memberID
+                    )
+                }
+            },
+            onHealthResourceCandidateCardChoose: { card in
+                Task {
+                    await detailViewModel.chooseInlineHealthResourceCandidateCard(
+                        threadID: threadID,
+                        message: message,
+                        card: card
+                    )
+                }
+            },
+            onHealthResourceCandidateCardSkip: { card in
+                Task {
+                    await detailViewModel.skipInlineHealthResourceCandidateCard(
+                        threadID: threadID,
+                        message: message,
+                        card: card
+                    )
+                }
+            },
+            onToolConsentCardAllow: { card in
+                Task {
+                    await detailViewModel.resolveInlineToolConsentCard(
+                        threadID: threadID,
+                        message: message,
+                        card: card,
+                        decision: ToolConsentDecision(allowed: true, rememberTool: false)
+                    )
+                }
+            },
+            onToolConsentCardDeny: { card in
+                Task {
+                    await detailViewModel.resolveInlineToolConsentCard(
+                        threadID: threadID,
+                        message: message,
+                        card: card,
+                        decision: ToolConsentDecision(allowed: false, rememberTool: false)
+                    )
+                }
+            },
+            onToolConsentCardShowDetails: { card in
+                Task {
+                    await detailViewModel.showInlineToolConsentDetails(
+                        threadID: threadID,
+                        message: message,
+                        card: card
                     )
                 }
             },

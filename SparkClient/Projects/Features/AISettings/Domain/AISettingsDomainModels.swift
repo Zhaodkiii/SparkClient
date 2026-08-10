@@ -377,8 +377,8 @@ nonisolated struct ChatToolInteractionPreferences: Codable, Equatable, Sendable 
     var questionPresentationMode: ChatToolInteractionPresentationMode
 
     static let fallback = ChatToolInteractionPreferences(
-        memberSelectionPresentationMode: .sheet,
-        questionPresentationMode: .sheet
+        memberSelectionPresentationMode: .inlineCard,
+        questionPresentationMode: .inlineCard
     )
 
     static var `default`: ChatToolInteractionPreferences {

@@ -102,6 +102,10 @@ nonisolated enum ChatMessageBlockKind: String, Codable, Sendable {
     case toolQuestionCards
     /// 工具成员选择消息内卡片块
     case toolMemberSelectionCards
+    /// 健康资料候选选择消息内卡片块
+    case healthResourceCandidateCards
+    /// 工具结果发送给 AI 前的数据授权消息内卡片块
+    case toolConsentCards
     /// 结构化健康卡片块
     case structuredHealthCards
     /// 睡眠可视化展示块
@@ -217,6 +221,8 @@ nonisolated enum ChatMessageBlockPayload: Codable, Equatable, Sendable {
     case pendingMemberToolCards([PendingMemberToolCard])
     case toolQuestionCards([ChatToolQuestionCard])
     case toolMemberSelectionCards([ChatToolMemberSelectionCard])
+    case healthResourceCandidateCards([ChatHealthResourceCandidateSelectionCard])
+    case toolConsentCards([ChatToolConsentCard])
     case structuredHealthCards(StructuredHealthCardsBlob)
     case sleepVisualization(ChatHealthSleepModel)
     case nutritionCards(ChatNutritionCardsPayload)
@@ -246,6 +252,8 @@ nonisolated enum ChatMessageBlockPayload: Codable, Equatable, Sendable {
         case .pendingMemberToolCards: return .pendingMemberToolCards
         case .toolQuestionCards: return .toolQuestionCards
         case .toolMemberSelectionCards: return .toolMemberSelectionCards
+        case .healthResourceCandidateCards: return .healthResourceCandidateCards
+        case .toolConsentCards: return .toolConsentCards
         case .structuredHealthCards: return .structuredHealthCards
         case .sleepVisualization: return .sleepVisualization
         case .nutritionCards: return .nutritionCards
@@ -366,6 +374,18 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         guard case .toolMemberSelectionCards(let cards) = payload else { return [] }
         return cards
     }
+
+    /// 健康资料候选选择消息内卡片列表
+    nonisolated var healthResourceCandidateCards: [ChatHealthResourceCandidateSelectionCard] {
+        guard case .healthResourceCandidateCards(let cards) = payload else { return [] }
+        return cards
+    }
+
+    /// 工具结果发送给 AI 前的数据授权消息内卡片列表
+    nonisolated var toolConsentCards: [ChatToolConsentCard] {
+        guard case .toolConsentCards(let cards) = payload else { return [] }
+        return cards
+    }
     
     /// 地图位置列表
     nonisolated var locations: [ChatMapLocationPayload] {
@@ -464,6 +484,8 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         pendingMemberToolCards: [PendingMemberToolCard] = [],
         toolQuestionCards: [ChatToolQuestionCard] = [],
         toolMemberSelectionCards: [ChatToolMemberSelectionCard] = [],
+        healthResourceCandidateCards: [ChatHealthResourceCandidateSelectionCard] = [],
+        toolConsentCards: [ChatToolConsentCard] = [],
         locations: [ChatMapLocationPayload] = [],
         routes: [ChatRoutePayload] = [],
         events: [ChatEventPayload] = [],
@@ -503,6 +525,8 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
             pendingMemberToolCards: pendingMemberToolCards,
             toolQuestionCards: toolQuestionCards,
             toolMemberSelectionCards: toolMemberSelectionCards,
+            healthResourceCandidateCards: healthResourceCandidateCards,
+            toolConsentCards: toolConsentCards,
             locations: locations,
             routes: routes,
             events: events,
@@ -539,6 +563,8 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         pendingMemberToolCards: [PendingMemberToolCard],
         toolQuestionCards: [ChatToolQuestionCard],
         toolMemberSelectionCards: [ChatToolMemberSelectionCard],
+        healthResourceCandidateCards: [ChatHealthResourceCandidateSelectionCard],
+        toolConsentCards: [ChatToolConsentCard],
         locations: [ChatMapLocationPayload],
         routes: [ChatRoutePayload],
         events: [ChatEventPayload],
@@ -594,6 +620,10 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
             return .toolQuestionCards(toolQuestionCards)
         case .toolMemberSelectionCards:
             return .toolMemberSelectionCards(toolMemberSelectionCards)
+        case .healthResourceCandidateCards:
+            return .healthResourceCandidateCards(healthResourceCandidateCards)
+        case .toolConsentCards:
+            return .toolConsentCards(toolConsentCards)
         case .structuredHealthCards:
             return .structuredHealthCards(structuredHealthCards ?? .empty)
         case .sleepVisualization:
@@ -874,10 +904,30 @@ extension ChatMessage {
     /// 由工具消息块构造全局工具详情 Sheet 的载荷（含同 `toolCallID` 关联块 id）。
     nonisolated func makeToolPreviewPrompt(forToolBlock toolBlock: ChatMessageBlock) -> ToolPreviewPrompt? {
         guard case .tool(let t) = toolBlock.payload else { return nil }
+        let nextToolOrderKey = blocks
+            .filter { $0.nodeRole == .tool && $0.id != toolBlock.id }
+            .compactMap(\.orderKey)
+            .filter { next in
+                guard let current = toolBlock.orderKey else { return false }
+                return next > current
+            }
+            .min()
         let related = blocks.filter {
-            $0.id != toolBlock.id
-                && $0.nodeRole == .toolPresentation
-                && ($0.parentToolCallID ?? $0.toolCallID) == toolBlock.toolCallID
+            guard $0.id != toolBlock.id, $0.nodeRole == .toolPresentation else { return false }
+            if ($0.parentToolCallID ?? $0.toolCallID) == toolBlock.toolCallID {
+                return true
+            }
+            guard $0.isInlineToolInteractionPresentationBlock,
+                  let toolOrder = toolBlock.orderKey,
+                  let blockOrder = $0.orderKey,
+                  blockOrder > toolOrder
+            else {
+                return false
+            }
+            if let nextToolOrderKey {
+                return blockOrder < nextToolOrderKey
+            }
+            return true
         }
         return ToolPreviewPrompt(
             toolName: ChatToolRuntimeAttachmentBuilder.localizedDisplayName(for: t.name),
@@ -922,7 +972,10 @@ extension ChatMessage {
 extension ChatMessageBlock {
     nonisolated var isInlineToolInteractionPresentationBlock: Bool {
         guard nodeRole == .toolPresentation else { return false }
-        return kind == .toolQuestionCards || kind == .toolMemberSelectionCards
+        return kind == .toolQuestionCards
+            || kind == .toolMemberSelectionCards
+            || kind == .healthResourceCandidateCards
+            || kind == .toolConsentCards
     }
 }
 

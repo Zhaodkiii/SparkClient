@@ -29,7 +29,8 @@ extension ToolHub {
             providerCompany: context.providerCompany,
             modelName: context.modelName,
             endpoint: context.endpoint,
-            privacyPolicyURL: context.privacyPolicyURL
+            privacyPolicyURL: context.privacyPolicyURL,
+            toolCallID: context.pendingToolCallID
         )
         switch decision {
         case .success(let decision):

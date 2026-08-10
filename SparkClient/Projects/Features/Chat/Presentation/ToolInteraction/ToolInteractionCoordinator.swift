@@ -6,13 +6,29 @@ protocol ChatInlineToolInteractionCardSink: AnyObject {
     func presentInlineQuestionCard(
         threadID: UUID?,
         prompt: ToolQuestionPrompt,
-        completionID: UUID
+        completionID: UUID,
+        toolCallID: String?
     ) async -> Bool
 
     func presentInlineMemberSelectionCard(
         threadID: UUID?,
         prompt: ToolMemberSelectionPrompt,
-        completionID: UUID
+        completionID: UUID,
+        toolCallID: String?
+    ) async -> Bool
+
+    func presentInlineHealthResourceCandidateCard(
+        threadID: UUID?,
+        prompt: HealthResourceToolCandidatePrompt,
+        completionID: UUID,
+        toolCallID: String?
+    ) async -> Bool
+
+    func presentInlineToolConsentCard(
+        threadID: UUID?,
+        prompt: ExternalToolDataSharePrompt,
+        completionID: UUID,
+        toolCallID: String?
     ) async -> Bool
 }
 
@@ -74,6 +90,8 @@ final class ToolInteractionCoordinator: ObservableObject {
     private var pendingOutcome: PendingOutcome?
     private var inlineQuestionContinuations: [UUID: CheckedContinuation<InteractionResult<ToolQuestionAnswer>, Never>] = [:]
     private var inlineMemberContinuations: [UUID: CheckedContinuation<InteractionResult<Int>, Never>] = [:]
+    private var inlineHealthResourceCandidateContinuations: [UUID: CheckedContinuation<InteractionResult<[HealthResourceToolCandidateDTO]>, Never>] = [:]
+    private var inlineConsentContinuations: [UUID: CheckedContinuation<InteractionResult<ToolConsentDecision>, Never>] = [:]
     weak var inlineCardSink: (any ChatInlineToolInteractionCardSink)?
     private var interactionPreferences: ChatToolInteractionPreferences = .default
 
@@ -90,13 +108,14 @@ final class ToolInteractionCoordinator: ObservableObject {
     /// 请求用户授权（是否允许工具使用/数据上传）
     /// - Returns: 用户授权决策结果
     func requestConsentDecision(
-        threadID _: UUID?,
+        threadID: UUID?,
         result: ToolExecutionResult,
         callArguments: String,
         providerCompany: String?,
         modelName: String?,
         endpoint: String?,
-        privacyPolicyURL: URL?
+        privacyPolicyURL: URL?,
+        toolCallID: String? = nil
     ) async -> InteractionResult<ToolConsentDecision> {
         // 构建授权弹窗数据
         let prompt = ConsentPayloadBuilder.makeSharePrompt(
@@ -107,6 +126,20 @@ final class ToolInteractionCoordinator: ObservableObject {
             endpoint: endpoint,
             privacyPolicyURL: privacyPolicyURL
         )
+        if let inlineCardSink {
+            return await requestInlineConsentDecision(
+                threadID: threadID,
+                prompt: prompt,
+                toolCallID: toolCallID,
+                sink: inlineCardSink
+            )
+        }
+        return await requestConsentDecisionSheet(prompt: prompt)
+    }
+
+    func requestConsentDecisionSheet(
+        prompt: ExternalToolDataSharePrompt
+    ) async -> InteractionResult<ToolConsentDecision> {
         let id = prompt.id
         let snapshot = ToolInteractionSnapshot.consent(prompt)
         
@@ -123,12 +156,17 @@ final class ToolInteractionCoordinator: ObservableObject {
     }
 
     /// 请求用户回答工具提出的问题
-    func requestQuestionAnswer(threadID: UUID?, prompt: ToolQuestionPrompt) async -> InteractionResult<ToolQuestionAnswer> {
+    func requestQuestionAnswer(
+        threadID: UUID?,
+        prompt: ToolQuestionPrompt,
+        toolCallID: String? = nil
+    ) async -> InteractionResult<ToolQuestionAnswer> {
         if interactionPreferences.questionPresentationMode == .inlineCard,
            let inlineCardSink {
             return await requestInlineQuestionAnswer(
                 threadID: threadID,
                 prompt: prompt,
+                toolCallID: toolCallID,
                 sink: inlineCardSink
             )
         }
@@ -145,12 +183,17 @@ final class ToolInteractionCoordinator: ObservableObject {
     }
 
     /// 请求用户选择成员
-    func requestMemberSelection(threadID: UUID?, prompt: ToolMemberSelectionPrompt) async -> InteractionResult<Int> {
+    func requestMemberSelection(
+        threadID: UUID?,
+        prompt: ToolMemberSelectionPrompt,
+        toolCallID: String? = nil
+    ) async -> InteractionResult<Int> {
         if interactionPreferences.memberSelectionPresentationMode == .inlineCard,
            let inlineCardSink {
             return await requestInlineMemberSelection(
                 threadID: threadID,
                 prompt: prompt,
+                toolCallID: toolCallID,
                 sink: inlineCardSink
             )
         }
@@ -200,6 +243,21 @@ final class ToolInteractionCoordinator: ObservableObject {
 
     /// 请求用户确认健康资料候选（阻塞直至确认或取消，与敏感数据授权一致）。
     func requestHealthResourceCandidateSelection(
+        prompt: HealthResourceToolCandidatePrompt,
+        toolCallID: String? = nil
+    ) async -> InteractionResult<[HealthResourceToolCandidateDTO]> {
+        if let inlineCardSink {
+            return await requestInlineHealthResourceCandidateSelection(
+                threadID: prompt.threadID,
+                prompt: prompt,
+                toolCallID: toolCallID,
+                sink: inlineCardSink
+            )
+        }
+        return await requestHealthResourceCandidateSelectionSheet(prompt: prompt)
+    }
+
+    func requestHealthResourceCandidateSelectionSheet(
         prompt: HealthResourceToolCandidatePrompt
     ) async -> InteractionResult<[HealthResourceToolCandidateDTO]> {
         let snapshot = ToolInteractionSnapshot.healthResourceCandidates(prompt)
@@ -312,9 +370,30 @@ final class ToolInteractionCoordinator: ObservableObject {
         continuation.resume(returning: .cancelled)
     }
 
+    func completeInlineHealthResourceCandidates(id: UUID, selected: [HealthResourceToolCandidateDTO]) {
+        guard let continuation = inlineHealthResourceCandidateContinuations.removeValue(forKey: id) else { return }
+        continuation.resume(returning: .success(selected))
+    }
+
+    func cancelInlineHealthResourceCandidates(id: UUID) {
+        guard let continuation = inlineHealthResourceCandidateContinuations.removeValue(forKey: id) else { return }
+        continuation.resume(returning: .cancelled)
+    }
+
+    func completeInlineConsent(id: UUID, decision: ToolConsentDecision) {
+        guard let continuation = inlineConsentContinuations.removeValue(forKey: id) else { return }
+        continuation.resume(returning: .success(decision))
+    }
+
+    func cancelInlineConsent(id: UUID) {
+        guard let continuation = inlineConsentContinuations.removeValue(forKey: id) else { return }
+        continuation.resume(returning: .cancelled)
+    }
+
     private func requestInlineQuestionAnswer(
         threadID: UUID?,
         prompt: ToolQuestionPrompt,
+        toolCallID: String?,
         sink: any ChatInlineToolInteractionCardSink
     ) async -> InteractionResult<ToolQuestionAnswer> {
         let completionID = UUID()
@@ -324,7 +403,8 @@ final class ToolInteractionCoordinator: ObservableObject {
                 let didPresent = await sink.presentInlineQuestionCard(
                     threadID: threadID,
                     prompt: prompt,
-                    completionID: completionID
+                    completionID: completionID,
+                    toolCallID: toolCallID
                 )
                 if didPresent == false {
                     await MainActor.run {
@@ -338,6 +418,7 @@ final class ToolInteractionCoordinator: ObservableObject {
     private func requestInlineMemberSelection(
         threadID: UUID?,
         prompt: ToolMemberSelectionPrompt,
+        toolCallID: String?,
         sink: any ChatInlineToolInteractionCardSink
     ) async -> InteractionResult<Int> {
         let completionID = UUID()
@@ -347,11 +428,62 @@ final class ToolInteractionCoordinator: ObservableObject {
                 let didPresent = await sink.presentInlineMemberSelectionCard(
                     threadID: threadID,
                     prompt: prompt,
-                    completionID: completionID
+                    completionID: completionID,
+                    toolCallID: toolCallID
                 )
                 if didPresent == false {
                     await MainActor.run {
                         self.cancelInlineMemberSelection(id: completionID)
+                    }
+                }
+            }
+        }
+    }
+
+    private func requestInlineHealthResourceCandidateSelection(
+        threadID: UUID?,
+        prompt: HealthResourceToolCandidatePrompt,
+        toolCallID: String?,
+        sink: any ChatInlineToolInteractionCardSink
+    ) async -> InteractionResult<[HealthResourceToolCandidateDTO]> {
+        let completionID = UUID()
+        return await withCheckedContinuation { continuation in
+            inlineHealthResourceCandidateContinuations[completionID] = continuation
+            Task {
+                let didPresent = await sink.presentInlineHealthResourceCandidateCard(
+                    threadID: threadID,
+                    prompt: prompt,
+                    completionID: completionID,
+                    toolCallID: toolCallID
+                )
+                if didPresent == false {
+                    await MainActor.run {
+                        self.cancelInlineHealthResourceCandidates(id: completionID)
+                    }
+                }
+            }
+        }
+    }
+
+    private func requestInlineConsentDecision(
+        threadID: UUID?,
+        prompt: ExternalToolDataSharePrompt,
+        toolCallID: String?,
+        sink: any ChatInlineToolInteractionCardSink
+    ) async -> InteractionResult<ToolConsentDecision> {
+        let completionID = UUID()
+        return await withCheckedContinuation { continuation in
+            inlineConsentContinuations[completionID] = continuation
+            Task {
+                let didPresent = await sink.presentInlineToolConsentCard(
+                    threadID: threadID,
+                    prompt: prompt,
+                    completionID: completionID,
+                    toolCallID: toolCallID
+                )
+                if didPresent == false {
+                    await MainActor.run {
+                        self.cancelInlineConsent(id: completionID)
                     }
                 }
             }

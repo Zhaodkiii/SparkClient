@@ -39,6 +39,11 @@ struct ChatMessageBubbleContentView: View {
     let onPendingMemberToolSelect: (PendingMemberToolCard, Int?) -> Void
     let onToolQuestionCardSubmit: (ChatToolQuestionCard, [ToolQuestionResponse]) -> Void
     let onToolMemberSelectionCardSubmit: (ChatToolMemberSelectionCard, Int) -> Void
+    let onHealthResourceCandidateCardChoose: (ChatHealthResourceCandidateSelectionCard) -> Void
+    let onHealthResourceCandidateCardSkip: (ChatHealthResourceCandidateSelectionCard) -> Void
+    let onToolConsentCardAllow: (ChatToolConsentCard) -> Void
+    let onToolConsentCardDeny: (ChatToolConsentCard) -> Void
+    let onToolConsentCardShowDetails: (ChatToolConsentCard) -> Void
     let savingStructuredHealthCardIDs: Set<UUID>
     let savingNutritionCardIDs: Set<UUID>
     let onStructuredHealthCardAction: (ChatStructuredHealthCardAction) -> Void
@@ -103,6 +108,11 @@ struct ChatMessageBubbleContentView: View {
             onPendingMemberToolSelect: onPendingMemberToolSelect,
             onToolQuestionCardSubmit: onToolQuestionCardSubmit,
             onToolMemberSelectionCardSubmit: onToolMemberSelectionCardSubmit,
+            onHealthResourceCandidateCardChoose: onHealthResourceCandidateCardChoose,
+            onHealthResourceCandidateCardSkip: onHealthResourceCandidateCardSkip,
+            onToolConsentCardAllow: onToolConsentCardAllow,
+            onToolConsentCardDeny: onToolConsentCardDeny,
+            onToolConsentCardShowDetails: onToolConsentCardShowDetails,
             onStructuredHealthCardAction: onStructuredHealthCardAction,
             onNutritionCardAction: onNutritionCardAction,
             onCaptureOpenCamera: onCaptureOpenCamera,
@@ -499,6 +509,8 @@ private enum ChatMessageTimelineProjector {
                 .pendingMemberToolCards,
                 .toolQuestionCards,
                 .toolMemberSelectionCards,
+                .healthResourceCandidateCards,
+                .toolConsentCards,
                 .structuredHealthCards,
                 .sleepVisualization,
                 .nutritionCards,
@@ -567,6 +579,10 @@ private struct ChatToolTimelineNodeView: View {
             return "等待用户回答..."
         case .toolMemberSelectionCards, .pendingMemberToolCards:
             return "等待选择成员..."
+        case .healthResourceCandidateCards:
+            return "等待选择健康资料..."
+        case .toolConsentCards:
+            return "等待数据授权..."
         default:
             return "正在整理结果..."
         }
