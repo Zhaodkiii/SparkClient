@@ -37,6 +37,8 @@ struct ChatMessageBubbleContentView: View {
     let onSaveKnowledgeCard: (ChatKnowledgeCard) -> Void
     let onTaskCardAction: (TaskCard.Action) -> Void
     let onPendingMemberToolSelect: (PendingMemberToolCard, Int?) -> Void
+    let onToolQuestionCardSubmit: (ChatToolQuestionCard, [ToolQuestionResponse]) -> Void
+    let onToolMemberSelectionCardSubmit: (ChatToolMemberSelectionCard, Int) -> Void
     let savingStructuredHealthCardIDs: Set<UUID>
     let savingNutritionCardIDs: Set<UUID>
     let onStructuredHealthCardAction: (ChatStructuredHealthCardAction) -> Void
@@ -99,6 +101,8 @@ struct ChatMessageBubbleContentView: View {
             onSaveKnowledgeCard: onSaveKnowledgeCard,
             onTaskCardAction: onTaskCardAction,
             onPendingMemberToolSelect: onPendingMemberToolSelect,
+            onToolQuestionCardSubmit: onToolQuestionCardSubmit,
+            onToolMemberSelectionCardSubmit: onToolMemberSelectionCardSubmit,
             onStructuredHealthCardAction: onStructuredHealthCardAction,
             onNutritionCardAction: onNutritionCardAction,
             onCaptureOpenCamera: onCaptureOpenCamera,
@@ -493,6 +497,8 @@ private enum ChatMessageTimelineProjector {
                 .events,
                 .healthCards,
                 .pendingMemberToolCards,
+                .toolQuestionCards,
+                .toolMemberSelectionCards,
                 .structuredHealthCards,
                 .sleepVisualization,
                 .nutritionCards,
@@ -557,6 +563,10 @@ private struct ChatToolTimelineNodeView: View {
             return "正在创建提醒..."
         case .captureCard:
             return "正在准备采集卡片..."
+        case .toolQuestionCards:
+            return "等待用户回答..."
+        case .toolMemberSelectionCards, .pendingMemberToolCards:
+            return "等待选择成员..."
         default:
             return "正在整理结果..."
         }

@@ -3,7 +3,7 @@ import Foundation
 import SwiftUI
 
 @MainActor
-final class ChatDetailViewModel: ObservableObject {
+final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCardSink {
     private let stateStore: ChatStateStore
     private let memberContextStore: MemberContextStore
     private let chatRepository: any ChatRepository
@@ -166,6 +166,11 @@ final class ChatDetailViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
+        toolInteractionCoordinator.configureInlineCardSink(self)
+    }
+
+    func updateToolInteractionPreferences(_ preferences: ChatToolInteractionPreferences) {
+        toolInteractionCoordinator.updateInteractionPreferences(preferences)
     }
 
     /// 打开工具输出详情全局 Sheet（与 consent/question 共用同一呈现队列）。
@@ -1382,6 +1387,130 @@ final class ChatDetailViewModel: ObservableObject {
         }
     }
 
+    func presentInlineQuestionCard(
+        threadID: UUID?,
+        prompt: ToolQuestionPrompt,
+        completionID: UUID
+    ) async -> Bool {
+        guard let target = await inlineToolInteractionTargetMessage(threadID: threadID) else {
+            return false
+        }
+        let card = ChatToolQuestionCard(
+            completionID: completionID,
+            prompt: prompt
+        )
+        let block = ChatMessageBlock(
+            id: ChatStableBlockID.rich(
+                messageID: target.clientMessageID,
+                toolCallID: completionID.uuidString,
+                kind: .toolQuestionCards
+            ),
+            anchor: .toolCall(completionID.uuidString),
+            kind: .toolQuestionCards,
+            toolCallID: completionID.uuidString,
+            nodeRole: .toolPresentation,
+            toolQuestionCards: [card],
+            orderKey: nextInlineToolCardOrderKey(for: target),
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        await persistInlineToolInteractionBlock(threadID: target.threadID, message: target, block: block)
+        return true
+    }
+
+    func presentInlineMemberSelectionCard(
+        threadID: UUID?,
+        prompt: ToolMemberSelectionPrompt,
+        completionID: UUID
+    ) async -> Bool {
+        guard let target = await inlineToolInteractionTargetMessage(threadID: threadID) else {
+            return false
+        }
+        let card = ChatToolMemberSelectionCard(
+            completionID: completionID,
+            prompt: prompt
+        )
+        let block = ChatMessageBlock(
+            id: ChatStableBlockID.rich(
+                messageID: target.clientMessageID,
+                toolCallID: completionID.uuidString,
+                kind: .toolMemberSelectionCards
+            ),
+            anchor: .toolCall(completionID.uuidString),
+            kind: .toolMemberSelectionCards,
+            toolCallID: completionID.uuidString,
+            nodeRole: .toolPresentation,
+            toolMemberSelectionCards: [card],
+            orderKey: nextInlineToolCardOrderKey(for: target),
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        await persistInlineToolInteractionBlock(threadID: target.threadID, message: target, block: block)
+        return true
+    }
+
+    func submitInlineToolQuestionCard(
+        threadID: UUID,
+        message: ChatMessage,
+        card: ChatToolQuestionCard,
+        responses: [ToolQuestionResponse]
+    ) async {
+        guard card.status == .pending else { return }
+        let resultText = inlineToolQuestionResultText(
+            questions: card.prompt.questions,
+            responses: responses
+        )
+        guard let updatedBlocks = replacingInlineToolQuestionCard(
+            in: message.blocks,
+            cardID: card.id,
+            mutate: {
+                $0.answers = responses
+                $0.status = .submitted
+                $0.resultText = resultText
+                $0.updatedAt = Date()
+            }
+        ) else { return }
+        guard let updatedBlock = updatedBlocks.first(where: {
+            $0.toolQuestionCards.contains(where: { $0.id == card.id })
+        }) else { return }
+        await persistInlineToolInteractionBlock(threadID: threadID, message: message, block: updatedBlock)
+        stateStore.updateMessages([message.replacingBlocks(updatedBlocks)], for: threadID)
+        toolInteractionCoordinator.completeInlineQuestion(
+            id: card.completionID,
+            answer: ToolQuestionAnswer(responses: responses)
+        )
+    }
+
+    func submitInlineToolMemberSelectionCard(
+        threadID: UUID,
+        message: ChatMessage,
+        card: ChatToolMemberSelectionCard,
+        memberID: Int
+    ) async {
+        guard card.status == .pending, memberID > 0 else { return }
+        let memberName = memberContextStore.context.members.first(where: { $0.id == memberID })?.name
+            ?? L10n.text("chat.composer.member_profile.unknown")
+        await updateThreadMemberBinding(memberID, for: threadID)
+        memberContextStore.select(memberID: memberID)
+        guard let updatedBlocks = replacingInlineToolMemberSelectionCard(
+            in: message.blocks,
+            cardID: card.id,
+            mutate: {
+                $0.selectedMemberID = memberID
+                $0.selectedMemberName = memberName
+                $0.status = .submitted
+                $0.resultText = L10n.text("tool.result.request_member_selection.completed")
+                $0.updatedAt = Date()
+            }
+        ) else { return }
+        guard let updatedBlock = updatedBlocks.first(where: {
+            $0.toolMemberSelectionCards.contains(where: { $0.id == card.id })
+        }) else { return }
+        await persistInlineToolInteractionBlock(threadID: threadID, message: message, block: updatedBlock)
+        stateStore.updateMessages([message.replacingBlocks(updatedBlocks)], for: threadID)
+        toolInteractionCoordinator.completeInlineMemberSelection(id: card.completionID, memberID: memberID)
+    }
+
     private func updatePendingMemberToolCard(
         threadID: UUID,
         message: ChatMessage,
@@ -1415,6 +1544,152 @@ final class ChatDetailViewModel: ObservableObject {
             return next
         }
         return nil
+    }
+
+    private func inlineToolInteractionTargetMessage(threadID requestedThreadID: UUID?) async -> ChatMessage? {
+        let threadID = requestedThreadID ?? stateStore.selectedThreadID
+        guard let threadID else { return nil }
+        let messages = stateStore.conversationListItems(for: threadID)
+        if let currentGenerationAssistantClientMessageID,
+           let message = messages.first(where: { $0.clientMessageID == currentGenerationAssistantClientMessageID }) {
+            return message
+        }
+        if let currentGenerationAssistantClientMessageID {
+            let loaded = await loadChatMessagesUseCase.execute(clientMessageIDs: [currentGenerationAssistantClientMessageID])
+            if let message = loaded.first {
+                return message
+            }
+        }
+        return messages.last(where: { $0.role == .assistant })
+    }
+
+    private func nextInlineToolCardOrderKey(for message: ChatMessage) -> Double {
+        let maxOrderKey = message.blocks.compactMap(\.orderKey).max() ?? 2_000
+        return maxOrderKey + 100
+    }
+
+    private func messageByAppendingOrReplacingBlock(
+        _ block: ChatMessageBlock,
+        to message: ChatMessage
+    ) -> ChatMessage {
+        var blocks = message.blocks.filter { $0.id != block.id }
+        blocks.append(block)
+        blocks.sort { lhs, rhs in
+            switch (lhs.orderKey, rhs.orderKey) {
+            case let (l?, r?) where l != r:
+                return l < r
+            case (.some, nil):
+                return true
+            case (nil, .some):
+                return false
+            default:
+                return lhs.createdAt < rhs.createdAt
+            }
+        }
+        return message.replacingBlocks(blocks)
+    }
+
+    @discardableResult
+    private func ensureInlineToolInteractionMessageExists(_ message: ChatMessage) async -> Bool {
+        let existing = await loadChatMessagesUseCase.execute(clientMessageIDs: [message.clientMessageID])
+        if existing.isEmpty == false {
+            return true
+        }
+        do {
+            _ = try await chatRepository.upsertLocalMessage(message)
+            return true
+        } catch {
+            logger.warning(
+                "内联工具交互卡片目标消息本地兜底写入失败，clientMessageID=\(message.clientMessageID.uuidString), error=\(error.localizedDescription)",
+                module: .aiConfig
+            )
+            return false
+        }
+    }
+
+    @discardableResult
+    private func persistInlineToolInteractionBlock(
+        threadID: UUID,
+        message: ChatMessage,
+        block: ChatMessageBlock
+    ) async -> Bool {
+        let updatedMessage = messageByAppendingOrReplacingBlock(block, to: message)
+        guard await ensureInlineToolInteractionMessageExists(updatedMessage) else { return false }
+        let didApply = await chatRepository.upsertMessageBlock(
+            clientMessageID: message.clientMessageID,
+            block: block,
+            markPendingForSync: true
+        )
+        if didApply {
+            stateStore.updateMessages([updatedMessage], for: threadID)
+            stateStore.requestScrollToBottom(for: threadID)
+        }
+        return didApply
+    }
+
+    private func replacingInlineToolQuestionCard(
+        in blocks: [ChatMessageBlock],
+        cardID: UUID,
+        mutate: (inout ChatToolQuestionCard) -> Void
+    ) -> [ChatMessageBlock]? {
+        for (index, block) in blocks.enumerated() {
+            guard block.kind == .toolQuestionCards else { continue }
+            var cards = block.toolQuestionCards
+            guard let cardIndex = cards.firstIndex(where: { $0.id == cardID }) else { continue }
+            mutate(&cards[cardIndex])
+            var next = blocks
+            next[index] = block.replacingPayload(
+                .toolQuestionCards(cards),
+                status: .ready,
+                revision: block.revision + 1,
+                updatedAt: Date()
+            )
+            return next
+        }
+        return nil
+    }
+
+    private func replacingInlineToolMemberSelectionCard(
+        in blocks: [ChatMessageBlock],
+        cardID: UUID,
+        mutate: (inout ChatToolMemberSelectionCard) -> Void
+    ) -> [ChatMessageBlock]? {
+        for (index, block) in blocks.enumerated() {
+            guard block.kind == .toolMemberSelectionCards else { continue }
+            var cards = block.toolMemberSelectionCards
+            guard let cardIndex = cards.firstIndex(where: { $0.id == cardID }) else { continue }
+            mutate(&cards[cardIndex])
+            var next = blocks
+            next[index] = block.replacingPayload(
+                .toolMemberSelectionCards(cards),
+                status: .ready,
+                revision: block.revision + 1,
+                updatedAt: Date()
+            )
+            return next
+        }
+        return nil
+    }
+
+    private func inlineToolQuestionResultText(
+        questions: [ToolQuestionItem],
+        responses: [ToolQuestionResponse]
+    ) -> String {
+        var lines = ["用户已提交回答。"]
+        for (index, question) in questions.enumerated() {
+            let response = responses.first { $0.questionID == question.id }
+            let selectedIDs = Set(response?.selectedOptionIDs ?? [])
+            var answers = question.options
+                .filter { selectedIDs.contains($0.id) }
+                .map(\.text)
+            if let otherText = response?.otherText?.trimmingCharacters(in: .whitespacesAndNewlines),
+               otherText.isEmpty == false {
+                answers.append(otherText)
+            }
+            lines.append("\(index + 1). \(question.question)")
+            lines.append(answers.isEmpty ? "未选择固定选项" : answers.joined(separator: "，"))
+        }
+        return lines.joined(separator: "\n")
     }
 
     // MARK: - 对话内营养卡片写入 Apple 健康

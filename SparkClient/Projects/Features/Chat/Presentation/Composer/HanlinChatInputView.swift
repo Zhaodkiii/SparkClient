@@ -9,7 +9,9 @@ struct HanlinChatInputView: View {
     let modelReasoning: ChatModelReasoningContext
     @ObservedObject var stateStore: ChatStateStore
     @ObservedObject var memberContextStore: MemberContextStore
+    @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     let boundMemberID: Int?
+    let modelRows: [AIScenarioRemoteModelRow]
     let medicalQueryAPI: SparkMedicalQueryAPI
     let initialCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
     let memberCompleteDataFetcher: any MemberCompleteDataFetching
@@ -222,7 +224,9 @@ struct HanlinChatInputView: View {
                         modelReasoning: modelReasoning,
                         stateStore: stateStore,
                         memberContextStore: memberContextStore,
+                        aiSettingsViewModel: aiSettingsViewModel,
                         boundMemberID: boundMemberID,
+                        modelRows: modelRows,
                         onSetMemberBinding: onSetMemberBinding
                     )
 

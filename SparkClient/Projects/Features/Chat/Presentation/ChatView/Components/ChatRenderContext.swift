@@ -29,6 +29,8 @@ struct ChatRenderContext {
     let onSaveKnowledgeCard: (ChatKnowledgeCard) -> Void   // 保存知识库卡片
     let onTaskCardAction: (TaskCard.Action) -> Void        // 任务卡片操作（完成/删除等）
     let onPendingMemberToolSelect: (PendingMemberToolCard, Int?) -> Void  // 待处理成员工具选择
+    let onToolQuestionCardSubmit: (ChatToolQuestionCard, [ToolQuestionResponse]) -> Void
+    let onToolMemberSelectionCardSubmit: (ChatToolMemberSelectionCard, Int) -> Void
     let onStructuredHealthCardAction: (ChatStructuredHealthCardAction) -> Void  // 健康卡片操作
     let onNutritionCardAction: (ChatNutritionCardAction) -> Void                // 营养卡片操作
     let onCaptureOpenCamera: () -> Void                    // 打开相机
@@ -72,6 +74,8 @@ extension ChatRenderContext {
             onSaveKnowledgeCard: onSaveKnowledgeCard,
             onTaskCardAction: onTaskCardAction,
             onPendingMemberToolSelect: onPendingMemberToolSelect,
+            onToolQuestionCardSubmit: onToolQuestionCardSubmit,
+            onToolMemberSelectionCardSubmit: onToolMemberSelectionCardSubmit,
             onStructuredHealthCardAction: onStructuredHealthCardAction,
             onNutritionCardAction: onNutritionCardAction,
             onCaptureOpenCamera: onCaptureOpenCamera,

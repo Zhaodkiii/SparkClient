@@ -358,6 +358,48 @@ nonisolated enum ChatConversationUIDevicePreferencesStore {
     }
 }
 
+nonisolated enum ChatToolInteractionPresentationMode: String, Codable, CaseIterable, Sendable {
+    case sheet
+    case inlineCard
+
+    var displayName: String {
+        switch self {
+        case .sheet:
+            return "Sheet 弹窗"
+        case .inlineCard:
+            return "会话卡片"
+        }
+    }
+}
+
+nonisolated struct ChatToolInteractionPreferences: Codable, Equatable, Sendable {
+    var memberSelectionPresentationMode: ChatToolInteractionPresentationMode
+    var questionPresentationMode: ChatToolInteractionPresentationMode
+
+    static let fallback = ChatToolInteractionPreferences(
+        memberSelectionPresentationMode: .sheet,
+        questionPresentationMode: .sheet
+    )
+
+    static var `default`: ChatToolInteractionPreferences {
+        ChatToolInteractionDevicePreferencesStore.load() ?? fallback
+    }
+}
+
+nonisolated enum ChatToolInteractionDevicePreferencesStore {
+    private static let defaultsKey = "cn.Zhaodk.Health.chat.toolInteraction.preferences"
+
+    static func load(defaults: UserDefaults = .standard) -> ChatToolInteractionPreferences? {
+        guard let data = defaults.data(forKey: defaultsKey) else { return nil }
+        return try? JSONDecoder.default.decode(ChatToolInteractionPreferences.self, from: data)
+    }
+
+    static func save(_ preferences: ChatToolInteractionPreferences, defaults: UserDefaults = .standard) {
+        guard let data = try? JSONEncoder.default.encode(preferences) else { return }
+        defaults.set(data, forKey: defaultsKey)
+    }
+}
+
 nonisolated enum DeepTutorConversationCardStyle: String, Codable, CaseIterable, Sendable {
     case standard
     case bodyFocused

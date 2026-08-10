@@ -98,6 +98,10 @@ nonisolated enum ChatMessageBlockKind: String, Codable, Sendable {
     case healthCards
     /// 待处理成员工具卡片块
     case pendingMemberToolCards
+    /// 工具用户问答消息内卡片块
+    case toolQuestionCards
+    /// 工具成员选择消息内卡片块
+    case toolMemberSelectionCards
     /// 结构化健康卡片块
     case structuredHealthCards
     /// 睡眠可视化展示块
@@ -211,6 +215,8 @@ nonisolated enum ChatMessageBlockPayload: Codable, Equatable, Sendable {
     case events([ChatEventPayload])
     case healthCards([ChatHealthCardPayload])
     case pendingMemberToolCards([PendingMemberToolCard])
+    case toolQuestionCards([ChatToolQuestionCard])
+    case toolMemberSelectionCards([ChatToolMemberSelectionCard])
     case structuredHealthCards(StructuredHealthCardsBlob)
     case sleepVisualization(ChatHealthSleepModel)
     case nutritionCards(ChatNutritionCardsPayload)
@@ -238,6 +244,8 @@ nonisolated enum ChatMessageBlockPayload: Codable, Equatable, Sendable {
         case .events: return .events
         case .healthCards: return .healthCards
         case .pendingMemberToolCards: return .pendingMemberToolCards
+        case .toolQuestionCards: return .toolQuestionCards
+        case .toolMemberSelectionCards: return .toolMemberSelectionCards
         case .structuredHealthCards: return .structuredHealthCards
         case .sleepVisualization: return .sleepVisualization
         case .nutritionCards: return .nutritionCards
@@ -346,6 +354,18 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         guard case .pendingMemberToolCards(let cards) = payload else { return [] }
         return cards
     }
+
+    /// 工具用户问答消息内卡片列表
+    nonisolated var toolQuestionCards: [ChatToolQuestionCard] {
+        guard case .toolQuestionCards(let cards) = payload else { return [] }
+        return cards
+    }
+
+    /// 工具成员选择消息内卡片列表
+    nonisolated var toolMemberSelectionCards: [ChatToolMemberSelectionCard] {
+        guard case .toolMemberSelectionCards(let cards) = payload else { return [] }
+        return cards
+    }
     
     /// 地图位置列表
     nonisolated var locations: [ChatMapLocationPayload] {
@@ -442,6 +462,8 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         knowledgeCards: [ChatKnowledgeCard] = [],
         taskCards: [TaskCard] = [],
         pendingMemberToolCards: [PendingMemberToolCard] = [],
+        toolQuestionCards: [ChatToolQuestionCard] = [],
+        toolMemberSelectionCards: [ChatToolMemberSelectionCard] = [],
         locations: [ChatMapLocationPayload] = [],
         routes: [ChatRoutePayload] = [],
         events: [ChatEventPayload] = [],
@@ -479,6 +501,8 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
             knowledgeCards: knowledgeCards,
             taskCards: taskCards,
             pendingMemberToolCards: pendingMemberToolCards,
+            toolQuestionCards: toolQuestionCards,
+            toolMemberSelectionCards: toolMemberSelectionCards,
             locations: locations,
             routes: routes,
             events: events,
@@ -513,6 +537,8 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         knowledgeCards: [ChatKnowledgeCard],
         taskCards: [TaskCard],
         pendingMemberToolCards: [PendingMemberToolCard],
+        toolQuestionCards: [ChatToolQuestionCard],
+        toolMemberSelectionCards: [ChatToolMemberSelectionCard],
         locations: [ChatMapLocationPayload],
         routes: [ChatRoutePayload],
         events: [ChatEventPayload],
@@ -564,6 +590,10 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
             return .healthCards(healthCards)
         case .pendingMemberToolCards:
             return .pendingMemberToolCards(pendingMemberToolCards)
+        case .toolQuestionCards:
+            return .toolQuestionCards(toolQuestionCards)
+        case .toolMemberSelectionCards:
+            return .toolMemberSelectionCards(toolMemberSelectionCards)
         case .structuredHealthCards:
             return .structuredHealthCards(structuredHealthCards ?? .empty)
         case .sleepVisualization:
@@ -756,6 +786,55 @@ nonisolated struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
 }
 
 extension ChatMessage {
+    nonisolated func replacingBlocks(_ blocks: [ChatMessageBlock]) -> ChatMessage {
+        ChatMessage(
+            id: id,
+            threadID: threadID,
+            role: role,
+            blocks: blocks,
+            clientMessageID: clientMessageID,
+            serverMessageID: serverMessageID,
+            deliveryState: deliveryState,
+            createdAt: createdAt,
+            serverUpdatedAt: serverUpdatedAt,
+            isTombstone: isTombstone,
+            modelName: modelName
+        )
+    }
+
+    /// 会话内阻塞式工具交互卡片属于本地优先的展示块。流式输出和远端回包可能暂时不包含这些块，
+    /// 刷新 UI 快照时需要保留，避免卡片一闪而过。
+    nonisolated func mergingLocalInlineToolInteractionBlocks(from local: ChatMessage) -> ChatMessage {
+        guard clientMessageID == local.clientMessageID else { return self }
+        let currentIDs = Set(blocks.map(\.id))
+        let preservedLocal = local.blocks.filter { block in
+            block.isInlineToolInteractionPresentationBlock && currentIDs.contains(block.id) == false
+        }
+        guard preservedLocal.isEmpty == false else { return self }
+        var mergedBlocks = blocks + preservedLocal
+        mergedBlocks.sort { lhs, rhs in
+            switch (lhs.orderKey, rhs.orderKey) {
+            case let (l?, r?) where l != r: return l < r
+            case (.some, nil): return true
+            case (nil, .some): return false
+            default: return lhs.createdAt < rhs.createdAt
+            }
+        }
+        return ChatMessage(
+            id: id,
+            threadID: threadID,
+            role: role,
+            blocks: mergedBlocks,
+            clientMessageID: clientMessageID,
+            serverMessageID: serverMessageID,
+            deliveryState: deliveryState,
+            createdAt: createdAt,
+            serverUpdatedAt: serverUpdatedAt,
+            isTombstone: isTombstone,
+            modelName: modelName
+        )
+    }
+
     /// 入站合并时保留本地已落库的 `healthResourceReference`（远端 push/拉取可能尚未支持该 block）。
     nonisolated func mergingRemotePreservingLocalHealthResourceBlocks(_ remote: ChatMessage) -> ChatMessage {
         guard clientMessageID == remote.clientMessageID else { return remote }
@@ -837,6 +916,13 @@ extension ChatMessage {
             score += piece
         }
         return score
+    }
+}
+
+extension ChatMessageBlock {
+    nonisolated var isInlineToolInteractionPresentationBlock: Bool {
+        guard nodeRole == .toolPresentation else { return false }
+        return kind == .toolQuestionCards || kind == .toolMemberSelectionCards
     }
 }
 

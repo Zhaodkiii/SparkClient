@@ -1125,6 +1125,7 @@
 "chat.composer.model.loading" = "Loading models…";
 "chat.composer.toggle.knowledge" = "Knowledge bag";
 "chat.composer.toggle.web" = "Web search";
+"chat.composer.view_tools" = "View Tools";
 "chat.composer.toggle.deep_thinking" = "Deep thinking";
 "chat.image_delivery.menu" = "Image delivery";
 "chat.image_delivery.direct" = "Direct to AI (image + text)";

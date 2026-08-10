@@ -92,6 +92,23 @@ extension ChatMessageBlock {
                     onSelectMember: context.onPendingMemberToolSelect
                 )
             }
+
+        case .toolQuestionCards(let cards):
+            ForEach(cards) { card in
+                ChatToolQuestionMessageCardView(
+                    card: card,
+                    onSubmit: context.onToolQuestionCardSubmit
+                )
+            }
+
+        case .toolMemberSelectionCards(let cards):
+            ForEach(cards) { card in
+                ChatToolMemberSelectionMessageCardView(
+                    card: card,
+                    memberContextStore: context.memberContextStore,
+                    onSubmit: context.onToolMemberSelectionCardSubmit
+                )
+            }
             
             // 11. 结构化健康卡片
         case .structuredHealthCards(let blob):
@@ -273,6 +290,10 @@ extension ChatMessageBlock {
             return "正在创建提醒..."
         case .captureCard:
             return "正在准备采集卡片..."
+        case .toolQuestionCards:
+            return "等待用户回答..."
+        case .toolMemberSelectionCards:
+            return "等待选择成员..."
         default:
             return "正在整理结果..."
         }

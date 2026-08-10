@@ -114,7 +114,15 @@ final class ChatStateStore: ObservableObject {
         for threadID: UUID,
         hasMore: Bool? = nil
     ) {
-        messagesByThread[threadID] = messages
+        var previousByClientID: [UUID: ChatMessage] = [:]
+        for message in messagesByThread[threadID] ?? [] {
+            previousByClientID[message.clientMessageID] = message
+        }
+        let mergedMessages = messages.map { message in
+            guard let previous = previousByClientID[message.clientMessageID] else { return message }
+            return message.mergingLocalInlineToolInteractionBlocks(from: previous)
+        }
+        messagesByThread[threadID] = mergedMessages
         if let hasMore {
             // 保留原有加载状态，仅更新是否有更多
             let current = messagePagingByThread[threadID] ?? MessagePaging(hasMore: hasMore, isLoadingMore: false)
@@ -134,7 +142,8 @@ final class ChatStateStore: ObservableObject {
         // 遍历替换变更的消息
         for index in current.indices {
             let id = current[index].clientMessageID
-            if let replacement = replacements[id], replacement != current[index] {
+            if let replacement = replacements[id]?.mergingLocalInlineToolInteractionBlocks(from: current[index]),
+               replacement != current[index] {
                 current[index] = replacement
                 changed = true
             }

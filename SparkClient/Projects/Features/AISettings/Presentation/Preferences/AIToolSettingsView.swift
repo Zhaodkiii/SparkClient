@@ -262,6 +262,38 @@ struct AIToolSettingsView: View {
     }
 }
 
+struct AIChatAvailableToolListView: View {
+    @ObservedObject var viewModel: AISettingsViewModel
+    let useKnowledgeBag: Bool
+    let useWebSearch: Bool
+    let allowedToolNames: Set<String>?
+
+    private var tools: [AIToolSettingsItem] {
+        AIToolCatalog.filteredChatTools(
+            useKnowledgeBag: useKnowledgeBag,
+            useWebSearch: useWebSearch,
+            allowedToolNames: allowedToolNames
+        )
+    }
+
+    private var groups: [AIToolSettingsGroup] {
+        AIToolCatalog.filteredChatToolGroups(for: tools)
+    }
+
+    var body: some View {
+        AIToolListView(
+            title: L10n.text("ai_settings.ai_tools.section.chat", fallback: "Chat"),
+            subtitle: L10n.text("ai_settings.ai_tools.section.chat.available_subtitle", fallback: "Tools currently available to this conversation after model and composer filters."),
+            tools: tools,
+            groups: groups,
+            viewModel: viewModel
+        )
+        .task {
+            await viewModel.loadIfNeeded()
+        }
+    }
+}
+
 private struct AIToolListView: View {
     let title: String
     let subtitle: String
@@ -430,6 +462,18 @@ private struct AIToolDetailView: View {
                 .padding(.vertical, 2)
             }
 
+            if let preferenceTarget = chatToolInteractionPreferenceTarget {
+                Section {
+                    Picker(preferenceTarget.title, selection: chatToolInteractionPreferenceBinding(for: preferenceTarget)) {
+                        ForEach(ChatToolInteractionPresentationMode.allCases, id: \.self) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+                } footer: {
+                    Text(preferenceTarget.footer)
+                }
+            }
+
             Section(L10n.text("ai_settings.ai_tools.detail.prompt", fallback: "Prompt")) {
                 Text(tool.definition.summary)
                     .font(.body)
@@ -481,6 +525,40 @@ private struct AIToolDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
+    private var chatToolInteractionPreferenceTarget: ChatToolInteractionPreferenceTarget? {
+        guard tool.source == .chat else { return nil }
+        switch tool.definition.name {
+        case SparkToolName.requestMemberSelection.rawValue:
+            return .memberSelection
+        case SparkToolName.askUserQuestion.rawValue:
+            return .question
+        default:
+            return nil
+        }
+    }
+
+    private func chatToolInteractionPreferenceBinding(
+        for target: ChatToolInteractionPreferenceTarget
+    ) -> Binding<ChatToolInteractionPresentationMode> {
+        Binding {
+            switch target {
+            case .memberSelection:
+                return viewModel.snapshot.chatToolInteractionPreferences.memberSelectionPresentationMode
+            case .question:
+                return viewModel.snapshot.chatToolInteractionPreferences.questionPresentationMode
+            }
+        } set: { newValue in
+            switch target {
+            case .memberSelection:
+                viewModel.snapshot.chatToolInteractionPreferences.memberSelectionPresentationMode = newValue
+            case .question:
+                viewModel.snapshot.chatToolInteractionPreferences.questionPresentationMode = newValue
+            }
+            ChatToolInteractionDevicePreferencesStore.save(viewModel.snapshot.chatToolInteractionPreferences)
+            Task { await viewModel.persistSnapshotNow() }
+        }
+    }
+
     @ViewBuilder
     private func relatedDestinationView(_ destination: AIToolRelatedDestination) -> some View {
         switch destination {
@@ -490,6 +568,27 @@ private struct AIToolDetailView: View {
         case .weather:
             AIWeatherToolSettingsView(viewModel: viewModel)
                 .hidesMainTabBarWhenPushed()
+        }
+    }
+}
+
+private enum ChatToolInteractionPreferenceTarget {
+    case memberSelection
+    case question
+
+    var title: String {
+        switch self {
+        case .memberSelection, .question:
+            return "提问方式"
+        }
+    }
+
+    var footer: String {
+        switch self {
+        case .memberSelection:
+            return "控制 Chat 运行时 request_member_selection 请求用户选择成员时，使用 Sheet 弹窗，还是在当前对话中插入阻塞式会话卡片。"
+        case .question:
+            return "控制 Chat 运行时 ask_user_question 请求用户补充信息时，使用 Sheet 弹窗，还是在当前对话中插入阻塞式会话卡片。"
         }
     }
 }
@@ -591,14 +690,7 @@ private struct AIToolBadge: View {
 }
 
 private enum AIToolCatalog {
-    static let defaultExpandedChatGroupIDs: Set<String> = Set([
-        "health_data",
-        "member_management",
-        "location_weather",
-        "memory_conversation",
-        "knowledge_network",
-        "system_tasks"
-    ])
+    static let defaultExpandedChatGroupIDs: Set<String> = []
 
     static func deepTutorTools() -> [AIToolSettingsItem] {
         nativeDeepTutorTools() + deepTutorCompatibilityTools()
@@ -620,7 +712,38 @@ private enum AIToolCatalog {
     }
 
     static func chatToolGroups() -> [AIToolSettingsGroup] {
-        let tools = chatTools()
+        filteredChatToolGroups(for: chatTools())
+    }
+
+    static func filteredChatTools(
+        useKnowledgeBag: Bool,
+        useWebSearch: Bool,
+        allowedToolNames: Set<String>?
+    ) -> [AIToolSettingsItem] {
+        var tools = chatTools()
+        if useKnowledgeBag == false {
+            tools.removeAll {
+                $0.definition.name == SparkToolName.searchKnowledgeBag.rawValue
+                    || $0.definition.name == SparkToolName.createKnowledgeDocument.rawValue
+            }
+        }
+        if useWebSearch == false {
+            let web: Set<String> = [
+                SparkToolName.searchOnline.rawValue,
+                SparkToolName.readWebPage.rawValue,
+                SparkToolName.searchArxivPapers.rawValue,
+                SparkToolName.extractRemoteFileContent.rawValue
+            ]
+            tools.removeAll { web.contains($0.definition.name) }
+        }
+        if let allowedToolNames {
+            let normalizedAllowed = Set(allowedToolNames.map(normalizeToolName))
+            tools.removeAll { normalizedAllowed.contains(normalizeToolName($0.definition.name)) == false }
+        }
+        return tools
+    }
+
+    static func filteredChatToolGroups(for tools: [AIToolSettingsItem]) -> [AIToolSettingsGroup] {
 
         func matching(_ toolNames: [SparkToolName]) -> [AIToolSettingsItem] {
             let ids = Set(toolNames.map { "chat.\($0.rawValue)" })
@@ -709,7 +832,7 @@ private enum AIToolCatalog {
                     .showMedicalRiskNotice
                 ])
             )
-        ]
+        ].filter { $0.tools.isEmpty == false }
     }
 
     private static func nativeDeepTutorTools() -> [AIToolSettingsItem] {
@@ -981,6 +1104,10 @@ private enum AIToolCatalog {
 
     private static func chatGroupSubtitle(_ id: String, fallback: String) -> String {
         L10n.text("ai_settings.ai_tools.chat_group.\(id).subtitle", fallback: fallback)
+    }
+
+    private static func normalizeToolName(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
     private static func relatedDestination(for tool: SparkToolName) -> AIToolRelatedDestination? {

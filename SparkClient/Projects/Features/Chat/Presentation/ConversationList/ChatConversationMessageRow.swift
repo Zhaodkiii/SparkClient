@@ -181,6 +181,8 @@ struct ChatConversationMessageRow: View {
             onSaveKnowledgeCard: { _ in },
             onTaskCardAction: { _ in },
             onPendingMemberToolSelect: { _, _ in },
+            onToolQuestionCardSubmit: { _, _ in },
+            onToolMemberSelectionCardSubmit: { _, _ in },
             savingStructuredHealthCardIDs: [],
             savingNutritionCardIDs: [],
             onStructuredHealthCardAction: { _ in },
@@ -262,6 +264,26 @@ struct ChatConversationMessageRow: View {
             onPendingMemberToolSelect: { card, memberID in
                 Task {
                     await detailViewModel.setPendingMemberToolSelection(
+                        threadID: threadID,
+                        message: message,
+                        card: card,
+                        memberID: memberID
+                    )
+                }
+            },
+            onToolQuestionCardSubmit: { card, responses in
+                Task {
+                    await detailViewModel.submitInlineToolQuestionCard(
+                        threadID: threadID,
+                        message: message,
+                        card: card,
+                        responses: responses
+                    )
+                }
+            },
+            onToolMemberSelectionCardSubmit: { card, memberID in
+                Task {
+                    await detailViewModel.submitInlineToolMemberSelectionCard(
                         threadID: threadID,
                         message: message,
                         card: card,

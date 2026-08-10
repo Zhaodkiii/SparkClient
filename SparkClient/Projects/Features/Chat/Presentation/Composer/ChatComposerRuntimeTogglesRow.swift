@@ -7,7 +7,9 @@ struct ChatComposerRuntimeTogglesRow: View {
     let modelReasoning: ChatModelReasoningContext
     @ObservedObject var stateStore: ChatStateStore
     @ObservedObject var memberContextStore: MemberContextStore
+    @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     let boundMemberID: Int?
+    let modelRows: [AIScenarioRemoteModelRow]
     let onSetMemberBinding: (Int?) -> Void
     @State private var expandedToggle: RuntimeToggleKind?
     @State private var collapseToken = UUID()
@@ -74,6 +76,37 @@ struct ChatComposerRuntimeTogglesRow: View {
         memberContextStore.context.selectedMember?.id
     }
 
+    private var selectedComposerModelRow: AIScenarioRemoteModelRow? {
+        let selectedName = flags.selectedChatModelName?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if selectedName.isEmpty == false,
+           let row = modelRows.first(where: { $0.name == selectedName }) {
+            return row
+        }
+
+        if let threadModel = stateStore.selectedThread?.currentModelName?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           threadModel.isEmpty == false,
+           let row = modelRows.first(where: { $0.name == threadModel }) {
+            return row
+        }
+
+        return modelRows.first(where: \.isDefault) ?? modelRows.first
+    }
+
+    private var allowedToolNamesForCurrentConversation: Set<String>? {
+        guard let row = selectedComposerModelRow else { return nil }
+        let storedToolNames = row.aiToolScenarios
+        if storedToolNames.isEmpty {
+            return nil
+        }
+        if storedToolNames.contains(SparkToolName.noSelectionSentinel) {
+            return []
+        }
+        let normalized = Set(storedToolNames).intersection(Set(SparkToolName.all))
+        return normalized.isEmpty ? nil : normalized
+    }
+
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
@@ -118,29 +151,44 @@ struct ChatComposerRuntimeTogglesRow: View {
     }
 
     private var toolToggle: some View {
-        Button {
-            updateRuntimeToggle(.tools) { $0.useTools.toggle() }
-        } label: {
-            HStack(spacing: 0) {
+        HStack(spacing: 0) {
+            Button {
+                updateRuntimeToggle(.tools) { $0.useTools.toggle() }
+            } label: {
                 Image(systemName: "hammer.circle")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 32, height: 32)
-                    .foregroundStyle(
-                        flags.useTools ? Color(uiColor: .systemBrown) : Color(.systemGray)
-                    )
+                    .foregroundStyle(flags.useTools ? Color(uiColor: .systemBrown) : Color(.systemGray))
                     .scaleEffect(expandedToggle == .tools ? 0.86 : 1)
-                if expandedToggle == .tools {
-                    Text(L10n.text("common.tools"))
-                        .font(.caption)
-                        .foregroundStyle(flags.useTools ? Color(uiColor: .systemBrown) : Color(.systemGray))
+            }
+            .buttonStyle(.plain)
+            .disabled(stateStore.isSending)
+
+            if flags.useTools {
+                NavigationLink {
+                    AIChatAvailableToolListView(
+                        viewModel: aiSettingsViewModel,
+                        useKnowledgeBag: flags.useKnowledgeBag,
+                        useWebSearch: flags.useWebSearch,
+                        allowedToolNames: allowedToolNamesForCurrentConversation
+                    )
+                } label: {
+                    Text(L10n.text("chat.composer.view_tools", fallback: "View Tools"))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(Color(uiColor: .systemBrown))
                         .padding(.trailing, 12)
-                        .transition(.opacity.combined(with: .move(edge: .leading)))
                 }
+                .disabled(stateStore.isSending)
+                .transition(.opacity.combined(with: .move(edge: .leading)))
+            } else if expandedToggle == .tools {
+                Text(L10n.text("common.tools"))
+                    .font(.caption)
+                    .foregroundStyle(Color(.systemGray))
+                    .padding(.trailing, 12)
+                    .transition(.opacity.combined(with: .move(edge: .leading)))
             }
         }
-        .buttonStyle(.plain)
-        .disabled(stateStore.isSending)
         .background(bgTool)
         .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
         .overlay(

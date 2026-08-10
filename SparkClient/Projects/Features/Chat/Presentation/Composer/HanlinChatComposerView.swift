@@ -7,6 +7,7 @@ struct HanlinChatComposerView: View {
     let modelReasoning: ChatModelReasoningContext
     @ObservedObject var stateStore: ChatStateStore
     @ObservedObject var memberContextStore: MemberContextStore
+    @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     let boundMemberID: Int?
     let modelRows: [AIScenarioRemoteModelRow]
     let smallTasks: [SmallTask]
@@ -53,7 +54,9 @@ struct HanlinChatComposerView: View {
                 modelReasoning: modelReasoning,
                 stateStore: stateStore,
                 memberContextStore: memberContextStore,
+                aiSettingsViewModel: aiSettingsViewModel,
                 boundMemberID: boundMemberID,
+                modelRows: modelRows,
                 medicalQueryAPI: medicalQueryAPI,
                 initialCompleteData: initialCompleteData,
                 memberCompleteDataFetcher: memberCompleteDataFetcher,

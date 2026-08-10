@@ -367,19 +367,19 @@ extension SparkToolName {
 
 // MARK: - 工具提问交互模型
 /// 选择模式：单选/多选
-enum ChatQuestionSelectionMode: String, Codable, Sendable {
+nonisolated enum ChatQuestionSelectionMode: String, Codable, Sendable {
     case single    // 单选
     case multiple  // 多选
 }
 
 /// 提问选项
-struct ChatQuestionOption: Codable, Equatable, Identifiable, Sendable {
+nonisolated struct ChatQuestionOption: Codable, Equatable, Identifiable, Sendable {
     let id: String   // 选项ID
     let text: String // 选项文本
 }
 
 /// 单个问题项
-struct ToolQuestionItem: Identifiable, Equatable, Codable, Sendable {
+nonisolated struct ToolQuestionItem: Identifiable, Equatable, Codable, Sendable {
     let id: String                  // 问题ID
     let question: String            // 问题文本
     let options: [ChatQuestionOption] // 选项列表
@@ -388,7 +388,7 @@ struct ToolQuestionItem: Identifiable, Equatable, Codable, Sendable {
 }
 
 /// 成员选择提示
-struct ToolMemberSelectionPrompt: Identifiable, Equatable, Codable, Sendable {
+nonisolated struct ToolMemberSelectionPrompt: Identifiable, Equatable, Codable, Sendable {
     let id: UUID              // 唯一标识
     let toolName: String      // 关联工具名
     let reason: String        // 选择原因
@@ -396,7 +396,7 @@ struct ToolMemberSelectionPrompt: Identifiable, Equatable, Codable, Sendable {
 }
 
 /// 工具提问提示
-struct ToolQuestionPrompt: Identifiable, Equatable, Codable, Sendable {
+nonisolated struct ToolQuestionPrompt: Identifiable, Equatable, Codable, Sendable {
     let id: UUID                  // 唯一标识
     let toolName: String          // 工具名
     let questions: [ToolQuestionItem] // 问题列表
@@ -413,12 +413,12 @@ struct ToolQuestionPrompt: Identifiable, Equatable, Codable, Sendable {
 }
 
 /// 问题回答
-struct ToolQuestionAnswer: Equatable, Codable, Sendable {
+nonisolated struct ToolQuestionAnswer: Equatable, Codable, Sendable {
     let responses: [ToolQuestionResponse] // 回答列表
 }
 
 /// 单个问题的回答
-struct ToolQuestionResponse: Equatable, Codable, Sendable {
+nonisolated struct ToolQuestionResponse: Equatable, Codable, Sendable {
     let questionID: String        // 问题ID
     let selectedOptionIDs: [String] // 选中的选项ID
     let otherText: String?        // 自定义输入文本

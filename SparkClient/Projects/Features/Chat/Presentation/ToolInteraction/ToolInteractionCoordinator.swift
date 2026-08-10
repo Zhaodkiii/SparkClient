@@ -1,6 +1,21 @@
 import Combine
 import Foundation
 
+@MainActor
+protocol ChatInlineToolInteractionCardSink: AnyObject {
+    func presentInlineQuestionCard(
+        threadID: UUID?,
+        prompt: ToolQuestionPrompt,
+        completionID: UUID
+    ) async -> Bool
+
+    func presentInlineMemberSelectionCard(
+        threadID: UUID?,
+        prompt: ToolMemberSelectionPrompt,
+        completionID: UUID
+    ) async -> Bool
+}
+
 /// 工具交互协调器
 /// 核心作用：**串行处理**工具相关的人机交互（授权同意/回答问题/选择成员）
 /// 设计特点：与具体UI展示形态解耦，只负责调度逻辑，保证同一时间只弹出一个交互窗口
@@ -57,6 +72,18 @@ final class ToolInteractionCoordinator: ObservableObject {
     private var userWaitGate: CheckedContinuation<Void, Never>?
     /// 待处理的用户操作结果
     private var pendingOutcome: PendingOutcome?
+    private var inlineQuestionContinuations: [UUID: CheckedContinuation<InteractionResult<ToolQuestionAnswer>, Never>] = [:]
+    private var inlineMemberContinuations: [UUID: CheckedContinuation<InteractionResult<Int>, Never>] = [:]
+    weak var inlineCardSink: (any ChatInlineToolInteractionCardSink)?
+    private var interactionPreferences: ChatToolInteractionPreferences = .default
+
+    func configureInlineCardSink(_ sink: (any ChatInlineToolInteractionCardSink)?) {
+        inlineCardSink = sink
+    }
+
+    func updateInteractionPreferences(_ preferences: ChatToolInteractionPreferences) {
+        interactionPreferences = preferences
+    }
 
     // MARK: - Public API 对外接口
 
@@ -96,7 +123,15 @@ final class ToolInteractionCoordinator: ObservableObject {
     }
 
     /// 请求用户回答工具提出的问题
-    func requestQuestionAnswer(threadID _: UUID?, prompt: ToolQuestionPrompt) async -> InteractionResult<ToolQuestionAnswer> {
+    func requestQuestionAnswer(threadID: UUID?, prompt: ToolQuestionPrompt) async -> InteractionResult<ToolQuestionAnswer> {
+        if interactionPreferences.questionPresentationMode == .inlineCard,
+           let inlineCardSink {
+            return await requestInlineQuestionAnswer(
+                threadID: threadID,
+                prompt: prompt,
+                sink: inlineCardSink
+            )
+        }
         let snapshot = ToolInteractionSnapshot.question(prompt)
         return await withCheckedContinuation { continuation in
             enqueue(
@@ -110,7 +145,15 @@ final class ToolInteractionCoordinator: ObservableObject {
     }
 
     /// 请求用户选择成员
-    func requestMemberSelection(threadID _: UUID?, prompt: ToolMemberSelectionPrompt) async -> InteractionResult<Int> {
+    func requestMemberSelection(threadID: UUID?, prompt: ToolMemberSelectionPrompt) async -> InteractionResult<Int> {
+        if interactionPreferences.memberSelectionPresentationMode == .inlineCard,
+           let inlineCardSink {
+            return await requestInlineMemberSelection(
+                threadID: threadID,
+                prompt: prompt,
+                sink: inlineCardSink
+            )
+        }
         let snapshot = ToolInteractionSnapshot.member(prompt)
         return await withCheckedContinuation { continuation in
             enqueue(
@@ -247,6 +290,72 @@ final class ToolInteractionCoordinator: ObservableObject {
         guard activePresentation?.id == id, pendingOutcome == nil else { return }
         pendingOutcome = .member(.cancelled)
         resumeUserGate()
+    }
+
+    func completeInlineQuestion(id: UUID, answer: ToolQuestionAnswer) {
+        guard let continuation = inlineQuestionContinuations.removeValue(forKey: id) else { return }
+        continuation.resume(returning: .success(answer))
+    }
+
+    func completeInlineMemberSelection(id: UUID, memberID: Int) {
+        guard let continuation = inlineMemberContinuations.removeValue(forKey: id) else { return }
+        continuation.resume(returning: .success(memberID))
+    }
+
+    func cancelInlineQuestion(id: UUID) {
+        guard let continuation = inlineQuestionContinuations.removeValue(forKey: id) else { return }
+        continuation.resume(returning: .cancelled)
+    }
+
+    func cancelInlineMemberSelection(id: UUID) {
+        guard let continuation = inlineMemberContinuations.removeValue(forKey: id) else { return }
+        continuation.resume(returning: .cancelled)
+    }
+
+    private func requestInlineQuestionAnswer(
+        threadID: UUID?,
+        prompt: ToolQuestionPrompt,
+        sink: any ChatInlineToolInteractionCardSink
+    ) async -> InteractionResult<ToolQuestionAnswer> {
+        let completionID = UUID()
+        return await withCheckedContinuation { continuation in
+            inlineQuestionContinuations[completionID] = continuation
+            Task {
+                let didPresent = await sink.presentInlineQuestionCard(
+                    threadID: threadID,
+                    prompt: prompt,
+                    completionID: completionID
+                )
+                if didPresent == false {
+                    await MainActor.run {
+                        self.cancelInlineQuestion(id: completionID)
+                    }
+                }
+            }
+        }
+    }
+
+    private func requestInlineMemberSelection(
+        threadID: UUID?,
+        prompt: ToolMemberSelectionPrompt,
+        sink: any ChatInlineToolInteractionCardSink
+    ) async -> InteractionResult<Int> {
+        let completionID = UUID()
+        return await withCheckedContinuation { continuation in
+            inlineMemberContinuations[completionID] = continuation
+            Task {
+                let didPresent = await sink.presentInlineMemberSelectionCard(
+                    threadID: threadID,
+                    prompt: prompt,
+                    completionID: completionID
+                )
+                if didPresent == false {
+                    await MainActor.run {
+                        self.cancelInlineMemberSelection(id: completionID)
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - 队列调度核心逻辑

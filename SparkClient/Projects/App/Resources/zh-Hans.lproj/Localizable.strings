@@ -1125,6 +1125,7 @@
 "chat.composer.model.loading" = "加载模型中…";
 "chat.composer.toggle.knowledge" = "知识背包";
 "chat.composer.toggle.web" = "联网搜索";
+"chat.composer.view_tools" = "查看工具";
 "chat.composer.toggle.deep_thinking" = "深度思考";
 "chat.image_delivery.menu" = "图片送达方式";
 "chat.image_delivery.direct" = "直发 AI（图+文）";

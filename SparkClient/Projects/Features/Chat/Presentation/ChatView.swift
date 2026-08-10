@@ -107,6 +107,7 @@ struct ChatView: View {
                 modelReasoning: detailViewModel.reasoningToolbarContext,
                 stateStore: stateStore,
                 memberContextStore: homeViewModel.memberContextStoreForBinding,
+                aiSettingsViewModel: aiSettingsViewModel,
                 boundMemberID: stateStore.selectedThread?.memberID,
                 modelRows: detailViewModel.chatScenarioModels,
                 smallTasks: composerAssociatedSmallTasks,
@@ -342,9 +343,13 @@ struct ChatView: View {
         statePersistenceLayout
             .onAppear {
                 detailViewModel.updateCachedMemberCompleteData(homeViewModel.dashboard?.medical.completeData)
+                detailViewModel.updateToolInteractionPreferences(aiSettingsViewModel.snapshot.chatToolInteractionPreferences)
             }
             .onChange(of: homeViewModel.dashboard?.medical.completeData) { data in
                 detailViewModel.updateCachedMemberCompleteData(data)
+            }
+            .onChange(of: aiSettingsViewModel.snapshot.chatToolInteractionPreferences) { preferences in
+                detailViewModel.updateToolInteractionPreferences(preferences)
             }
             .task(id: threadID) {
                 if let initialModel = await detailViewModel.refreshChatModelPicker(for: threadID) {
