@@ -12,6 +12,8 @@ struct ChatConversationMessageRow: View {
     let visibleMessages: [ChatMessage]
     @ObservedObject var stateStore: ChatStateStore
     @ObservedObject var detailViewModel: ChatDetailViewModel
+    let knowledgeDependencies: KnowledgeFeatureDependencies
+    @ObservedObject var knowledgeViewModel: KnowledgeLibraryViewModel
     @ObservedObject var uiStateStore: ChatMessageUIStateStore
     @ObservedObject var speechHelper: ChatSpeechHelper
     @ObservedObject var memberContextStore: MemberContextStore
@@ -159,6 +161,7 @@ struct ChatConversationMessageRow: View {
             conversationCardStyle: conversationAppearance.cardStyle,
             toolTraceDisplayMode: conversationAppearance.toolTraceDisplayMode,
             collapseToolsWhileStreaming: conversationAppearance.collapseToolsWhileStreaming,
+            separatesToolPresentationsInBodyFocused: conversationAppearance.separatesToolPresentationsInBodyFocused,
             isTranslating: false,
             isSavingMessage: false,
             isSavedMessage: false,
@@ -170,6 +173,8 @@ struct ChatConversationMessageRow: View {
             savedKnowledgeCardIDs: uiStateStore.savedKnowledgeCardIDs,
             showActions: false,
             memberContextStore: memberContextStore,
+            knowledgeDependencies: knowledgeDependencies,
+            knowledgeViewModel: knowledgeViewModel,
             onRetry: {},
             onCopy: {},
             onDelete: {},
@@ -179,6 +184,7 @@ struct ChatConversationMessageRow: View {
             onSaveMessageToKnowledge: {},
             onGenerateKnowledgeCardsPreview: {},
             onSaveKnowledgeCard: { _ in },
+            onKnowledgeCardSaved: { _ in },
             onTaskCardAction: { _ in },
             onPendingMemberToolSelect: { _, _ in },
             onToolQuestionCardSubmit: { _, _ in },
@@ -218,6 +224,7 @@ struct ChatConversationMessageRow: View {
             conversationCardStyle: conversationAppearance.cardStyle,
             toolTraceDisplayMode: conversationAppearance.toolTraceDisplayMode,
             collapseToolsWhileStreaming: conversationAppearance.collapseToolsWhileStreaming,
+            separatesToolPresentationsInBodyFocused: conversationAppearance.separatesToolPresentationsInBodyFocused,
             isTranslating: uiStateStore.isTranslating(message.id),
             isSavingMessage: uiStateStore.isMessageSaving(message.id),
             isSavedMessage: uiStateStore.isMessageSaved(message.id),
@@ -229,6 +236,8 @@ struct ChatConversationMessageRow: View {
             savedKnowledgeCardIDs: uiStateStore.savedKnowledgeCardIDs,
             showActions: message.id == visibleMessages.last?.id,
             memberContextStore: memberContextStore,
+            knowledgeDependencies: knowledgeDependencies,
+            knowledgeViewModel: knowledgeViewModel,
             onRetry: {
                 Task {
                     if shouldUseUnifiedRetryFlow {
@@ -264,6 +273,9 @@ struct ChatConversationMessageRow: View {
             },
             onSaveKnowledgeCard: { card in
                 saveKnowledgeCard(card, from: message)
+            },
+            onKnowledgeCardSaved: { card in
+                uiStateStore.setKnowledgeCardSaved(true, for: card.id)
             },
             onTaskCardAction: handleTaskCardAction,
             onPendingMemberToolSelect: { card, memberID in

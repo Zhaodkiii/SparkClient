@@ -402,8 +402,27 @@ extension ToolHub {
     }
 
 
-    func findSimilarTasks(existing: [HealthTask], extracted: TaskIntentExtraction) -> [HealthTask] {
-        let type = mapTaskType(extracted.taskType)
+    func findSimilarTasks(
+        existing: [HealthTask],
+        extracted: TaskIntentExtraction,
+        taskTypeOverride: HealthTask.TaskType? = nil,
+        businessType: String = "",
+        businessID: String = ""
+    ) -> [HealthTask] {
+        let type = taskTypeOverride ?? mapTaskType(extracted.taskType)
+        let normalizedBusinessType = businessType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let normalizedBusinessID = businessID.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalizedBusinessType.isEmpty == false && normalizedBusinessID.isEmpty == false {
+            let exactBusinessMatches = existing.filter { task in
+                task.type == type
+                    && task.status == .pending
+                    && task.businessType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == normalizedBusinessType
+                    && task.businessId.trimmingCharacters(in: .whitespacesAndNewlines) == normalizedBusinessID
+            }
+            if exactBusinessMatches.isEmpty == false {
+                return exactBusinessMatches
+            }
+        }
         let target = extracted.targetMetric.lowercased()
         let action = extracted.action.lowercased()
         return existing.filter { task in
@@ -495,6 +514,18 @@ extension ToolHub {
         }
     }
 
+    func resolveRequestedTaskType(
+        explicitTaskType: String?,
+        businessType: String,
+        extracted: TaskIntentExtraction
+    ) -> HealthTask.TaskType {
+        if let explicitTaskType,
+           explicitTaskType.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+            return mapTaskType(explicitTaskType)
+        }
+        return mapTaskType(extracted.taskType)
+    }
+
 
     func mapRepeatType(period: String, frequency: String) -> HealthTask.RepeatType {
         let p = period.lowercased()
@@ -561,15 +592,23 @@ extension ToolHub {
         startAt: Date,
         dueAt: Date?,
         repeatType: HealthTask.RepeatType,
-        priority: HealthTask.Priority
+        priority: HealthTask.Priority,
+        title: String? = nil,
+        description: String? = nil,
+        businessType: String = "ai_task_generation",
+        businessID: String = ""
     ) -> [String: String] {
         var base: [String: Any] = [
             "creator_id": "current_user",
+            "title": title ?? makeTaskTitle(extracted: extracted, type: type),
+            "description": description ?? makeTaskDescription(extracted: extracted, type: type),
             "type": type.rawValue,
             "status": HealthTask.TaskStatus.pending.rawValue,
             "repeat_type": repeatType.rawValue,
             "priority": priority.rawValue,
             "source": HealthTask.Source.ai.rawValue,
+            "business_type": businessType,
+            "business_id": businessID,
             "start_time": iso8601(startAt),
             "due_time": dueAt.map(iso8601) ?? ""
         ]

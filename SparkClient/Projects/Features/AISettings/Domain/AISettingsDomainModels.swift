@@ -244,12 +244,65 @@ nonisolated struct ChatConversationAppearancePreferences: Codable, Equatable, Se
     var cardStyle: ChatConversationCardStyle
     var toolTraceDisplayMode: ChatToolTraceDisplayMode
     var collapseToolsWhileStreaming: Bool
+    var separatesToolPresentationsInBodyFocused: Bool
 
-    static let `default` = ChatConversationAppearancePreferences(
-        cardStyle: .standard,
+    init(
+        cardStyle: ChatConversationCardStyle,
+        toolTraceDisplayMode: ChatToolTraceDisplayMode,
+        collapseToolsWhileStreaming: Bool,
+        separatesToolPresentationsInBodyFocused: Bool
+    ) {
+        self.cardStyle = cardStyle
+        self.toolTraceDisplayMode = toolTraceDisplayMode
+        self.collapseToolsWhileStreaming = collapseToolsWhileStreaming
+        self.separatesToolPresentationsInBodyFocused = separatesToolPresentationsInBodyFocused
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodableKey.self)
+        let fallback = ChatConversationAppearancePreferences.fallback
+        cardStyle = try container.decodeIfPresent(ChatConversationCardStyle.self, forKey: .key("cardStyle"))
+            ?? fallback.cardStyle
+        toolTraceDisplayMode = try container.decodeIfPresent(ChatToolTraceDisplayMode.self, forKey: .key("toolTraceDisplayMode"))
+            ?? fallback.toolTraceDisplayMode
+        collapseToolsWhileStreaming = try container.decodeIfPresent(Bool.self, forKey: .key("collapseToolsWhileStreaming"))
+            ?? fallback.collapseToolsWhileStreaming
+        separatesToolPresentationsInBodyFocused = try container.decodeIfPresent(Bool.self, forKey: .key("separatesToolPresentationsInBodyFocused"))
+            ?? fallback.separatesToolPresentationsInBodyFocused
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodableKey.self)
+        try container.encode(cardStyle, forKey: .key("cardStyle"))
+        try container.encode(toolTraceDisplayMode, forKey: .key("toolTraceDisplayMode"))
+        try container.encode(collapseToolsWhileStreaming, forKey: .key("collapseToolsWhileStreaming"))
+        try container.encode(separatesToolPresentationsInBodyFocused, forKey: .key("separatesToolPresentationsInBodyFocused"))
+    }
+
+    static let fallback = ChatConversationAppearancePreferences(
+        cardStyle: .bodyFocused,
         toolTraceDisplayMode: .collapsedAfterCompletion,
-        collapseToolsWhileStreaming: false
+        collapseToolsWhileStreaming: false,
+        separatesToolPresentationsInBodyFocused: false
     )
+
+    static var `default`: ChatConversationAppearancePreferences {
+        ChatConversationAppearanceDevicePreferencesStore.load() ?? fallback
+    }
+}
+
+nonisolated enum ChatConversationAppearanceDevicePreferencesStore {
+    private static let defaultsKey = "cn.Zhaodk.Health.chat.conversation.appearancePreferences"
+
+    static func load(defaults: UserDefaults = .standard) -> ChatConversationAppearancePreferences? {
+        guard let data = defaults.data(forKey: defaultsKey) else { return nil }
+        return try? JSONDecoder.default.decode(ChatConversationAppearancePreferences.self, from: data)
+    }
+
+    static func save(_ preferences: ChatConversationAppearancePreferences, defaults: UserDefaults = .standard) {
+        guard let data = try? JSONEncoder.default.encode(preferences) else { return }
+        defaults.set(data, forKey: defaultsKey)
+    }
 }
 
 nonisolated enum ChatConversationUIArchitecture: String, Codable, CaseIterable, Sendable {

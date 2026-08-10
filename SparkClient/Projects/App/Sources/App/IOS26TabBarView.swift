@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// iOS 26 正式主导航：系统 Liquid Glass 浮动 TabBar，底部 Tab 为首页、对话、DeepTutor、搜索、设置（IOS26-TABBAR-000002）。
+/// iOS 26 正式主导航：系统 Liquid Glass 浮动 TabBar，底部 Tab 为首页、对话、知识背包、搜索、设置（IOS26-TABBAR-000002）。
 @available(iOS 26.0, *)
 struct IOS26TabBarView: View {
     let session: UserSession
@@ -32,8 +32,10 @@ struct IOS26TabBarView: View {
         MainTabRouteDestinationBuilder(
             session: session,
             homeDependencies: homeDependencies,
+            knowledgeDependencies: knowledgeDependencies,
             popularScienceDependencies: popularScienceDependencies,
             homeViewModel: homeViewModel,
+            knowledgeViewModel: knowledgeViewModel,
             taskManager: taskManager,
             chatStateStore: chatStateStore,
             chatListViewModel: chatListViewModel,
@@ -65,10 +67,16 @@ struct IOS26TabBarView: View {
                 chatContainer
             }
 
-            Tab(L10n.text("tab.deep_tutor"), systemImage: "graduationcap.fill", value: AppRouteStore.RootTab.deepTutor) {
-                deepTutorContainer
+            Tab(L10n.text("tab.knowledge"), systemImage: "backpack.fill", value: AppRouteStore.RootTab.knowledge) {
+                knowledgeContainer
             }
 
+            
+/// iOS 26 正式主导航：系统 Liquid Glass 浮动 TabBar，底部 Tab 为首页、对话、DeepTutor、搜索、设置（IOS26-TABBAR-000002）。
+//            Tab(L10n.text("tab.deep_tutor"), systemImage: "graduationcap.fill", value: AppRouteStore.RootTab.deepTutor) {
+//                deepTutorContainer
+//            }
+            
             Tab(L10n.text("tab.search"), systemImage: "magnifyingglass", value: AppRouteStore.RootTab.search, role: .search) {
                 IOS26SearchTabView()
             }
@@ -124,6 +132,8 @@ struct IOS26TabBarView: View {
                 stateStore: chatStateStore,
                 listViewModel: chatListViewModel,
                 detailViewModel: chatDetailViewModel,
+                knowledgeDependencies: knowledgeDependencies,
+                knowledgeViewModel: knowledgeViewModel,
                 taskManager: taskManager,
                 homeViewModel: homeViewModel,
                 aiSettingsViewModel: aiSettingsViewModel,
@@ -139,6 +149,17 @@ struct IOS26TabBarView: View {
             DeepTutorConversationListPage(
                 viewModel: deepTutorChatViewModel,
                 aiSettingsViewModel: aiSettingsViewModel
+            )
+        } destination: { route in
+            destinationBuilder.destination(route)
+        }
+    }
+
+    private var knowledgeContainer: some View {
+        CompatibleRouteNavigationContainer(path: routePath(.knowledge)) {
+            KnowledgeLibraryView(
+                dependencies: knowledgeDependencies,
+                viewModel: knowledgeViewModel
             )
         } destination: { route in
             destinationBuilder.destination(route)

@@ -5,8 +5,10 @@ import SwiftUI
 struct MainTabRouteDestinationBuilder {
     let session: UserSession
     let homeDependencies: HomeFeatureDependencies
+    let knowledgeDependencies: KnowledgeFeatureDependencies
     let popularScienceDependencies: PopularScienceFeatureDependencies
     let homeViewModel: HomeViewModel
+    let knowledgeViewModel: KnowledgeLibraryViewModel
     let taskManager: TaskManager
     let chatStateStore: ChatStateStore
     let chatListViewModel: ChatListViewModel
@@ -24,6 +26,8 @@ struct MainTabRouteDestinationBuilder {
                 stateStore: chatStateStore,
                 listViewModel: chatListViewModel,
                 detailViewModel: chatDetailViewModel,
+                knowledgeDependencies: knowledgeDependencies,
+                knowledgeViewModel: knowledgeViewModel,
                 taskManager: taskManager,
                 homeViewModel: homeViewModel,
                 aiSettingsViewModel: aiSettingsViewModel

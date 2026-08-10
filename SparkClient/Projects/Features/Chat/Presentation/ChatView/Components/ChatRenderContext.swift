@@ -20,6 +20,8 @@ struct ChatRenderContext {
     
     // MARK: - 全局依赖
     let memberContextStore: MemberContextStore             // 成员上下文数据仓库
+    let knowledgeDependencies: KnowledgeFeatureDependencies
+    let knowledgeViewModel: KnowledgeLibraryViewModel
     
     // MARK: - 展示文本
     let errorCardBodyText: String                          // 错误卡片默认提示文本
@@ -27,6 +29,7 @@ struct ChatRenderContext {
     // MARK: - 用户操作回调（事件响应）
     let onRetry: () -> Void                                // 重试按钮点击（发送失败时）
     let onSaveKnowledgeCard: (ChatKnowledgeCard) -> Void   // 保存知识库卡片
+    let onKnowledgeCardSaved: (ChatKnowledgeCard) -> Void
     let onTaskCardAction: (TaskCard.Action) -> Void        // 任务卡片操作（完成/删除等）
     let onPendingMemberToolSelect: (PendingMemberToolCard, Int?) -> Void  // 待处理成员工具选择
     let onToolQuestionCardSubmit: (ChatToolQuestionCard, [ToolQuestionResponse]) -> Void
@@ -74,9 +77,12 @@ extension ChatRenderContext {
             savingStructuredHealthCardIDs: savingStructuredHealthCardIDs,
             savingNutritionCardIDs: savingNutritionCardIDs,
             memberContextStore: memberContextStore,
+            knowledgeDependencies: knowledgeDependencies,
+            knowledgeViewModel: knowledgeViewModel,
             errorCardBodyText: errorCardBodyText,
             onRetry: onRetry,
             onSaveKnowledgeCard: onSaveKnowledgeCard,
+            onKnowledgeCardSaved: onKnowledgeCardSaved,
             onTaskCardAction: onTaskCardAction,
             onPendingMemberToolSelect: onPendingMemberToolSelect,
             onToolQuestionCardSubmit: onToolQuestionCardSubmit,

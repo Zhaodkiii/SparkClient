@@ -227,6 +227,7 @@ private struct ChatConversationAppearanceSettingsSection: View {
             get: { viewModel.snapshot.chatConversationAppearance.cardStyle },
             set: { newValue in
                 viewModel.snapshot.chatConversationAppearance.cardStyle = newValue
+                ChatConversationAppearanceDevicePreferencesStore.save(viewModel.snapshot.chatConversationAppearance)
                 Task { await viewModel.persistSnapshotNow() }
             }
         )) {
@@ -239,6 +240,7 @@ private struct ChatConversationAppearanceSettingsSection: View {
             get: { viewModel.snapshot.chatConversationAppearance.toolTraceDisplayMode },
             set: { newValue in
                 viewModel.snapshot.chatConversationAppearance.toolTraceDisplayMode = newValue
+                ChatConversationAppearanceDevicePreferencesStore.save(viewModel.snapshot.chatConversationAppearance)
                 Task { await viewModel.persistSnapshotNow() }
             }
         )) {
@@ -251,9 +253,21 @@ private struct ChatConversationAppearanceSettingsSection: View {
             get: { viewModel.snapshot.chatConversationAppearance.collapseToolsWhileStreaming },
             set: { newValue in
                 viewModel.snapshot.chatConversationAppearance.collapseToolsWhileStreaming = newValue
+                ChatConversationAppearanceDevicePreferencesStore.save(viewModel.snapshot.chatConversationAppearance)
                 Task { await viewModel.persistSnapshotNow() }
             }
         ))
+
+        if viewModel.snapshot.chatConversationAppearance.cardStyle == .bodyFocused {
+            Toggle("工具结果卡片显示在正文", isOn: Binding(
+                get: { viewModel.snapshot.chatConversationAppearance.separatesToolPresentationsInBodyFocused },
+                set: { newValue in
+                    viewModel.snapshot.chatConversationAppearance.separatesToolPresentationsInBodyFocused = newValue
+                    ChatConversationAppearanceDevicePreferencesStore.save(viewModel.snapshot.chatConversationAppearance)
+                    Task { await viewModel.persistSnapshotNow() }
+                }
+            ))
+        }
     }
 }
 

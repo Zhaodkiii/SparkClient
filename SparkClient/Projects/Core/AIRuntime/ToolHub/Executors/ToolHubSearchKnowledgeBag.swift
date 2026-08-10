@@ -34,9 +34,13 @@ extension ToolHub {
             var sideEffects: [ToolSideEffect] = []
             if context.threadID != nil, context.assistantMessageClientID != nil {
                 sideEffects = [
-                    .knowledgeCards([
-                        ChatKnowledgeCard(title: title, content: body, showsSaveAndCopy: false)
-                    ])
+                    .knowledgeCards(results.map { result in
+                        ChatKnowledgeCard(
+                            title: result.title.isEmpty ? title : result.title,
+                            content: result.excerpt,
+                            showsSaveAndCopy: false
+                        )
+                    })
                 ]
             }
             return ToolExecutionResult(

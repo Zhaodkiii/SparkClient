@@ -14,6 +14,7 @@ struct ChatMessageBubbleContentView: View {
     let conversationCardStyle: ChatConversationCardStyle
     let toolTraceDisplayMode: ChatToolTraceDisplayMode
     let collapseToolsWhileStreaming: Bool
+    let separatesToolPresentationsInBodyFocused: Bool
     let isTranslating: Bool
     let isSavingMessage: Bool
     let isSavedMessage: Bool
@@ -25,6 +26,8 @@ struct ChatMessageBubbleContentView: View {
     let savedKnowledgeCardIDs: Set<UUID>
     let showActions: Bool
     @ObservedObject var memberContextStore: MemberContextStore
+    let knowledgeDependencies: KnowledgeFeatureDependencies
+    @ObservedObject var knowledgeViewModel: KnowledgeLibraryViewModel
 
     let onRetry: () -> Void
     let onCopy: () -> Void
@@ -35,6 +38,7 @@ struct ChatMessageBubbleContentView: View {
     let onSaveMessageToKnowledge: () -> Void
     let onGenerateKnowledgeCardsPreview: () -> Void
     let onSaveKnowledgeCard: (ChatKnowledgeCard) -> Void
+    let onKnowledgeCardSaved: (ChatKnowledgeCard) -> Void
     let onTaskCardAction: (TaskCard.Action) -> Void
     let onPendingMemberToolSelect: (PendingMemberToolCard, Int?) -> Void
     let onToolQuestionCardSubmit: (ChatToolQuestionCard, [ToolQuestionResponse]) -> Void
@@ -101,9 +105,12 @@ struct ChatMessageBubbleContentView: View {
             savingStructuredHealthCardIDs: savingStructuredHealthCardIDs,
             savingNutritionCardIDs: savingNutritionCardIDs,
             memberContextStore: memberContextStore,
+            knowledgeDependencies: knowledgeDependencies,
+            knowledgeViewModel: knowledgeViewModel,
             errorCardBodyText: errorCardBodyText,
             onRetry: onRetry,
             onSaveKnowledgeCard: onSaveKnowledgeCard,
+            onKnowledgeCardSaved: onKnowledgeCardSaved,
             onTaskCardAction: onTaskCardAction,
             onPendingMemberToolSelect: onPendingMemberToolSelect,
             onToolQuestionCardSubmit: onToolQuestionCardSubmit,
@@ -158,7 +165,11 @@ struct ChatMessageBubbleContentView: View {
             case .block(let block) where block.kind == .deepThought:
                 return [block]
             case .tool(let toolNode):
-                return ([toolNode.toolBlock].compactMap { $0 } + toolNode.presentations)
+                let toolBlocks = [toolNode.toolBlock].compactMap { $0 }
+                if separatesToolPresentationsInBodyFocused {
+                    return toolBlocks
+                }
+                return toolBlocks + toolNode.presentations
             default:
                 return []
             }
@@ -166,29 +177,65 @@ struct ChatMessageBubbleContentView: View {
     }
 
     private var chatToolTraceTimelineNodes: [ChatMessageTimelineNode] {
-        effectiveTimeline.filter { node in
+        if separatesToolPresentationsInBodyFocused == false {
+            return effectiveTimeline.filter { node in
+                switch node.content {
+                case .block(let block):
+                    return block.kind == .deepThought
+                case .tool:
+                    return true
+                case .healthResourceReferenceGroup:
+                    return false
+                }
+            }
+        }
+
+        return effectiveTimeline.compactMap { node in
             switch node.content {
             case .block(let block):
-                return block.kind == .deepThought
-            case .tool:
-                return true
+                return block.kind == .deepThought ? node : nil
+            case .tool(let toolNode):
+                guard toolNode.toolBlock != nil else { return nil }
+                let traceOnlyNode = ChatToolTimelineNode(
+                    id: toolNode.id,
+                    toolCallID: toolNode.toolCallID,
+                    toolBlock: toolNode.toolBlock,
+                    presentations: []
+                )
+                return ChatMessageTimelineNode(id: node.id, content: .tool(traceOnlyNode))
             case .healthResourceReferenceGroup:
-                return false
+                return nil
             }
         }
     }
 
     private var bodyFocusedTimelineNodes: [ChatMessageTimelineNode] {
-        effectiveTimeline.filter { node in
-            switch node.content {
-            case .block(let block):
-                return block.kind != .deepThought
-            case .tool:
-                return false
-            case .healthResourceReferenceGroup:
-                return true
+        if separatesToolPresentationsInBodyFocused == false {
+            return effectiveTimeline.filter { node in
+                switch node.content {
+                case .block(let block):
+                    return block.kind != .deepThought
+                case .tool:
+                    return false
+                case .healthResourceReferenceGroup:
+                    return true
+                }
             }
         }
+
+        let nodes = effectiveTimeline.flatMap { node -> [ChatMessageTimelineNode] in
+            switch node.content {
+            case .block(let block):
+                return block.kind == .deepThought ? [] : [node]
+            case .tool(let toolNode):
+                return toolNode.presentations.map { presentation in
+                    ChatMessageTimelineNode(id: presentation.id, content: .block(presentation))
+                }
+            case .healthResourceReferenceGroup:
+                return [node]
+            }
+        }
+        return nodes.isEmpty ? effectiveTimeline : nodes
     }
 
     private var chatToolTracePayload: ChatToolTracePresentationModel {

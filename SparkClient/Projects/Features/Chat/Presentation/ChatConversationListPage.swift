@@ -4,6 +4,8 @@ struct ChatConversationListPage: View {
     @ObservedObject var stateStore: ChatStateStore
     @ObservedObject var listViewModel: ChatListViewModel
     @ObservedObject var detailViewModel: ChatDetailViewModel
+    let knowledgeDependencies: KnowledgeFeatureDependencies
+    @ObservedObject var knowledgeViewModel: KnowledgeLibraryViewModel
     @ObservedObject var taskManager: TaskManager
     @ObservedObject var homeViewModel: HomeViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
@@ -128,6 +130,8 @@ struct ChatConversationListPage: View {
                     stateStore: stateStore,
                     listViewModel: listViewModel,
                     detailViewModel: detailViewModel,
+                    knowledgeDependencies: knowledgeDependencies,
+                    knowledgeViewModel: knowledgeViewModel,
                     taskManager: taskManager,
                     homeViewModel: homeViewModel,
                     aiSettingsViewModel: aiSettingsViewModel
@@ -174,6 +178,8 @@ struct ChatConversationListPage: View {
                 stateStore: stateStore,
                 listViewModel: listViewModel,
                 detailViewModel: detailViewModel,
+                knowledgeDependencies: knowledgeDependencies,
+                knowledgeViewModel: knowledgeViewModel,
                 taskManager: taskManager,
                 homeViewModel: homeViewModel,
                 aiSettingsViewModel: aiSettingsViewModel

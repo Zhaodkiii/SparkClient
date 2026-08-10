@@ -16,6 +16,8 @@ struct ChatView: View {
     @ObservedObject var stateStore: ChatStateStore
     @ObservedObject var listViewModel: ChatListViewModel
     @ObservedObject var detailViewModel: ChatDetailViewModel
+    let knowledgeDependencies: KnowledgeFeatureDependencies
+    @ObservedObject var knowledgeViewModel: KnowledgeLibraryViewModel
     @ObservedObject var taskManager: TaskManager
     @ObservedObject var homeViewModel: HomeViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
@@ -425,6 +427,8 @@ struct ChatView: View {
                 threadID: threadID,
                 stateStore: stateStore,
                 detailViewModel: detailViewModel,
+                knowledgeDependencies: knowledgeDependencies,
+                knowledgeViewModel: knowledgeViewModel,
                 uiStateStore: uiStateStore,
                 speechHelper: speechHelper,
                 memberContextStore: homeViewModel.memberContextStoreForBinding,
@@ -444,6 +448,8 @@ struct ChatView: View {
                 threadID: threadID,
                 stateStore: stateStore,
                 detailViewModel: detailViewModel,
+                knowledgeDependencies: knowledgeDependencies,
+                knowledgeViewModel: knowledgeViewModel,
                 uiStateStore: uiStateStore,
                 speechHelper: speechHelper,
                 memberContextStore: homeViewModel.memberContextStoreForBinding,
@@ -837,6 +843,8 @@ private struct ChatConversationMessageListContainer: View {
     let threadID: UUID
     @ObservedObject var stateStore: ChatStateStore
     @ObservedObject var detailViewModel: ChatDetailViewModel
+    let knowledgeDependencies: KnowledgeFeatureDependencies
+    @ObservedObject var knowledgeViewModel: KnowledgeLibraryViewModel
     @ObservedObject var uiStateStore: ChatMessageUIStateStore
     @ObservedObject var speechHelper: ChatSpeechHelper
     @ObservedObject var memberContextStore: MemberContextStore
@@ -857,6 +865,8 @@ private struct ChatConversationMessageListContainer: View {
         threadID: UUID,
         stateStore: ChatStateStore,
         detailViewModel: ChatDetailViewModel,
+        knowledgeDependencies: KnowledgeFeatureDependencies,
+        knowledgeViewModel: KnowledgeLibraryViewModel,
         uiStateStore: ChatMessageUIStateStore,
         speechHelper: ChatSpeechHelper,
         memberContextStore: MemberContextStore,
@@ -874,6 +884,8 @@ private struct ChatConversationMessageListContainer: View {
         self.threadID = threadID
         self.stateStore = stateStore
         self.detailViewModel = detailViewModel
+        self.knowledgeDependencies = knowledgeDependencies
+        self.knowledgeViewModel = knowledgeViewModel
         self.uiStateStore = uiStateStore
         self.speechHelper = speechHelper
         self.memberContextStore = memberContextStore
@@ -900,6 +912,8 @@ private struct ChatConversationMessageListContainer: View {
             threadID: threadID,
             stateStore: stateStore,
             detailViewModel: detailViewModel,
+            knowledgeDependencies: knowledgeDependencies,
+            knowledgeViewModel: knowledgeViewModel,
             uiStateStore: uiStateStore,
             speechHelper: speechHelper,
             memberContextStore: memberContextStore,

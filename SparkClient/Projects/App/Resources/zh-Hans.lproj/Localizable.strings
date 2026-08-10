@@ -10,6 +10,7 @@
 "tab.home" = "首页";
 "tab.health" = "健康";
 "tab.chat" = "AI 对话";
+"tab.knowledge" = "知识背包";
 "tab.deep_tutor" = "DeepTutor";
 "tab.search" = "搜索";
 "tab.popular_science" = "科普";
@@ -1229,6 +1230,7 @@
 "chat.bubble.knowledge.saved" = "已保存";
 "chat.bubble.knowledge.save_to_bag" = "存入知识背包";
 "chat.bubble.knowledge.saved_to_bag" = "已经存入背包";
+"chat.bubble.knowledge.open_detail" = "打开知识详情";
 "chat.bubble.knowledge.default_title" = "聊天洞察";
 "chat.bubble.knowledge.saved.toast" = "已保存到知识库";
 "chat.history.load_more" = "正在加载更早消息…";

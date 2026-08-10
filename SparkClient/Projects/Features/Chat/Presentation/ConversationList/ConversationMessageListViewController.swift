@@ -48,6 +48,8 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
     // MARK: - 依赖注入（ViewModel / Store / 工具）
     weak var stateStore: ChatStateStore?
     weak var detailViewModel: ChatDetailViewModel?
+    var knowledgeDependencies: KnowledgeFeatureDependencies?
+    weak var knowledgeViewModel: KnowledgeLibraryViewModel?
     weak var uiStateStore: ChatMessageUIStateStore?
     weak var speechHelper: ChatSpeechHelper?
     weak var memberContextStore: MemberContextStore?
@@ -535,6 +537,8 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
             if let msg = messageLookup[itemID],
                let stateStore = stateStore,
                let detailViewModel = detailViewModel,
+               let knowledgeDependencies = knowledgeDependencies,
+               let knowledgeViewModel = knowledgeViewModel,
                let uiStateStore = uiStateStore,
                let speechHelper = speechHelper,
                let memberContextStore = memberContextStore,
@@ -553,6 +557,8 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
                     visibleMessages: allVisibleMessages,
                     stateStore: stateStore,
                     detailViewModel: detailViewModel,
+                    knowledgeDependencies: knowledgeDependencies,
+                    knowledgeViewModel: knowledgeViewModel,
                     uiStateStore: uiStateStore,
                     speechHelper: speechHelper,
                     memberContextStore: memberContextStore,

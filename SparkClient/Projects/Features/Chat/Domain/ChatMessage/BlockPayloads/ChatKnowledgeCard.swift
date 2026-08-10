@@ -5,6 +5,7 @@ nonisolated struct ChatKnowledgeCard: Codable, Equatable, Identifiable, Sendable
     let id: UUID
     let title: String
     let content: String
+    let documentID: UUID?
     /// `search_knowledge_bag` 检索预览为 `false`（仅展示）；`create_knowledge_document` 等新建草稿为 `true`。
     let showsSaveAndCopy: Bool
 
@@ -26,10 +27,11 @@ nonisolated struct ChatKnowledgeCard: Codable, Equatable, Identifiable, Sendable
         )
     }
 
-    init(id: UUID? = nil, title: String, content: String, showsSaveAndCopy: Bool = true) {
+    init(id: UUID? = nil, title: String, content: String, documentID: UUID? = nil, showsSaveAndCopy: Bool = true) {
         self.id = id ?? Self.stableID(title: title, content: content)
         self.title = title
         self.content = content
+        self.documentID = documentID
         self.showsSaveAndCopy = showsSaveAndCopy
     }
 
@@ -44,6 +46,9 @@ nonisolated struct ChatKnowledgeCard: Codable, Equatable, Identifiable, Sendable
         }
         self.title = title
         self.content = content
+        self.documentID = try c.decodeIfPresent(UUID.self, forKey: .key("documentID"))
+            ?? c.decodeIfPresent(UUID.self, forKey: .key("documentId"))
+            ?? c.decodeIfPresent(UUID.self, forKey: .key("document_id"))
         self.showsSaveAndCopy = try c.decodeIfPresent(Bool.self, forKey: .key("showsSaveAndCopy")) ?? true
     }
 
@@ -52,6 +57,7 @@ nonisolated struct ChatKnowledgeCard: Codable, Equatable, Identifiable, Sendable
         try c.encode(id, forKey: .key("id"))
         try c.encode(title, forKey: .key("title"))
         try c.encode(content, forKey: .key("content"))
+        try c.encodeIfPresent(documentID, forKey: .key("documentID"))
         try c.encode(showsSaveAndCopy, forKey: .key("showsSaveAndCopy"))
     }
 }

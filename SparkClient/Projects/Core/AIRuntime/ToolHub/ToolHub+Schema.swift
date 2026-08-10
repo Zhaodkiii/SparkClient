@@ -126,6 +126,11 @@ extension ToolHub {
             return [
                 "member_id": AIRuntimeToolProperty(type: "integer", description: td("tool.param.member_id_for_task")),
                 "user_input": AIRuntimeToolProperty(type: "string", description: td("tool.param.user_input_for_extraction")),
+                "task_type": AIRuntimeToolProperty(type: "string", description: td("tool.param.task_type_optional"), enumValues: ["medical", "exercise", "diet"]),
+                "title": AIRuntimeToolProperty(type: "string", description: td("tool.param.task_title_optional")),
+                "description": AIRuntimeToolProperty(type: "string", description: td("tool.param.task_description_optional")),
+                "business_type": AIRuntimeToolProperty(type: "string", description: td("tool.param.business_type_optional")),
+                "business_id": AIRuntimeToolProperty(type: "string", description: td("tool.param.business_id_optional")),
                 "require_query_first": AIRuntimeToolProperty(type: "boolean", description: td("tool.param.require_query_first"))
             ]
         case .searchKnowledgeBag:
@@ -133,7 +138,11 @@ extension ToolHub {
         case .createKnowledgeDocument:
             return [
                 "title": AIRuntimeToolProperty(type: "string", description: td("tool.param.doc_title")),
-                "content": AIRuntimeToolProperty(type: "string", description: td("tool.param.doc_content_markdown"))
+                "content": AIRuntimeToolProperty(type: "string", description: td("tool.param.doc_content_markdown")),
+                "auto_save": AIRuntimeToolProperty(type: "boolean", description: td("tool.param.knowledge_auto_save")),
+                "category": AIRuntimeToolProperty(type: "string", description: td("tool.param.knowledge_category_optional")),
+                "member_id": AIRuntimeToolProperty(type: "integer", description: td("tool.param.member_id_optional")),
+                "source": AIRuntimeToolProperty(type: "string", description: td("tool.param.knowledge_source_optional"))
             ]
         case .searchCalendarAndReminders:
             return [

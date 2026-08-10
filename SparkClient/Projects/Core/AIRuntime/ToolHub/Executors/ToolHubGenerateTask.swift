@@ -37,7 +37,29 @@ extension ToolHub {
         }
 
         let extracted = await extractTaskIntent(from: userInput)
-        let similarTasks = findSimilarTasks(existing: existingTasks, extracted: extracted)
+        let explicitTaskType = invocation.arguments["task_type"]?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let businessType = (
+            invocation.arguments["business_type"]
+            ?? invocation.arguments["businessType"]
+            ?? ""
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+        let businessID = (
+            invocation.arguments["business_id"]
+            ?? invocation.arguments["businessID"]
+            ?? ""
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+        let requestedTaskType = resolveRequestedTaskType(
+            explicitTaskType: explicitTaskType,
+            businessType: businessType,
+            extracted: extracted
+        )
+        let similarTasks = findSimilarTasks(
+            existing: existingTasks,
+            extracted: extracted,
+            taskTypeOverride: requestedTaskType,
+            businessType: businessType,
+            businessID: businessID
+        )
         if similarTasks.isEmpty == false {
             let response = TaskNoCreateToolPayload(
                 ok: true,
@@ -65,29 +87,47 @@ extension ToolHub {
         }
 
         let now = Date()
-        let taskType = mapTaskType(extracted.taskType)
+        let taskType = requestedTaskType
         let startAt = parseISODate(extracted.timeInfo.startTime) ?? now
         let repeatType = mapRepeatType(period: extracted.timeInfo.period, frequency: extracted.timeInfo.frequency)
         let dueAt = resolveDueDate(startAt: startAt, repeatType: repeatType)
         let priority: HealthTask.Priority = .medium
+        let resolvedTitle = nonEmptyTaskToolText(invocation.arguments["title"])
+            ?? makeTaskTitle(extracted: extracted, type: taskType)
+        let resolvedDescription = nonEmptyTaskToolText(invocation.arguments["description"])
+            ?? makeTaskDescription(extracted: extracted, type: taskType)
+        let resolvedBusinessType = businessType.isEmpty ? "ai_task_generation" : businessType
+        let resolvedBusinessID = businessID
 
         let card = TaskToolCardPayload(
             id: -Int(now.timeIntervalSince1970),
             member: memberID,
             creator: nil,
-            title: makeTaskTitle(extracted: extracted, type: taskType),
-            description: makeTaskDescription(extracted: extracted, type: taskType),
+            title: resolvedTitle,
+            description: resolvedDescription,
             type: taskType.rawValue,
             startTime: iso8601(startAt),
             dueTime: dueAt.map(iso8601),
             repeatType: repeatType.rawValue,
             priority: priority.rawValue,
-            businessType: "ai_task_generation",
-            businessID: "",
+            businessType: resolvedBusinessType,
+            businessID: resolvedBusinessID,
             source: HealthTask.Source.ai.rawValue,
             status: TaskCard.CardStatus.pending.rawValue,
             extractPayload: extracted.asStringMap(),
-            taskPayload: buildTaskPayloadStrings(memberID: memberID, type: taskType, extracted: extracted, startAt: startAt, dueAt: dueAt, repeatType: repeatType, priority: priority),
+            taskPayload: buildTaskPayloadStrings(
+                memberID: memberID,
+                type: taskType,
+                extracted: extracted,
+                startAt: startAt,
+                dueAt: dueAt,
+                repeatType: repeatType,
+                priority: priority,
+                title: resolvedTitle,
+                description: resolvedDescription,
+                businessType: resolvedBusinessType,
+                businessID: resolvedBusinessID
+            ),
             similarityPayload: [
                 "queried_first": "true",
                 "similar_count": "0",
@@ -99,8 +139,17 @@ extension ToolHub {
             updatedAt: iso8601(now)
         )
         let taskCards = taskCardsFromToolCardPayload([card]) ?? []
-        let titleLine = makeTaskTitle(extracted: extracted, type: taskType)
-        let userFacing = "已根据描述生成 1 条待确认任务「\(titleLine)」。请在消息内任务卡片中确认或忽略。"
+        let response = TaskGeneratedToolPayload(
+            ok: true,
+            action: "pending_confirm",
+            queriedFirst: true,
+            task: .init(
+                title: resolvedTitle,
+                type: taskType.rawValue,
+                businessType: resolvedBusinessType,
+                businessId: resolvedBusinessID
+            )
+        )
         var sideEffects: [ToolSideEffect] = []
         if taskCards.isEmpty == false,
            context.threadID != nil,
@@ -109,11 +158,30 @@ extension ToolHub {
         }
         return ToolExecutionResult(
             toolName: SparkToolName.generateTask,
-            outputText: userFacing,
+            outputText: encodeJSON(response) ?? #"{"ok":false,"error":"encode_failed"}"#,
             sensitive: true,
             shouldBypassModel: true,
             sideEffects: sideEffects
         )
     }
 
+}
+
+private struct TaskGeneratedToolPayload: Encodable {
+    struct Task: Encodable {
+        let title: String
+        let type: Int
+        let businessType: String
+        let businessId: String
+    }
+
+    let ok: Bool
+    let action: String
+    let queriedFirst: Bool
+    let task: Task
+}
+
+private func nonEmptyTaskToolText(_ value: String?) -> String? {
+    let text = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    return text.isEmpty ? nil : text
 }

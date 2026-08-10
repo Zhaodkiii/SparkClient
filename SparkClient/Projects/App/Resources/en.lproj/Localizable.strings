@@ -10,6 +10,7 @@
 "tab.home" = "Home";
 "tab.health" = "Health";
 "tab.chat" = "Chat";
+"tab.knowledge" = "Knowledge Bag";
 "tab.deep_tutor" = "DeepTutor";
 "tab.search" = "Search";
 "tab.popular_science" = "Learn";
@@ -1229,6 +1230,7 @@
 "chat.bubble.knowledge.saved" = "Saved";
 "chat.bubble.knowledge.save_to_bag" = "Save to Knowledge Bag";
 "chat.bubble.knowledge.saved_to_bag" = "Saved to Bag";
+"chat.bubble.knowledge.open_detail" = "Open knowledge detail";
 "chat.bubble.knowledge.default_title" = "Chat Insight";
 "chat.bubble.knowledge.saved.toast" = "Saved to knowledge library";
 "chat.history.load_more" = "Loading earlier messages…";

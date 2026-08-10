@@ -19,6 +19,8 @@ struct ChatSwiftUIConversationView: View {
     let threadID: UUID
     @ObservedObject var stateStore: ChatStateStore
     @ObservedObject var detailViewModel: ChatDetailViewModel
+    let knowledgeDependencies: KnowledgeFeatureDependencies
+    @ObservedObject var knowledgeViewModel: KnowledgeLibraryViewModel
     @ObservedObject var uiStateStore: ChatMessageUIStateStore
     @ObservedObject var speechHelper: ChatSpeechHelper
     @ObservedObject var memberContextStore: MemberContextStore
@@ -43,6 +45,8 @@ struct ChatSwiftUIConversationView: View {
         threadID: UUID,
         stateStore: ChatStateStore,
         detailViewModel: ChatDetailViewModel,
+        knowledgeDependencies: KnowledgeFeatureDependencies,
+        knowledgeViewModel: KnowledgeLibraryViewModel,
         uiStateStore: ChatMessageUIStateStore,
         speechHelper: ChatSpeechHelper,
         memberContextStore: MemberContextStore,
@@ -61,6 +65,8 @@ struct ChatSwiftUIConversationView: View {
         self.threadID = threadID
         self.stateStore = stateStore
         self.detailViewModel = detailViewModel
+        self.knowledgeDependencies = knowledgeDependencies
+        self.knowledgeViewModel = knowledgeViewModel
         self.uiStateStore = uiStateStore
         self.speechHelper = speechHelper
         self.memberContextStore = memberContextStore
@@ -112,6 +118,8 @@ struct ChatSwiftUIConversationView: View {
                             frame: frame,
                             stateStore: stateStore,
                             detailViewModel: detailViewModel,
+                            knowledgeDependencies: knowledgeDependencies,
+                            knowledgeViewModel: knowledgeViewModel,
                             uiStateStore: uiStateStore,
                             speechHelper: speechHelper,
                             memberContextStore: memberContextStore,
@@ -264,6 +272,8 @@ private struct ChatSwiftUIConversationMessageRow: View {
     let frame: ChatSwiftUIConversationFrame
     @ObservedObject var stateStore: ChatStateStore
     @ObservedObject var detailViewModel: ChatDetailViewModel
+    let knowledgeDependencies: KnowledgeFeatureDependencies
+    @ObservedObject var knowledgeViewModel: KnowledgeLibraryViewModel
     @ObservedObject var uiStateStore: ChatMessageUIStateStore
     @ObservedObject var speechHelper: ChatSpeechHelper
     @ObservedObject var memberContextStore: MemberContextStore
@@ -281,6 +291,8 @@ private struct ChatSwiftUIConversationMessageRow: View {
             visibleMessages: frame.visibleMessages,
             stateStore: stateStore,
             detailViewModel: detailViewModel,
+            knowledgeDependencies: knowledgeDependencies,
+            knowledgeViewModel: knowledgeViewModel,
             uiStateStore: uiStateStore,
             speechHelper: speechHelper,
             memberContextStore: memberContextStore,

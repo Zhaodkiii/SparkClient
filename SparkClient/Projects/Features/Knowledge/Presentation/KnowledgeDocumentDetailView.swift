@@ -9,6 +9,8 @@ import UniformTypeIdentifiers
 struct KnowledgeDocumentDetailView: View {
     @ObservedObject var libraryViewModel: KnowledgeLibraryViewModel
     let documentID: UUID
+    private let initialEditMode: Bool
+    private let onSaved: (() -> Void)?
 
     @StateObject private var editor: KnowledgeDocumentEditorViewModel
     @State private var showDeleteConfirmation = false
@@ -28,10 +30,14 @@ struct KnowledgeDocumentDetailView: View {
     init(
         dependencies: KnowledgeFeatureDependencies,
         viewModel: KnowledgeLibraryViewModel,
-        documentID: UUID
+        documentID: UUID,
+        initialEditMode: Bool = false,
+        onSaved: (() -> Void)? = nil
     ) {
         self.libraryViewModel = viewModel
         self.documentID = documentID
+        self.initialEditMode = initialEditMode
+        self.onSaved = onSaved
         _editor = StateObject(wrappedValue: dependencies.makeEditorViewModel(documentID))
     }
 
@@ -207,8 +213,10 @@ struct KnowledgeDocumentDetailView: View {
             Button {
                 Task {
                     if editor.isEditMode {
-                        _ = await editor.saveNow()
-                        await libraryViewModel.refresh()
+                        if await editor.saveNow() {
+                            await libraryViewModel.refresh()
+                            onSaved?()
+                        }
                     }
                     withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
                         editor.isEditMode.toggle()
@@ -230,6 +238,9 @@ struct KnowledgeDocumentDetailView: View {
 
     private func loadTask() async {
         await editor.load()
+        if initialEditMode {
+            editor.isEditMode = true
+        }
         await libraryViewModel.refresh()
         titleDraft = editor.title
     }

@@ -62,7 +62,10 @@ extension ChatMessageBlock {
         case .knowledgeCards(let cards):
             ChatKnowledgeCardListView(
                 cards: cards,
+                knowledgeDependencies: context.knowledgeDependencies,
+                knowledgeViewModel: context.knowledgeViewModel,
                 onSave: context.onSaveKnowledgeCard,
+                onSaved: context.onKnowledgeCardSaved,
                 isSaving: { context.savingKnowledgeCardIDs.contains($0.id) },
                 isSaved: { context.savedKnowledgeCardIDs.contains($0.id) }
             )
