@@ -448,7 +448,7 @@ actor MessageRunActor: ChatSideEffectSink {
             )
         )
         logger.info(
-            "[CHAT_USAGE_TMP] actor.summary.finalize.done assistant=\(assistantClientMessageID.uuidString) amount=\(amount) currency=\(currency == .cny ? "CNY" : "USD") callsDisplay=\(state.llmCallCount + state.toolCallCount)",
+            "[CHAT_USAGE_TMP] actor.summary.finalize.done assistant=\(assistantClientMessageID.uuidString) amount=\(amount) currency=\(currency == .cny ? "CNY" : "USD") callsDisplay=\(state.visibleCallCount)",
             module: .aiConfig
         )
     }
@@ -1233,6 +1233,10 @@ nonisolated private struct AssistantRunState {
 
     var isUsageEstimated: Bool {
         hasEstimatedUsage || hasProviderUsage == false
+    }
+
+    var visibleCallCount: Int {
+        toolCallCount > 0 ? toolCallCount : max(llmCallCount, 1)
     }
 
     mutating func recordLLMUsage(_ event: ChatMessageUsageEvent) {

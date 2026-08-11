@@ -147,12 +147,13 @@ nonisolated struct ChatBillingEstimate: Equatable, Sendable {
 
     static func make(summary: ChatMessageUsageSummary) -> ChatBillingEstimate {
         let currency: ChatBillingCurrency = summary.currencyCode.uppercased() == "CNY" ? .cny : .usd
+        let visibleCallCount = summary.toolCallCount > 0 ? summary.toolCallCount : max(summary.llmCallCount, 1)
         return ChatBillingEstimate(
             priceTier: ChatBillingPriceTier(modelPriceTier: summary.priceTier),
             promptTokens: summary.promptTokens,
             completionTokens: summary.completionTokens,
             estimatedTokens: summary.totalTokens,
-            estimatedCalls: max(summary.llmCallCount + summary.toolCallCount, 1),
+            estimatedCalls: visibleCallCount,
             currency: currency,
             estimatedAmount: summary.estimatedAmount
         )

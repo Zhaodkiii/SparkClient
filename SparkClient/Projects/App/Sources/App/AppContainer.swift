@@ -807,6 +807,17 @@ final class AppContainer {
         logger.info("主 Tab 依赖首次初始化 accountID=\(ownerAccountID)", module: .general)
         let aiSettingsViewModel = makeAISettingsViewModel(ownerAccountID: ownerAccountID)
         let homeViewModel = makeHomeViewModel()
+        let autoSmallTaskRegistry = AutoSmallTaskRegistry(
+            aiConfigCenter: aiConfigCenter,
+            logger: logger
+        )
+        let chatAutoSmallTaskIntentStore = ChatAutoSmallTaskIntentStore(logger: logger)
+        let chatAutoSmallTaskCoordinator = ChatAutoSmallTaskCoordinator(
+            intentStore: chatAutoSmallTaskIntentStore,
+            aiConfigCenter: aiConfigCenter,
+            notificationClient: notificationClient,
+            logger: logger
+        )
         let medicalDocumentUploadViewModel = makeMedicalDocumentUploadViewModel()
         let memberFlowMedicalDocumentUploadViewModel = makeScopedMedicalDocumentUploadViewModel()
         let homeLaunchIntentConsumer = HomeLaunchIntentConsumer(
@@ -878,6 +889,9 @@ final class AppContainer {
             chatStateStore: chatStateStore,
             chatListViewModel: chatListViewModel,
             chatDetailViewModel: chatDetailViewModel,
+            chatAutoSmallTaskIntentStore: chatAutoSmallTaskIntentStore,
+            chatAutoSmallTaskCoordinator: chatAutoSmallTaskCoordinator,
+            autoSmallTaskRegistry: autoSmallTaskRegistry,
             deepTutorChatViewModel: deepTutorChatViewModel,
             settingsViewModel: makeSettingsViewModel(),
             accountManagementViewModel: makeAccountManagementViewModel(),

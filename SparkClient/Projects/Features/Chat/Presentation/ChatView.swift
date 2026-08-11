@@ -21,6 +21,7 @@ struct ChatView: View {
     @ObservedObject var taskManager: TaskManager
     @ObservedObject var homeViewModel: HomeViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
+    let autoSmallTaskCoordinator: ChatAutoSmallTaskCoordinator?
     
     @State private var hasLoaded = false
     @StateObject private var uiStateStore = ChatMessageUIStateStore()
@@ -68,6 +69,30 @@ struct ChatView: View {
     
     var body: some View {
         AnyView(configuredLayout)
+    }
+
+    init(
+        threadID: UUID,
+        stateStore: ChatStateStore,
+        listViewModel: ChatListViewModel,
+        detailViewModel: ChatDetailViewModel,
+        knowledgeDependencies: KnowledgeFeatureDependencies,
+        knowledgeViewModel: KnowledgeLibraryViewModel,
+        taskManager: TaskManager,
+        homeViewModel: HomeViewModel,
+        aiSettingsViewModel: AISettingsViewModel,
+        autoSmallTaskCoordinator: ChatAutoSmallTaskCoordinator? = nil
+    ) {
+        self.threadID = threadID
+        self.stateStore = stateStore
+        self.listViewModel = listViewModel
+        self.detailViewModel = detailViewModel
+        self.knowledgeDependencies = knowledgeDependencies
+        self.knowledgeViewModel = knowledgeViewModel
+        self.taskManager = taskManager
+        self.homeViewModel = homeViewModel
+        self.aiSettingsViewModel = aiSettingsViewModel
+        self.autoSmallTaskCoordinator = autoSmallTaskCoordinator
     }
     
     private var baseLayout: some View {
@@ -314,6 +339,7 @@ struct ChatView: View {
                 listViewModel.selectThread(threadID)
                 await detailViewModel.loadMessagesIfNeeded(for: threadID, lockBottomViewport: true)
                 restoreCardActionSnapshotIfNeeded(forceReload: true)
+                await trySendAutoSmallTaskIfReady()
             }
             .onChange(of: threadID) { _ in
                 activeParameterCard = nil
@@ -360,6 +386,7 @@ struct ChatView: View {
                     }
                 }
                 await detailViewModel.refreshThreadImageDeliveryMode(for: threadID)
+                await trySendAutoSmallTaskIfReady()
             }
             .task(id: reasoningRefreshId) {
                 await detailViewModel.refreshReasoningToolbarContext(for: threadID)
@@ -417,6 +444,17 @@ struct ChatView: View {
             } message: {
                 Text(L10n.text("chat.management.clear_confirm_message"))
             }
+    }
+
+    private func trySendAutoSmallTaskIfReady() async {
+        guard let autoSmallTaskCoordinator else { return }
+        guard selectedComposerModelRow != nil else { return }
+        await autoSmallTaskCoordinator.trySendIfNeeded(
+            threadID: threadID,
+            selectedModelRow: selectedComposerModelRow,
+            stateStore: stateStore,
+            detailViewModel: detailViewModel
+        )
     }
     
     @ViewBuilder

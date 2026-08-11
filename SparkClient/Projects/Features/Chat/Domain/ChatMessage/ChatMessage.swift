@@ -831,7 +831,8 @@ extension ChatMessage {
             createdAt: createdAt,
             serverUpdatedAt: serverUpdatedAt,
             isTombstone: isTombstone,
-            modelName: modelName
+            modelName: modelName,
+            usageSummary: usageSummary
         )
     }
 
@@ -864,7 +865,8 @@ extension ChatMessage {
             createdAt: createdAt,
             serverUpdatedAt: serverUpdatedAt,
             isTombstone: isTombstone,
-            modelName: modelName
+            modelName: modelName,
+            usageSummary: usageSummary
         )
     }
 
@@ -900,7 +902,8 @@ extension ChatMessage {
             createdAt: remote.createdAt,
             serverUpdatedAt: remote.serverUpdatedAt,
             isTombstone: remote.isTombstone,
-            modelName: remote.modelName
+            modelName: remote.modelName,
+            usageSummary: remote.usageSummary ?? usageSummary
         )
     }
 

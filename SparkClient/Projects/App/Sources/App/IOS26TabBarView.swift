@@ -16,6 +16,9 @@ struct IOS26TabBarView: View {
     @ObservedObject var chatStateStore: ChatStateStore
     @ObservedObject var chatListViewModel: ChatListViewModel
     @ObservedObject var chatDetailViewModel: ChatDetailViewModel
+    @ObservedObject var chatAutoSmallTaskIntentStore: ChatAutoSmallTaskIntentStore
+    let chatAutoSmallTaskCoordinator: ChatAutoSmallTaskCoordinator
+    let autoSmallTaskRegistry: AutoSmallTaskRegistry
     @ObservedObject var deepTutorChatViewModel: DeepTutorChatViewModel
     @ObservedObject var settingsViewModel: SettingsViewModel
     @ObservedObject var accountManagementViewModel: AccountManagementViewModel
@@ -41,6 +44,7 @@ struct IOS26TabBarView: View {
             chatStateStore: chatStateStore,
             chatListViewModel: chatListViewModel,
             chatDetailViewModel: chatDetailViewModel,
+            chatAutoSmallTaskCoordinator: chatAutoSmallTaskCoordinator,
             deepTutorChatViewModel: deepTutorChatViewModel,
             accountManagementViewModel: accountManagementViewModel,
             aiSettingsViewModel: aiSettingsViewModel
@@ -54,7 +58,10 @@ struct IOS26TabBarView: View {
             chatListViewModel: chatListViewModel,
             deepTutorChatViewModel: deepTutorChatViewModel,
             notificationClient: homeDependencies.notificationClient,
-            quickStartPreferenceStore: .shared
+            quickStartPreferenceStore: .shared,
+            autoSmallTaskRegistry: autoSmallTaskRegistry,
+            autoSmallTaskIntentStore: chatAutoSmallTaskIntentStore,
+            ownerAccountID: session.accountID
         )
     }
 

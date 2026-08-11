@@ -176,6 +176,31 @@ final class AIConfigCenter {
         await runtimeConfigStore.effectiveSmallTasks()
     }
 
+    /// 按稳定 code 新增或更新本地小任务，并刷新运行时本地配置。
+    @discardableResult
+    func upsertLocalSmallTask(_ task: SmallTask, ownerAccountID: Int64? = nil) async throws -> SmallTask {
+        let resolved = await resolvedOwnerAccountID(explicit: ownerAccountID)
+        var normalized = task
+        normalized.source = .local
+
+        var snapshot = await currentSnapshot(ownerAccountID: resolved)
+        if normalized.id <= 0 {
+            normalized.id = (snapshot.smallTasks.filter { $0.source == .local }.map(\.id).max() ?? 0) + 1
+        }
+        if let index = snapshot.smallTasks.firstIndex(where: { $0.code == normalized.code }) {
+            snapshot.smallTasks[index] = normalized
+        } else {
+            snapshot.smallTasks.append(normalized)
+        }
+        await runtimeConfigStore.applySnapshot(snapshot, ownerAccountID: resolved)
+        try await repository.save(snapshot: snapshot, ownerAccountID: resolved)
+        logger.info(
+            "AIConfigCenter.upsertLocalSmallTask 已保存 code=\(normalized.code) id=\(normalized.id) owner=\(String(describing: resolved))",
+            module: .aiConfig
+        )
+        return normalized
+    }
+
     /// 获取搜索运行时配置
     func effectiveSearchConfig() async throws -> SearchRuntimeConfig {
         try await runtimeConfigStore.effectiveSearchConfig()

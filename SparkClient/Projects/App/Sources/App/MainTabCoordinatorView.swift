@@ -15,6 +15,9 @@ struct MainTabCoordinatorView: View {
     @ObservedObject var chatStateStore: ChatStateStore
     @ObservedObject var chatListViewModel: ChatListViewModel
     @ObservedObject var chatDetailViewModel: ChatDetailViewModel
+    @ObservedObject var chatAutoSmallTaskIntentStore: ChatAutoSmallTaskIntentStore
+    let chatAutoSmallTaskCoordinator: ChatAutoSmallTaskCoordinator
+    let autoSmallTaskRegistry: AutoSmallTaskRegistry
     @ObservedObject var deepTutorChatViewModel: DeepTutorChatViewModel
     @ObservedObject var settingsViewModel: SettingsViewModel
     @ObservedObject var accountManagementViewModel: AccountManagementViewModel
@@ -40,6 +43,7 @@ struct MainTabCoordinatorView: View {
             chatStateStore: chatStateStore,
             chatListViewModel: chatListViewModel,
             chatDetailViewModel: chatDetailViewModel,
+            chatAutoSmallTaskCoordinator: chatAutoSmallTaskCoordinator,
             deepTutorChatViewModel: deepTutorChatViewModel,
             accountManagementViewModel: accountManagementViewModel,
             aiSettingsViewModel: aiSettingsViewModel

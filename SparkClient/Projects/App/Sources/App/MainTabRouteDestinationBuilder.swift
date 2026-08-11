@@ -13,6 +13,7 @@ struct MainTabRouteDestinationBuilder {
     let chatStateStore: ChatStateStore
     let chatListViewModel: ChatListViewModel
     let chatDetailViewModel: ChatDetailViewModel
+    let chatAutoSmallTaskCoordinator: ChatAutoSmallTaskCoordinator?
     let deepTutorChatViewModel: DeepTutorChatViewModel
     let accountManagementViewModel: AccountManagementViewModel
     let aiSettingsViewModel: AISettingsViewModel
@@ -30,7 +31,8 @@ struct MainTabRouteDestinationBuilder {
                 knowledgeViewModel: knowledgeViewModel,
                 taskManager: taskManager,
                 homeViewModel: homeViewModel,
-                aiSettingsViewModel: aiSettingsViewModel
+                aiSettingsViewModel: aiSettingsViewModel,
+                autoSmallTaskCoordinator: chatAutoSmallTaskCoordinator
             )
             .task(id: threadID) {
                 await chatListViewModel.selectAndPrepare(threadID: threadID)
