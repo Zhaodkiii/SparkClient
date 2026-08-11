@@ -7,6 +7,7 @@ struct ChatStructuredHealthCardsBlockView: View {
     let blob: StructuredHealthCardsBlob
     @ObservedObject var memberContextStore: MemberContextStore
     let isSavingIDs: Set<UUID>
+    let onOpenPreview: (ChatStructuredHealthCardItem) -> Void
     let onAction: (ChatStructuredHealthCardAction) -> Void
 
     private var members: [Member] {
@@ -31,6 +32,7 @@ struct ChatStructuredHealthCardsBlockView: View {
                         subtitle: [card.specification, card.dosageLine].compactMap { $0 }.joined(separator: "\n"),
                         item: item,
                         isSaving: isSavingIDs.contains(item.id),
+                        onOpenPreview: onOpenPreview,
                         onSetMember: { memberID in
                             onAction(.setMember(blockID: blockID, item: item, memberID))
                         },
@@ -47,6 +49,7 @@ struct ChatStructuredHealthCardsBlockView: View {
                         subtitle: card.specification,
                         item: item,
                         isSaving: isSavingIDs.contains(item.id),
+                        onOpenPreview: onOpenPreview,
                         onSetMember: { memberID in
                             onAction(.setMember(blockID: blockID, item: item, memberID))
                         },
@@ -63,6 +66,7 @@ struct ChatStructuredHealthCardsBlockView: View {
                         subtitle: card.subtitle,
                         item: item,
                         isSaving: isSavingIDs.contains(item.id),
+                        onOpenPreview: onOpenPreview,
                         onSetMember: { memberID in
                             onAction(.setMember(blockID: blockID, item: item, memberID))
                         },
@@ -79,6 +83,7 @@ struct ChatStructuredHealthCardsBlockView: View {
                         subtitle: [card.hospital, card.dateText].compactMap { $0 }.joined(separator: " · "),
                         item: item,
                         isSaving: isSavingIDs.contains(item.id),
+                        onOpenPreview: onOpenPreview,
                         onSetMember: { memberID in
                             onAction(.setMember(blockID: blockID, item: item, memberID))
                         },
@@ -95,6 +100,7 @@ struct ChatStructuredHealthCardsBlockView: View {
                         subtitle: card.diagnosisLine,
                         item: item,
                         isSaving: isSavingIDs.contains(item.id),
+                        onOpenPreview: onOpenPreview,
                         onSetMember: { memberID in
                             onAction(.setMember(blockID: blockID, item: item, memberID))
                         },
@@ -154,15 +160,34 @@ struct ChatStructuredHealthCardsBlockView: View {
         subtitle: String?,
         item: ChatStructuredHealthCardItem,
         isSaving: Bool,
+        onOpenPreview: @escaping (ChatStructuredHealthCardItem) -> Void,
         onSetMember: @escaping (Int?) -> Void,
         action: @escaping () -> Void
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 8) {
-                Text(title)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(.primary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                Button {
+                    if ChatStructuredHealthCardPreviewAdapter.supportsPreview(item) {
+                        onOpenPreview(item)
+                    }
+                } label: {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(title)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(.primary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        if let subtitle, subtitle.isEmpty == false {
+                            Text(subtitle)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(ChatStructuredHealthCardPreviewAdapter.supportsPreview(item) == false)
+
                 if item.isSaved {
                     Text(memberName(for: item.memberId))
                         .font(.caption.weight(.medium))
@@ -172,11 +197,6 @@ struct ChatStructuredHealthCardsBlockView: View {
                 } else {
                     memberMenu(memberID: item.memberId, onSelect: onSetMember)
                 }
-            }
-            if let subtitle, subtitle.isEmpty == false {
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
             HStack {
                 if item.isSaved {

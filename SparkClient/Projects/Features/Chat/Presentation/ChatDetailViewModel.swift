@@ -2528,6 +2528,22 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         }
     }
 
+    func updateStructuredHealthCardPreviewDraft(
+        threadID: UUID,
+        message: ChatMessage,
+        blockID: UUID,
+        item: ChatStructuredHealthCardItem
+    ) async {
+        await updateStructuredHealthCardsBlob(
+            threadID: threadID,
+            message: message,
+            blockID: blockID,
+            item: item
+        ) {
+            $0.replace(item)
+        }
+    }
+
     private func saveStructuredHealthCard(
         threadID: UUID,
         message: ChatMessage,

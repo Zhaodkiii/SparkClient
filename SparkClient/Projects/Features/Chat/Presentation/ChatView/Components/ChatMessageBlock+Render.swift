@@ -140,6 +140,9 @@ extension ChatMessageBlock {
                 blob: blob,
                 memberContextStore: context.memberContextStore,
                 isSavingIDs: context.savingStructuredHealthCardIDs,
+                onOpenPreview: { item in
+                    context.onStructuredHealthCardOpenPreview(id, item, context.message)
+                },
                 onAction: context.onStructuredHealthCardAction
             )
             

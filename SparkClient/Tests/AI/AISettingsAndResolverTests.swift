@@ -201,6 +201,16 @@ final class AISettingsAndResolverTests: XCTestCase {
         XCTAssertEqual(restored.scenarioModelSource(for: .chat), .trial)
     }
 
+    func testChatConversationUIDefaultsToSwiftUINewArchitecture() {
+        XCTAssertEqual(ChatConversationUIPreferences.fallback.architecture, .swiftUI)
+        XCTAssertEqual(ChatConversationUIPreferences.fallback.swiftUIRefreshBehavior, .stable)
+    }
+
+    func testChatConversationAppearanceDefaultsToolResultCardsIntoBody() {
+        XCTAssertEqual(ChatConversationAppearancePreferences.fallback.cardStyle, .bodyFocused)
+        XCTAssertTrue(ChatConversationAppearancePreferences.fallback.separatesToolPresentationsInBodyFocused)
+    }
+
     private func emptyScenarioBundles() -> AIScenarioRemoteBundlesCollection {
         let empty = AIScenarioRemoteBundle(defaultModelName: "", models: [])
         return AIScenarioRemoteBundlesCollection(

@@ -283,7 +283,7 @@ nonisolated struct ChatConversationAppearancePreferences: Codable, Equatable, Se
         cardStyle: .bodyFocused,
         toolTraceDisplayMode: .collapsedAfterCompletion,
         collapseToolsWhileStreaming: false,
-        separatesToolPresentationsInBodyFocused: false
+        separatesToolPresentationsInBodyFocused: true
     )
 
     static var `default`: ChatConversationAppearancePreferences {
@@ -364,7 +364,7 @@ nonisolated struct ChatConversationUIPreferences: Codable, Equatable, Sendable {
     }
 
     static let fallback = ChatConversationUIPreferences(
-        architecture: .uiKit,
+        architecture: .swiftUI,
         swiftUIRefreshBehavior: .stable
     )
 

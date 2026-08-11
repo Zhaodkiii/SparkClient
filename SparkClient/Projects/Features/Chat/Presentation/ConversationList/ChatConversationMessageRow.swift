@@ -8,6 +8,7 @@ struct ChatConversationMessageRow: View {
     @State private var textSelectionPayload: ChatSelectableTextPayload?
     @State private var activeSmallTaskPayload: ChatSmallTaskMessageCardPayload?
     @State private var activeTaskDetailMode: TaskDetailMode?
+    @State private var activeStructuredHealthPreview: ChatStructuredHealthCardPreviewContext?
 
     let threadID: UUID
     let message: ChatMessage
@@ -132,6 +133,26 @@ struct ChatConversationMessageRow: View {
                 }
             )
         }
+        .navigationDestination(item: $activeStructuredHealthPreview) { context in
+            ChatStructuredHealthCardPreviewDestination(
+                context: context,
+                memberContextStore: memberContextStore,
+                medicalQueryAPI: detailViewModel.sparkMedicalQueryAPI,
+                fileTransferService: detailViewModel.attachmentFileTransferService,
+                notificationClient: detailViewModel.chatNotificationClient,
+                cachedCompleteData: detailViewModel.cachedMemberCompleteData,
+                onDraftUpdated: { updatedItem in
+                    Task {
+                        await detailViewModel.updateStructuredHealthCardPreviewDraft(
+                            threadID: threadID,
+                            message: message,
+                            blockID: context.blockID,
+                            item: updatedItem
+                        )
+                    }
+                }
+            )
+        }
     }
 
     /// 带长按手势的气泡，替代系统 contextMenu
@@ -247,6 +268,7 @@ struct ChatConversationMessageRow: View {
             savingStructuredHealthCardIDs: [],
             savingNutritionCardIDs: [],
             onStructuredHealthCardAction: { _ in },
+            onStructuredHealthCardOpenPreview: { _, _, _ in },
             onNutritionCardAction: { _ in },
             onCaptureAttachmentsPicked: { _, _ in },
             onCaptureCancel: { _ in },
@@ -425,6 +447,7 @@ struct ChatConversationMessageRow: View {
             savingStructuredHealthCardIDs: detailViewModel.savingStructuredHealthCardIDs,
             savingNutritionCardIDs: detailViewModel.savingNutritionCardIDs,
             onStructuredHealthCardAction: handleStructuredHealthCardAction,
+            onStructuredHealthCardOpenPreview: openStructuredHealthCardPreview,
             onNutritionCardAction: handleNutritionCardAction,
             onCaptureAttachmentsPicked: { card, attachments in
                 logger.info(
@@ -491,6 +514,20 @@ struct ChatConversationMessageRow: View {
                 action: action
             )
         }
+    }
+
+    private func openStructuredHealthCardPreview(
+        blockID: UUID,
+        item: ChatStructuredHealthCardItem,
+        message: ChatMessage
+    ) {
+        guard ChatStructuredHealthCardPreviewAdapter.supportsPreview(item) else { return }
+        activeStructuredHealthPreview = ChatStructuredHealthCardPreviewContext(
+            threadID: threadID,
+            messageClientID: message.clientMessageID,
+            blockID: blockID,
+            item: item
+        )
     }
 
     private func handleNutritionCardAction(_ action: ChatNutritionCardAction) {

@@ -55,6 +55,7 @@ struct ChatMessageBubbleContentView: View {
     let savingStructuredHealthCardIDs: Set<UUID>
     let savingNutritionCardIDs: Set<UUID>
     let onStructuredHealthCardAction: (ChatStructuredHealthCardAction) -> Void
+    let onStructuredHealthCardOpenPreview: (UUID, ChatStructuredHealthCardItem, ChatMessage) -> Void
     let onNutritionCardAction: (ChatNutritionCardAction) -> Void
     let onCaptureAttachmentsPicked: (ChatCaptureMessageCardPayload, [ChatComposerAttachmentPreview]) -> Void
     let onCaptureCancel: (ChatCaptureMessageCardPayload) -> Void
@@ -129,6 +130,7 @@ struct ChatMessageBubbleContentView: View {
             onToolConsentCardDeny: onToolConsentCardDeny,
             onToolConsentCardShowDetails: onToolConsentCardShowDetails,
             onStructuredHealthCardAction: onStructuredHealthCardAction,
+            onStructuredHealthCardOpenPreview: onStructuredHealthCardOpenPreview,
             onNutritionCardAction: onNutritionCardAction,
             onCaptureAttachmentsPicked: onCaptureAttachmentsPicked,
             onCaptureCancel: onCaptureCancel,

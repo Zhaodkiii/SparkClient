@@ -43,6 +43,7 @@ struct ChatRenderContext {
     let onToolConsentCardDeny: (ChatToolConsentCard) -> Void
     let onToolConsentCardShowDetails: (ChatToolConsentCard) -> Void
     let onStructuredHealthCardAction: (ChatStructuredHealthCardAction) -> Void  // 健康卡片操作
+    let onStructuredHealthCardOpenPreview: (UUID, ChatStructuredHealthCardItem, ChatMessage) -> Void
     let onNutritionCardAction: (ChatNutritionCardAction) -> Void                // 营养卡片操作
     let onCaptureAttachmentsPicked: (ChatCaptureMessageCardPayload, [ChatComposerAttachmentPreview]) -> Void
     let onCaptureCancel: (ChatCaptureMessageCardPayload) -> Void
@@ -99,6 +100,7 @@ extension ChatRenderContext {
             onToolConsentCardDeny: onToolConsentCardDeny,
             onToolConsentCardShowDetails: onToolConsentCardShowDetails,
             onStructuredHealthCardAction: onStructuredHealthCardAction,
+            onStructuredHealthCardOpenPreview: onStructuredHealthCardOpenPreview,
             onNutritionCardAction: onNutritionCardAction,
             onCaptureAttachmentsPicked: onCaptureAttachmentsPicked,
             onCaptureCancel: onCaptureCancel,

@@ -83,6 +83,7 @@ struct AISettingsView: View {
                 }
             }
 
+            #if DEBUG
             Section("Chat 会话设置") {
                 ChatConversationUIArchitectureSettingsSection(viewModel: viewModel)
                 ChatConversationAppearanceSettingsSection(viewModel: viewModel)
@@ -91,6 +92,7 @@ struct AISettingsView: View {
             Section("DeepTutorChat 对话外观") {
                 DeepTutorConversationAppearanceSettingsSection(viewModel: viewModel)
             }
+            #endif
 
             // 当前版本 功能不完善 ，暂时关闭
             Section(L10n.text("ai_settings.section.personalization")) {

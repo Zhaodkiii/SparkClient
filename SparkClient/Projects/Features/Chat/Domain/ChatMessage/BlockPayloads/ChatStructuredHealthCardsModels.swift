@@ -156,6 +156,29 @@ nonisolated struct StructuredHealthCardsBlob: Codable, Equatable, Sendable {
             }
         }
     }
+
+    mutating func replace(_ item: ChatStructuredHealthCardItem) {
+        switch item {
+        case .medicationPlan(let card):
+            if let i = medicationPlans.firstIndex(where: { $0.id == card.id }) {
+                medicationPlans[i] = card
+            }
+        case .medicineBox(let card):
+            if let i = medicineBoxes.firstIndex(where: { $0.id == card.id }) {
+                medicineBoxes[i] = card
+            }
+        case .prescription(let card):
+            if let i = prescriptions.firstIndex(where: { $0.id == card.id }) {
+                prescriptions[i] = card
+            }
+        case .examReport(let card):
+            if let i = examReports.firstIndex(where: { $0.id == card.id }) {
+                examReports[i] = card
+            }
+        case .medicalCase:
+            break
+        }
+    }
 }
 
 private extension String {
