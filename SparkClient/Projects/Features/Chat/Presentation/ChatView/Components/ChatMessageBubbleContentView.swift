@@ -25,6 +25,7 @@ struct ChatMessageBubbleContentView: View {
     let savingKnowledgeCardIDs: Set<UUID>
     let savedKnowledgeCardIDs: Set<UUID>
     let showActions: Bool
+    let billingEstimate: ChatBillingEstimate?
     @ObservedObject var memberContextStore: MemberContextStore
     let knowledgeDependencies: KnowledgeFeatureDependencies
     @ObservedObject var knowledgeViewModel: KnowledgeLibraryViewModel
@@ -86,6 +87,7 @@ struct ChatMessageBubbleContentView: View {
                     node.render(context: renderContext)
                 }
             }
+            billingFooter
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -297,6 +299,26 @@ struct ChatMessageBubbleContentView: View {
         .foregroundStyle(.secondary)
         
     }
+
+    @ViewBuilder
+    private var billingFooter: some View {
+        if let billingEstimate {
+            HStack(spacing: 5) {
+                Image(systemName: "creditcard")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 12, height: 12)
+                Text(billingEstimate.displayText)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            .padding(.top, 2)
+            .accessibilityLabel(billingEstimate.displayText)
+        }
+    }
+
     private var shouldRenderErrorCard: Bool {
         message.deliveryState == .failed && message.role != .user
     }

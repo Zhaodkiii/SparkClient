@@ -68,9 +68,15 @@ actor MessageRunActor: ChatSideEffectSink {
         threadID: UUID,
         assistantClientMessageID: UUID,
         modelName: String,
+        priceTier: Int,
         createdAt: Date = Date()
     ) async throws {
-        runStates[assistantClientMessageID] = AssistantRunState(threadID: threadID)
+        runStates[assistantClientMessageID] = AssistantRunState(
+            threadID: threadID,
+            modelName: modelName,
+            priceTier: priceTier,
+            createdAt: createdAt
+        )
         _ = try await repository.upsertLocalMessage(
             ChatMessage(
                 id: assistantClientMessageID,
@@ -82,6 +88,178 @@ actor MessageRunActor: ChatSideEffectSink {
                 deliveryState: .sending,
                 createdAt: createdAt,
                 modelName: modelName
+            )
+        )
+    }
+
+    func recordLLMRequestStarted(
+        assistantClientMessageID: UUID,
+        callIndex: Int,
+        modelName: String?
+    ) async {
+        guard var state = runStates[assistantClientMessageID],
+              let threadID = state.threadID else {
+            logger.info(
+                "[CHAT_USAGE_TMP] actor.llm.request.skip assistant=\(assistantClientMessageID.uuidString) callIndex=\(callIndex) reason=missing_run_state",
+                module: .aiConfig
+            )
+            return
+        }
+        let normalizedIndex = max(callIndex, 1)
+        guard state.recordedLLMStartIndexes.insert(normalizedIndex).inserted else {
+            logger.info(
+                "[CHAT_USAGE_TMP] actor.llm.request.duplicate assistant=\(assistantClientMessageID.uuidString) callIndex=\(normalizedIndex)",
+                module: .aiConfig
+            )
+            return
+        }
+        runStates[assistantClientMessageID] = state
+        logger.info(
+            "[CHAT_USAGE_TMP] actor.llm.request.record assistant=\(assistantClientMessageID.uuidString) thread=\(threadID.uuidString) callIndex=\(normalizedIndex) model=\(modelName ?? state.modelName)",
+            module: .aiConfig
+        )
+        await repository.appendUsageEvent(
+            ChatMessageUsageEvent(
+                messageID: assistantClientMessageID,
+                threadID: threadID,
+                runID: state.runID,
+                eventType: .llmRequestStarted,
+                callIndex: normalizedIndex,
+                modelName: modelName ?? state.modelName
+            )
+        )
+    }
+
+    func recordLLMUsage(
+        assistantClientMessageID: UUID,
+        callIndex: Int,
+        modelName: String?,
+        promptTokens: Int,
+        completionTokens: Int,
+        reasoningTokens: Int = 0,
+        cachedPromptTokens: Int = 0,
+        isEstimated: Bool
+    ) async {
+        guard var state = runStates[assistantClientMessageID],
+              let threadID = state.threadID else {
+            logger.info(
+                "[CHAT_USAGE_TMP] actor.llm.usage.skip assistant=\(assistantClientMessageID.uuidString) callIndex=\(callIndex) reason=missing_run_state",
+                module: .aiConfig
+            )
+            return
+        }
+        let normalizedIndex = max(callIndex, 1)
+        guard state.recordedLLMUsageIndexes.insert(normalizedIndex).inserted else {
+            logger.info(
+                "[CHAT_USAGE_TMP] actor.llm.usage.duplicate assistant=\(assistantClientMessageID.uuidString) callIndex=\(normalizedIndex)",
+                module: .aiConfig
+            )
+            return
+        }
+        let usage = ChatMessageUsageEvent(
+            messageID: assistantClientMessageID,
+            threadID: threadID,
+            runID: state.runID,
+            eventType: isEstimated ? .llmUsageEstimated : .llmUsageReceived,
+            callIndex: normalizedIndex,
+            modelName: modelName ?? state.modelName,
+            promptTokens: promptTokens,
+            completionTokens: completionTokens,
+            reasoningTokens: reasoningTokens,
+            cachedPromptTokens: cachedPromptTokens,
+            isEstimated: isEstimated
+        )
+        state.recordLLMUsage(usage)
+        logger.info(
+            "[CHAT_USAGE_TMP] actor.llm.usage.record assistant=\(assistantClientMessageID.uuidString) callIndex=\(normalizedIndex) prompt=\(usage.promptTokens) completion=\(usage.completionTokens) reasoning=\(usage.reasoningTokens) total=\(usage.totalTokens) estimated=\(usage.isEstimated) accumulatedPrompt=\(state.promptTokens) accumulatedCompletion=\(state.completionTokens) accumulatedTotal=\(state.totalTokens) llmCalls=\(state.llmCallCount)",
+            module: .aiConfig
+        )
+        runStates[assistantClientMessageID] = state
+        await repository.appendUsageEvent(usage)
+    }
+
+    func recordToolCallStarted(
+        assistantClientMessageID: UUID,
+        callIndex: Int,
+        toolCallID: String?,
+        toolName: String?
+    ) async {
+        guard var state = runStates[assistantClientMessageID],
+              let threadID = state.threadID else {
+            logger.info(
+                "[CHAT_USAGE_TMP] actor.tool.start.skip assistant=\(assistantClientMessageID.uuidString) callIndex=\(callIndex) toolCallID=\(toolCallID ?? "-") tool=\(toolName ?? "-") reason=missing_run_state",
+                module: .aiConfig
+            )
+            return
+        }
+        let key = Self.toolUsageKey(callIndex: callIndex, toolCallID: toolCallID, toolName: toolName)
+        guard state.recordedToolStartKeys.insert(key).inserted else {
+            logger.info(
+                "[CHAT_USAGE_TMP] actor.tool.start.duplicate assistant=\(assistantClientMessageID.uuidString) key=\(key)",
+                module: .aiConfig
+            )
+            return
+        }
+        runStates[assistantClientMessageID] = state
+        logger.info(
+            "[CHAT_USAGE_TMP] actor.tool.start.record assistant=\(assistantClientMessageID.uuidString) callIndex=\(max(callIndex, 0)) key=\(key) toolCallID=\(toolCallID ?? "-") tool=\(toolName ?? "-")",
+            module: .aiConfig
+        )
+        await repository.appendUsageEvent(
+            ChatMessageUsageEvent(
+                messageID: assistantClientMessageID,
+                threadID: threadID,
+                runID: state.runID,
+                eventType: .toolCallStarted,
+                callIndex: max(callIndex, 0),
+                modelName: state.modelName,
+                toolCallID: toolCallID,
+                toolName: toolName
+            )
+        )
+    }
+
+    func recordToolCallFinished(
+        assistantClientMessageID: UUID,
+        callIndex: Int,
+        toolCallID: String?,
+        toolName: String?,
+        resultText: String
+    ) async {
+        guard var state = runStates[assistantClientMessageID],
+              let threadID = state.threadID else {
+            logger.info(
+                "[CHAT_USAGE_TMP] actor.tool.finish.skip assistant=\(assistantClientMessageID.uuidString) callIndex=\(callIndex) toolCallID=\(toolCallID ?? "-") tool=\(toolName ?? "-") reason=missing_run_state",
+                module: .aiConfig
+            )
+            return
+        }
+        let key = Self.toolUsageKey(callIndex: callIndex, toolCallID: toolCallID, toolName: toolName)
+        guard state.recordedToolFinishKeys.insert(key).inserted else {
+            logger.info(
+                "[CHAT_USAGE_TMP] actor.tool.finish.duplicate assistant=\(assistantClientMessageID.uuidString) key=\(key)",
+                module: .aiConfig
+            )
+            return
+        }
+        state.toolCallCount += 1
+        logger.info(
+            "[CHAT_USAGE_TMP] actor.tool.finish.record assistant=\(assistantClientMessageID.uuidString) callIndex=\(max(callIndex, 0)) key=\(key) toolCallID=\(toolCallID ?? "-") tool=\(toolName ?? "-") resultChars=\(resultText.count) toolCalls=\(state.toolCallCount)",
+            module: .aiConfig
+        )
+        runStates[assistantClientMessageID] = state
+        await repository.appendUsageEvent(
+            ChatMessageUsageEvent(
+                messageID: assistantClientMessageID,
+                threadID: threadID,
+                runID: state.runID,
+                eventType: .toolCallFinished,
+                callIndex: max(callIndex, 0),
+                modelName: state.modelName,
+                toolCallID: toolCallID,
+                toolName: toolName,
+                completionTokens: ChatBillingEstimate.estimateTokens(textCharacterCount: resultText.count),
+                isEstimated: true
             )
         )
     }
@@ -207,6 +385,12 @@ actor MessageRunActor: ChatSideEffectSink {
             )
 
             await syncMedicalDisclaimerIfNeeded(assistantClientMessageID: assistantClientMessageID)
+
+            await finalizeUsageSummary(
+                state: state,
+                assistantClientMessageID: assistantClientMessageID,
+                eventType: .assistantCompleted
+            )
             
             // 7. 清理：消息已定稿，移除运行状态，释放内存
             let messagePrefix = assistantClientMessageID.uuidString + ":"
@@ -215,6 +399,66 @@ actor MessageRunActor: ChatSideEffectSink {
             writtenPendingPlaceholders = writtenPendingPlaceholders.filter { !$0.hasPrefix(messagePrefix) }
             return true
         }
+    }
+
+    private func finalizeUsageSummary(
+        state: AssistantRunState,
+        assistantClientMessageID: UUID,
+        eventType: ChatUsageEventType
+    ) async {
+        guard let threadID = state.threadID else { return }
+        logger.info(
+            "[CHAT_USAGE_TMP] actor.summary.finalize.start assistant=\(assistantClientMessageID.uuidString) event=\(eventType.rawValue) thread=\(threadID.uuidString) llmCalls=\(state.llmCallCount) toolCalls=\(state.toolCallCount) prompt=\(state.promptTokens) completion=\(state.completionTokens) reasoning=\(state.reasoningTokens) total=\(state.totalTokens) estimated=\(state.isUsageEstimated) model=\(state.modelName) priceTier=\(state.priceTier)",
+            module: .aiConfig
+        )
+        await repository.appendUsageEvent(
+            ChatMessageUsageEvent(
+                messageID: assistantClientMessageID,
+                threadID: threadID,
+                runID: state.runID,
+                eventType: eventType,
+                callIndex: state.llmCallCount,
+                modelName: state.modelName,
+                isEstimated: state.isUsageEstimated
+            )
+        )
+        let currency = ChatBillingCurrency.current()
+        let amount = (Decimal(state.totalTokens) / Decimal(1_000))
+            * ChatBillingPriceTier(modelPriceTier: state.priceTier).estimatedUSDPerThousandTokens
+            * currency.estimatedExchangeRateFromUSD
+        await repository.upsertUsageSummary(
+            ChatMessageUsageSummary(
+                messageID: assistantClientMessageID,
+                threadID: threadID,
+                modelName: state.modelName,
+                priceTier: state.priceTier,
+                currencyCode: currency == .cny ? "CNY" : "USD",
+                promptTokens: state.promptTokens,
+                completionTokens: state.completionTokens,
+                reasoningTokens: state.reasoningTokens,
+                cachedPromptTokens: state.cachedPromptTokens,
+                totalTokens: state.totalTokens,
+                llmCallCount: state.llmCallCount,
+                toolCallCount: state.toolCallCount,
+                estimatedAmount: amount,
+                isEstimated: state.isUsageEstimated,
+                source: state.isUsageEstimated ? .localFallbackEstimate : .providerUsage,
+                createdAt: state.createdAt,
+                updatedAt: Date()
+            )
+        )
+        logger.info(
+            "[CHAT_USAGE_TMP] actor.summary.finalize.done assistant=\(assistantClientMessageID.uuidString) amount=\(amount) currency=\(currency == .cny ? "CNY" : "USD") callsDisplay=\(state.llmCallCount + state.toolCallCount)",
+            module: .aiConfig
+        )
+    }
+
+    nonisolated private static func toolUsageKey(callIndex: Int, toolCallID: String?, toolName: String?) -> String {
+        let id = toolCallID?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let id, id.isEmpty == false {
+            return "id:\(id)"
+        }
+        return "call:\(max(callIndex, 0)):\(toolName ?? "-")"
     }
 
     private func enqueueAssistantPartial(
@@ -477,6 +721,14 @@ actor MessageRunActor: ChatSideEffectSink {
         )
 
         await syncMedicalDisclaimerIfNeeded(assistantClientMessageID: assistantClientMessageID)
+
+        if let state = runStates[assistantClientMessageID] {
+            await finalizeUsageSummary(
+                state: state,
+                assistantClientMessageID: assistantClientMessageID,
+                eventType: .assistantCompleted
+            )
+        }
 
         let messagePrefix = assistantClientMessageID.uuidString + ":"
         runStates.removeValue(forKey: assistantClientMessageID)
@@ -938,15 +1190,62 @@ nonisolated private struct AssistantRunState {
     }
 
     let threadID: UUID?
+    let runID: UUID
+    let modelName: String
+    let priceTier: Int
+    let createdAt: Date
     private(set) var lastAnswer = ""
     private(set) var currentTextSegment = TextSegment(index: 0, text: "", orderKey: 1_000)
     private var completedTextSegments: [TextSegment] = []
     private var nextSegmentIndex = 1
     private var nextOrderKey: Double = 2_000
     private var toolOrderKeys: [String: Double] = [:]
+    var recordedLLMStartIndexes: Set<Int> = []
+    var recordedLLMUsageIndexes: Set<Int> = []
+    var recordedToolStartKeys: Set<String> = []
+    var recordedToolFinishKeys: Set<String> = []
+    private(set) var promptTokens = 0
+    private(set) var completionTokens = 0
+    private(set) var reasoningTokens = 0
+    private(set) var cachedPromptTokens = 0
+    private(set) var llmCallCount = 0
+    var toolCallCount = 0
+    private(set) var hasEstimatedUsage = false
+    private(set) var hasProviderUsage = false
 
-    init(threadID: UUID?) {
+    init(
+        threadID: UUID?,
+        runID: UUID = UUID(),
+        modelName: String = "",
+        priceTier: Int = 0,
+        createdAt: Date = Date()
+    ) {
         self.threadID = threadID
+        self.runID = runID
+        self.modelName = modelName
+        self.priceTier = min(max(priceTier, 0), 3)
+        self.createdAt = createdAt
+    }
+
+    var totalTokens: Int {
+        promptTokens + completionTokens + reasoningTokens
+    }
+
+    var isUsageEstimated: Bool {
+        hasEstimatedUsage || hasProviderUsage == false
+    }
+
+    mutating func recordLLMUsage(_ event: ChatMessageUsageEvent) {
+        promptTokens += event.promptTokens
+        completionTokens += event.completionTokens
+        reasoningTokens += event.reasoningTokens
+        cachedPromptTokens += event.cachedPromptTokens
+        llmCallCount += 1
+        if event.isEstimated {
+            hasEstimatedUsage = true
+        } else {
+            hasProviderUsage = true
+        }
     }
 
     mutating func consumeAnswer(_ answer: String) -> String {

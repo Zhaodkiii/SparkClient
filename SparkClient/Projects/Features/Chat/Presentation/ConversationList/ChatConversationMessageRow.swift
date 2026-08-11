@@ -172,6 +172,7 @@ struct ChatConversationMessageRow: View {
             savingKnowledgeCardIDs: [],
             savedKnowledgeCardIDs: uiStateStore.savedKnowledgeCardIDs,
             showActions: false,
+            billingEstimate: nil,
             memberContextStore: memberContextStore,
             knowledgeDependencies: knowledgeDependencies,
             knowledgeViewModel: knowledgeViewModel,
@@ -235,6 +236,7 @@ struct ChatConversationMessageRow: View {
             savingKnowledgeCardIDs: uiStateStore.savingKnowledgeCardIDs,
             savedKnowledgeCardIDs: uiStateStore.savedKnowledgeCardIDs,
             showActions: message.id == visibleMessages.last?.id,
+            billingEstimate: billingEstimate(for: message),
             memberContextStore: memberContextStore,
             knowledgeDependencies: knowledgeDependencies,
             knowledgeViewModel: knowledgeViewModel,
@@ -416,6 +418,25 @@ struct ChatConversationMessageRow: View {
     private func isLastAssistantMessage(_ message: ChatMessage) -> Bool {
         guard message.role == .assistant else { return false }
         return visibleMessages.last(where: { $0.role == .assistant })?.id == message.id
+    }
+
+    private func billingEstimate(for message: ChatMessage) -> ChatBillingEstimate? {
+        guard message.role == .assistant else { return nil }
+        guard let summary = message.usageSummary else {
+            SparkLogger.log(
+                level: .info,
+                module: .aiConfig,
+                message: "[CHAT_USAGE_TMP] ui.footer.hidden assistant=\(message.clientMessageID.uuidString) reason=missing_usage_summary state=\(message.deliveryState.rawValue) blocks=\(message.blocks.count)"
+            )
+            return nil
+        }
+        let estimate = ChatBillingEstimate.make(summary: summary)
+        SparkLogger.log(
+            level: .info,
+            module: .aiConfig,
+            message: "[CHAT_USAGE_TMP] ui.footer.show assistant=\(message.clientMessageID.uuidString) display=\"\(estimate.displayText)\" total=\(summary.totalTokens) llmCalls=\(summary.llmCallCount) toolCalls=\(summary.toolCallCount) source=\(summary.source.rawValue) estimated=\(summary.isEstimated)"
+        )
+        return estimate
     }
 
     private func toolMeta() -> (name: String, content: String)? {

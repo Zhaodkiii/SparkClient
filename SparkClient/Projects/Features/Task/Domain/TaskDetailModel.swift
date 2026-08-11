@@ -22,7 +22,7 @@ enum TaskDetailModelBuilder {
         switch task.type {
         case .medical:
             if let medical = task.taskMedical {
-                businessTitle = medical.medicalTaskType
+                businessTitle = medical.medicalTaskTypeDisplayName
                 businessSubtitle = medical.reminderTime.map {
                     DateFormatter.localizedString(from: $0, dateStyle: .none, timeStyle: .short)
                 } ?? NSLocalizedString("task.detail.no_reminder", comment: "未设置提醒时间")
@@ -34,11 +34,11 @@ enum TaskDetailModelBuilder {
             }
         case .exercise:
             if let exercise = task.taskExercise {
-                businessTitle = exercise.exerciseType
+                businessTitle = exercise.exerciseTypeDisplayName
                 businessSubtitle = String(
                     format: NSLocalizedString("task.detail.exercise_summary", comment: "%d 分钟 · %@"),
                     exercise.durationMin,
-                    exercise.intensity
+                    exercise.intensityDisplayName
                 )
                 hasBusinessData = true
             } else {
@@ -48,7 +48,7 @@ enum TaskDetailModelBuilder {
             }
         case .diet:
             if let diet = task.taskDiet {
-                businessTitle = diet.mealType
+                businessTitle = diet.mealTypeDisplayName
                 businessSubtitle = String(
                     format: NSLocalizedString("task.detail.diet_calories", comment: "%d kcal"),
                     diet.calorieTarget

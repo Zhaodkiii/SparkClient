@@ -25,6 +25,7 @@ struct IOS26TabBarView: View {
     let pushAdapter: PushAdapter
     @ObservedObject var externalMedicalDocumentImportCoordinator: ExternalMedicalDocumentImportCoordinator
     @ObservedObject var launchIntentCoordinator: LaunchIntentCoordinator
+    @Binding var activeHomeFullScreenCover: HomeFullScreenCover?
 
     @State private var showsDeviceAccountUpgradeSheet = false
 
@@ -67,9 +68,13 @@ struct IOS26TabBarView: View {
                 chatContainer
             }
 
-            Tab(L10n.text("tab.knowledge"), systemImage: "backpack.fill", value: AppRouteStore.RootTab.knowledge) {
-                knowledgeContainer
+            Tab(L10n.text("tab.health"), systemImage: "heart.fill", value: AppRouteStore.RootTab.health) {
+                healthContainer
             }
+
+//            Tab(L10n.text("tab.knowledge"), systemImage: "backpack.fill", value: AppRouteStore.RootTab.knowledge) {
+//                knowledgeContainer
+//            }
 
             
 /// iOS 26 正式主导航：系统 Liquid Glass 浮动 TabBar，底部 Tab 为首页、对话、DeepTutor、搜索、设置（IOS26-TABBAR-000002）。
@@ -119,7 +124,8 @@ struct IOS26TabBarView: View {
                 session: session,
                 actionHandler: homeDashboardActionHandler,
                 chatListViewModel: chatListViewModel,
-                deepTutorChatViewModel: deepTutorChatViewModel
+                deepTutorChatViewModel: deepTutorChatViewModel,
+                activeFullScreenCover: $activeHomeFullScreenCover
             )
         } destination: { route in
             destinationBuilder.destination(route)
@@ -138,6 +144,22 @@ struct IOS26TabBarView: View {
                 homeViewModel: homeViewModel,
                 aiSettingsViewModel: aiSettingsViewModel,
                 pushAdapter: pushAdapter
+            )
+        } destination: { route in
+            destinationBuilder.destination(route)
+        }
+    }
+
+    private var healthContainer: some View {
+        CompatibleRouteNavigationContainer(path: routePath(.health)) {
+            HealthHomeView(
+                dependencies: homeDependencies,
+                viewModel: homeViewModel,
+                medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
+                externalMedicalDocumentImportCoordinator: externalMedicalDocumentImportCoordinator,
+                launchIntentCoordinator: launchIntentCoordinator,
+                session: session,
+                activeFullScreenCover: $activeHomeFullScreenCover
             )
         } destination: { route in
             destinationBuilder.destination(route)

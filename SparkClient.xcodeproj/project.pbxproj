@@ -311,8 +311,8 @@
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Look Health reads steps, weight, sleep, and heart rate to show basic health information.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Look Health writes health records only when you choose to save them.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Look Health uses the local network to connect to the server for account verification and data sync.";
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Look Health uses your location in chats to search nearby places and plan routes.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Look Health uses your location in chats to search nearby places and plan routes.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Look Health uses your location to search nearby places, plan routes, and preview weather for your current location.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Look Health uses your location to search nearby places, plan routes, and preview weather for your current location.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Look Health uses the microphone to record voice messages for AI health assistant conversations.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Look Health saves processed medical reports and case photos to your photo library when you choose to save them.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Look Health uses your photo library to select images in chats and preview them before sending.";
@@ -368,8 +368,8 @@
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Look Health reads steps, weight, sleep, and heart rate to show basic health information.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Look Health writes health records only when you choose to save them.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Look Health uses the local network to connect to the server for account verification and data sync.";
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Look Health uses your location in chats to search nearby places and plan routes.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Look Health uses your location in chats to search nearby places and plan routes.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Look Health uses your location to search nearby places, plan routes, and preview weather for your current location.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Look Health uses your location to search nearby places, plan routes, and preview weather for your current location.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Look Health uses the microphone to record voice messages for AI health assistant conversations.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Look Health saves processed medical reports and case photos to your photo library when you choose to save them.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Look Health uses your photo library to select images in chats and preview them before sending.";
@@ -489,8 +489,8 @@
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Look Health reads steps, weight, sleep, and heart rate to show basic health information.";
 				INFOPLIST_KEY_NSHealthUpdateUsageDescription = "Look Health writes health records only when you choose to save them.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Look Health uses the local network to connect to the server for account verification and data sync.";
-				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Look Health uses your location in chats to search nearby places and plan routes.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Look Health uses your location in chats to search nearby places and plan routes.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "Look Health uses your location to search nearby places, plan routes, and preview weather for your current location.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Look Health uses your location to search nearby places, plan routes, and preview weather for your current location.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Look Health uses the microphone to record voice messages for AI health assistant conversations.";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Look Health saves processed medical reports and case photos to your photo library when you choose to save them.";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Look Health uses your photo library to select images in chats and preview them before sending.";

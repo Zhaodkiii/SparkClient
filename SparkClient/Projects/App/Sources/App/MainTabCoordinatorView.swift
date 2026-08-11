@@ -24,6 +24,7 @@ struct MainTabCoordinatorView: View {
     let pushAdapter: PushAdapter
     @ObservedObject var externalMedicalDocumentImportCoordinator: ExternalMedicalDocumentImportCoordinator
     @ObservedObject var launchIntentCoordinator: LaunchIntentCoordinator
+    @Binding var activeHomeFullScreenCover: HomeFullScreenCover?
 
     @State private var showsDeviceAccountUpgradeSheet = false
 
@@ -47,22 +48,23 @@ struct MainTabCoordinatorView: View {
 
     var body: some View {
         TabView(selection: $routeStore.selectedTab) {
-            CompatibleRouteNavigationContainer(path: routePath(.home)) {
-                HomeView(
+            CompatibleRouteNavigationContainer(path: routePath(.health)) {
+                HealthHomeView(
                     dependencies: homeDependencies,
                     viewModel: homeViewModel,
                     medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
                     externalMedicalDocumentImportCoordinator: externalMedicalDocumentImportCoordinator,
                     launchIntentCoordinator: launchIntentCoordinator,
-                    session: session
+                    session: session,
+                    activeFullScreenCover: $activeHomeFullScreenCover
                 )
             } destination: { route in
                 destinationBuilder.destination(route)
             }
             .tabItem {
-                Label(L10n.text("tab.home"), systemImage: "house.fill")
+                Label(L10n.text("tab.health"), systemImage: "heart.fill")
             }
-            .tag(AppRouteStore.RootTab.home)
+            .tag(AppRouteStore.RootTab.health)
 
             CompatibleRouteNavigationContainer(path: routePath(.chat)) {
                 ChatConversationListPage(

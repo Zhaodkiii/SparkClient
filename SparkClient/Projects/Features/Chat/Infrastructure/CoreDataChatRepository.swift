@@ -52,6 +52,10 @@ actor CoreDataChatRepository: ChatRepository {
         await store.loadMessages(clientMessageIDs: clientMessageIDs)
     }
 
+    func loadUsageSummary(clientMessageID: UUID) async -> ChatMessageUsageSummary? {
+        await store.loadUsageSummary(clientMessageID: clientMessageID)
+    }
+
     func countMessages(threadID: UUID) async -> Int {
         await store.countMessages(threadID: threadID)
     }
@@ -171,6 +175,13 @@ actor CoreDataChatRepository: ChatRepository {
         await store.markMessageBlocksSynced(ids: ids)
     }
 
+    func appendUsageEvent(_ event: ChatMessageUsageEvent) async {
+        await store.appendUsageEvent(event)
+    }
+
+    func upsertUsageSummary(_ summary: ChatMessageUsageSummary) async {
+        await store.upsertUsageSummary(summary)
+    }
 
     func applyPushMessageAck(
         clientMessageID: UUID,

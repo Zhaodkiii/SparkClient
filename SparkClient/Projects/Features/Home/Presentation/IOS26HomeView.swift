@@ -3,7 +3,7 @@ import SwiftUI
 import UIKit
 #endif
 
-/// iOS 26 首页独立 root：承载工作台、sheet/cover、Launch Intent 与上传/成员详情等宿主能力。
+/// iOS 26 首页独立 root：承载工作台、Launch Intent 与上传/成员详情等宿主触发能力。
 @available(iOS 26.0, *)
 struct IOS26HomeView: View {
     let dependencies: HomeFeatureDependencies
@@ -18,9 +18,8 @@ struct IOS26HomeView: View {
     @ObservedObject var deepTutorChatViewModel: DeepTutorChatViewModel
 
     @State private var hasLoaded = false
-    @State private var activeFullScreenCover: HomeFullScreenCover?
+    @Binding var activeFullScreenCover: HomeFullScreenCover?
     @State private var showExternalImportErrorAlert = false
-    @State private var addMemberNearbyTransport = NearbyShareTransport()
 
     private var launchIntentConsumer: HomeLaunchIntentConsumer {
         dependencies.homeLaunchIntentConsumer
@@ -51,12 +50,6 @@ private extension IOS26HomeView {
 
     var contentWithPresentation: some View {
         dashboardContent
-            .sheet(item: $viewModel.activeSheet) { sheet in
-                homeSheetContent(sheet)
-            }
-            .fullScreenCover(item: $activeFullScreenCover) { cover in
-                homeFullScreenCoverContent(cover)
-            }
     }
 
     var contentWithLifecycle: some View {
@@ -161,131 +154,5 @@ private extension IOS26HomeView {
             reason: reason,
             immediate: true
         )
-    }
-}
-
-@available(iOS 26.0, *)
-private extension IOS26HomeView {
-    @ViewBuilder
-    func homeSheetContent(_ sheet: HomeSheet) -> some View {
-        switch sheet {
-        case .addMember(let addMemberSheet):
-            CompatibleNavigationContainer {
-                switch addMemberSheet {
-                case .create(let pendingTicket):
-                    AddFamilyMemberView(
-                        mode: .create,
-                        store: viewModel.memberContextStoreForBinding,
-                        shareUseCase: dependencies.shareMemberUseCase,
-                        inviteUseCase: dependencies.memberInviteUseCase,
-                        nearbyTransport: addMemberNearbyTransport,
-                        initialPendingTicket: pendingTicket,
-                        onBindingAccepted: {
-                            Task {
-                                await viewModel.refresh()
-                                await viewModel.fetchPendingInvitesIfNeeded()
-                            }
-                        },
-                        onCreatedMemberCompleted: { member in
-                            viewModel.selectMember(member.id)
-                        },
-                        homeDependencies: dependencies
-                    )
-                case .edit(let member):
-                    AddFamilyMemberView(mode: .edit(member), store: viewModel.memberContextStoreForBinding)
-                case .acceptInvite(let inviteID, let preview):
-                    AddFamilyMemberView(
-                        mode: .acceptInvite(inviteID: inviteID, preview: preview),
-                        store: viewModel.memberContextStoreForBinding,
-                        inviteUseCase: dependencies.memberInviteUseCase,
-                        onBindingAccepted: {
-                            Task {
-                                await viewModel.refresh()
-                                await viewModel.fetchPendingInvitesIfNeeded()
-                            }
-                        }
-                    )
-                }
-            }
-
-        case .pendingInvites:
-            PendingMemberInvitesView(viewModel: viewModel)
-
-        case .memberModuleSetup(let member):
-            MemberSetupFlowView(
-                mode: .maintain(member),
-                store: viewModel.memberContextStoreForBinding,
-                homeDependencies: dependencies,
-                onMemberCreated: { member in
-                    viewModel.selectMember(member.id)
-                    Task { await viewModel.refresh() }
-                }
-            )
-
-        case .share(let member):
-            ShareSheet(
-                member: member,
-                shareUseCase: dependencies.shareMemberUseCase,
-                inviteUseCase: dependencies.memberInviteUseCase
-            )
-
-        case .taskCenter:
-            CompatibleNavigationContainer {
-                TaskCenterViewController(
-                    memberID: viewModel.selectedMemberID,
-                    taskManager: taskManager
-                )
-            }
-        }
-    }
-
-    @ViewBuilder
-    func homeFullScreenCoverContent(_ cover: HomeFullScreenCover) -> some View {
-        switch cover {
-        case .medicalDocumentUpload:
-            CompatibleNavigationContainer {
-                MedicalDocumentUploadHostView(
-                    viewModel: medicalDocumentUploadViewModel,
-                    aiSettingsViewModel: dependencies.aiSettingsViewModel
-                )
-            }
-
-        case .customCamera:
-            CustomCameraHomeView {
-                activeFullScreenCover = nil
-            }
-
-        case .memberDetail(let memberID):
-            memberDetailFullScreenCover(memberID: memberID)
-        }
-    }
-
-    @ViewBuilder
-    func memberDetailFullScreenCover(memberID: Int) -> some View {
-        CompatibleNavigationContainer {
-            MemberDetailView(
-                memberID: memberID,
-                bindingUseCase: dependencies.manageMemberBindingUseCase,
-                moduleSetupUseCase: dependencies.memberModuleSetupUseCase,
-                nutritionGoalUseCase: dependencies.nutritionDependencies.goalUseCase,
-                nutritionDashboardUseCase: dependencies.nutritionDependencies.dashboardUseCase,
-                homeDependencies: dependencies,
-                memberContextStore: viewModel.memberContextStoreForBinding,
-                memberAPI: dependencies.medicalMemberAPI,
-                shareUseCase: dependencies.shareMemberUseCase,
-                onClose: {
-                    activeFullScreenCover = nil
-                },
-                onEdit: {
-                    if let member = viewModel.dashboard?.members.first(where: { $0.id == memberID }) {
-                        viewModel.activeSheet = .addMember(.edit(member))
-                    }
-                },
-                onDeleted: {
-                    activeFullScreenCover = nil
-                    Task { await viewModel.refresh() }
-                }
-            )
-        }
     }
 }

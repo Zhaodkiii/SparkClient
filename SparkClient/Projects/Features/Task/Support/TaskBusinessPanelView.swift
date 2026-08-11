@@ -7,7 +7,7 @@ struct TaskBusinessPanelView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text(panelTitle)
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(task.type.accentColor)
 
             switch task.type {
             case .medical:
@@ -21,8 +21,12 @@ struct TaskBusinessPanelView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(task.type.accentColor.opacity(0.12), lineWidth: 1)
         )
     }
 
@@ -43,7 +47,7 @@ struct TaskBusinessPanelView: View {
             )
             detailRow(
                 title: NSLocalizedString("task.field.medical_type", comment: "医疗任务类型"),
-                value: medical.medicalTaskType
+                value: medical.medicalTaskTypeDisplayName
             )
             if medical.description.isEmpty == false {
                 detailRow(
@@ -61,7 +65,7 @@ struct TaskBusinessPanelView: View {
         if let exercise = task.taskExercise {
             detailRow(
                 title: NSLocalizedString("task.field.exercise_type", comment: "运动类型"),
-                value: exercise.exerciseType
+                value: exercise.exerciseTypeDisplayName
             )
             detailRow(
                 title: NSLocalizedString("task.field.duration", comment: "时长"),
@@ -69,7 +73,7 @@ struct TaskBusinessPanelView: View {
             )
             detailRow(
                 title: NSLocalizedString("task.field.intensity", comment: "强度"),
-                value: exercise.intensity
+                value: exercise.intensityDisplayName
             )
             if exercise.description.isEmpty == false {
                 detailRow(
@@ -87,7 +91,7 @@ struct TaskBusinessPanelView: View {
         if let diet = task.taskDiet {
             detailRow(
                 title: NSLocalizedString("task.field.meal_type", comment: "餐次类型"),
-                value: diet.mealType
+                value: diet.mealTypeDisplayName
             )
             detailRow(
                 title: NSLocalizedString("task.field.calorie_target", comment: "目标热量"),
@@ -123,6 +127,7 @@ struct TaskBusinessPanelView: View {
                 .foregroundStyle(.secondary)
             Text(value)
                 .font(.body)
+                .foregroundStyle(.primary)
         }
     }
 

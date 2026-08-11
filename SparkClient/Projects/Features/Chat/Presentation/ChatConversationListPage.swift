@@ -59,6 +59,17 @@ struct ChatConversationListPage: View {
                 }
         )
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                MainNavigationLink {
+                    KnowledgeLibraryView(
+                        dependencies: knowledgeDependencies,
+                        viewModel: knowledgeViewModel
+                    )
+                } label: {
+                    Image(systemName: "backpack.fill")
+                }
+                .accessibilityLabel(L10n.text("knowledge.library.title"))
+            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
                     Task {

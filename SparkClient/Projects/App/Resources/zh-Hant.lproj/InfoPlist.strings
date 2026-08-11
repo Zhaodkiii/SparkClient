@@ -4,8 +4,8 @@
 "NSHealthShareUsageDescription" = "Look健康需要讀取步數、體重、睡眠和心率，用於展示健康基礎資訊。";
 "NSHealthUpdateUsageDescription" = "Look健康僅會在你主動儲存時寫入健康紀錄。";
 "NSLocalNetworkUsageDescription" = "Look健康需要存取本機網路，用於連線伺服器完成帳號驗證和資料同步。";
-"NSLocationAlwaysAndWhenInUseUsageDescription" = "Look健康需要在對話中使用你的位置，用於搜尋附近地點和規劃路線。";
-"NSLocationWhenInUseUsageDescription" = "Look健康需要在對話中使用你的位置，用於搜尋附近地點和規劃路線。";
+"NSLocationAlwaysAndWhenInUseUsageDescription" = "Look健康需要使用你的位置，用於搜尋附近地點、規劃路線和預覽目前位置天氣。";
+"NSLocationWhenInUseUsageDescription" = "Look健康需要使用你的位置，用於搜尋附近地點、規劃路線和預覽目前位置天氣。";
 "NSMicrophoneUsageDescription" = "Look健康需要使用麥克風錄製語音訊息，便於你與 AI 健康助手進行語音交流。";
 "NSPhotoLibraryAddUsageDescription" = "Look健康會在你主動儲存時，將處理後的醫療報告和病例照片儲存到相簿。";
 "NSPhotoLibraryUsageDescription" = "Look健康需要存取相簿選擇聊天圖片，並在傳送前產生預覽。";

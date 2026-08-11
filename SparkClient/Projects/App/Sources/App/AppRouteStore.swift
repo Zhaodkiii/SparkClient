@@ -22,8 +22,10 @@ enum AppRoute: Hashable, Sendable {
 
     var rootTab: AppRouteStore.RootTab {
         switch self {
-        case .home, .homeMedicalList, .homeFamilyMedicineCabinet:
+        case .home:
             return .home
+        case .homeMedicalList, .homeFamilyMedicineCabinet:
+            return .health
         case .knowledge:
             return .knowledge
         case .chatList, .chatThread:
@@ -50,6 +52,7 @@ enum AppRoute: Hashable, Sendable {
 @MainActor
 final class AppRouteStore: ObservableObject {
     enum RootTab: Int, Hashable {
+        /// iOS 26 新工作台首页。经典系统没有独立工作台，`.home` 路由会落到 `.health`。
         case home = 0
         /// 历史版本曾为「健康」Tab；保留 raw value 以免升级后 Tab 顺序错乱。
         case knowledge = 2
@@ -61,10 +64,24 @@ final class AppRouteStore: ObservableObject {
         case deepTutor = 6
         /// iOS 26 专用搜索 Tab。
         case search = 7
+        /// 传统健康首页（医疗档案、营养等），由 `HealthHomeView` / 旧 `HomeView` 承载。
+        case health = 8
     }
 
-    @Published var selectedTab: RootTab = .home
+    @Published var selectedTab: RootTab = AppRouteStore.defaultRootTab
     @Published private(set) var routeStacks: [RootTab: [AppRoute]] = [:]
+
+    static var defaultRootTab: RootTab {
+        supportsIOS26Home ? .home : .health
+    }
+
+    static var supportsIOS26Home: Bool {
+        if #available(iOS 26.0, *) {
+            return true
+        } else {
+            return false
+        }
+    }
 
     func routes(for tab: RootTab) -> [AppRoute] {
         routeStacks[tab, default: []]
@@ -75,7 +92,7 @@ final class AppRouteStore: ObservableObject {
     }
 
     func route(to route: AppRoute, replaceStack: Bool = false) {
-        let tab = route.rootTab
+        let tab = hostTab(for: route)
         selectedTab = tab
         if route.isRootDestination {
             routeStacks[tab] = replaceStack ? [] : routeStacks[tab, default: []]
@@ -93,13 +110,26 @@ final class AppRouteStore: ObservableObject {
         }
     }
 
+    /// `.home` 是 iOS 26 工作台；经典系统没有独立工作台，落到健康首页。
+    /// 医疗相关子页始终由 `.health` Tab 的传统 `HomeView` 承载。
+    private func hostTab(for route: AppRoute) -> RootTab {
+        switch route {
+        case .home:
+            return Self.supportsIOS26Home ? .home : .health
+        case .homeMedicalList, .homeFamilyMedicineCabinet:
+            return .health
+        default:
+            return route.rootTab
+        }
+    }
+
     func replaceStack(_ routes: [AppRoute], for tab: RootTab) {
         routeStacks[tab] = routes
         selectedTab = tab
     }
 
     func resetRouteGraph() {
-        selectedTab = .home
+        selectedTab = Self.defaultRootTab
         routeStacks.removeAll()
     }
 }

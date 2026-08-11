@@ -88,6 +88,7 @@ struct AIWeatherToolSettingsView: View {
                     enableWeatherCard
                     sectionTitle(L10n.text("ai_settings.weather.section.providers", fallback: "Weather service provider selection (only one can be enabled)"))
                     providerCard
+                    AIWeatherPreviewPanel(snapshot: viewModel.snapshot)
                     sectionTitle(L10n.text("ai_settings.weather.section.capabilities", fallback: "Function List"))
                     functionListCard
                 }

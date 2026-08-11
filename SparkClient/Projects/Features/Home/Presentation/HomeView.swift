@@ -3,6 +3,9 @@ import SwiftUI
 import UIKit
 #endif
 
+/// 传统健康首页。旧名 `HomeView` 暂时保留，路由层优先使用 `HealthHomeView` 表达业务语义。
+typealias HealthHomeView = HomeView
+
 struct HomeView: View {
     let dependencies: HomeFeatureDependencies
     @ObservedObject var viewModel: HomeViewModel
@@ -17,7 +20,8 @@ struct HomeView: View {
         medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel,
         externalMedicalDocumentImportCoordinator: ExternalMedicalDocumentImportCoordinator,
         launchIntentCoordinator: LaunchIntentCoordinator,
-        session: UserSession
+        session: UserSession,
+        activeFullScreenCover: Binding<HomeFullScreenCover?> = .constant(nil)
     ) {
         self.dependencies = dependencies
         self.viewModel = viewModel
@@ -25,6 +29,7 @@ struct HomeView: View {
         self.externalMedicalDocumentImportCoordinator = externalMedicalDocumentImportCoordinator
         self.launchIntentCoordinator = launchIntentCoordinator
         self.session = session
+        self._activeFullScreenCover = activeFullScreenCover
     }
 
     private var launchIntentConsumer: HomeLaunchIntentConsumer {
@@ -33,8 +38,7 @@ struct HomeView: View {
 
     @State private var hasLoaded = false
     @State private var memberActionTarget: Member?
-    @State private var activeFullScreenCover: HomeFullScreenCover?
-    @State private var addMemberNearbyTransport = NearbyShareTransport()
+    @Binding private var activeFullScreenCover: HomeFullScreenCover?
     @State private var showExternalImportErrorAlert = false
 
     var body: some View {
@@ -74,12 +78,6 @@ struct HomeView: View {
 
     private var homeContentWithPresentation: some View {
         homeScrollBody
-            .sheet(item: $viewModel.activeSheet) { sheet in
-                homeSheetContent(sheet)
-            }
-            .fullScreenCover(item: $activeFullScreenCover) { cover in
-                homeFullScreenCoverContent(cover)
-            }
     }
 
     /// 首页生命周期与启动意图（Launch Intent）消费入口。
@@ -202,154 +200,6 @@ struct HomeView: View {
         )
     }
 
-    // MARK: - 首页底部弹窗内容构建器
-    /// 弹窗内容统一构造方法，根据弹窗枚举类型渲染对应页面
-    /// - Parameter sheet: 首页弹窗类型枚举，区分新增成员/待处理邀请/成员详情等弹窗
-    /// - Returns: 对应弹窗的视图内容，部分页面包裹兼容导航容器保证导航栏正常展示
-    @ViewBuilder
-    private func homeSheetContent(_ sheet: HomeSheet) -> some View {
-        switch sheet {
-        // MARK: 新增家庭成员弹窗（创建/编辑/接受邀请三种子场景）
-        case .addMember(let addMemberSheet):
-            // 兼容多版本导航容器，统一弹窗内导航栈样式
-            CompatibleNavigationContainer {
-                switch addMemberSheet {
-                // 场景1：全新创建家庭成员，传入预填单据
-                case .create(let pendingTicket):
-                    AddFamilyMemberView(
-                        mode: .create, // 页面模式：新建成员
-                        store: viewModel.memberContextStoreForBinding, // 成员表单状态存储
-                        shareUseCase: dependencies.shareMemberUseCase, // 成员分享业务用例
-                        inviteUseCase: dependencies.memberInviteUseCase, // 成员邀请业务用例
-                        nearbyTransport: addMemberNearbyTransport, // 附近设备互通传输工具
-                        initialPendingTicket: pendingTicket, // 初始化预填单据数据
-                        // 绑定关系确认完成回调：刷新首页成员列表、拉取待处理邀请
-                        onBindingAccepted: {
-                            Task {
-                                await viewModel.refresh()
-                                await viewModel.fetchPendingInvitesIfNeeded()
-                            }
-                        },
-                        // 成员创建成功回调：自动选中当前新建的成员
-                        onCreatedMemberCompleted: { member in
-                            viewModel.selectMember(member.id)
-                        },
-                        homeDependencies: dependencies // 首页全局依赖注入
-                    )
-                // 场景2：编辑已有家庭成员
-                case .edit(let member):
-                    AddFamilyMemberView(mode: .edit(member), store: viewModel.memberContextStoreForBinding)
-                // 场景3：接收他人发来的家庭加入邀请
-                case .acceptInvite(let inviteID, let preview):
-                    AddFamilyMemberView(
-                        mode: .acceptInvite(inviteID: inviteID, preview: preview), // 邀请模式：传入邀请ID与邀请预览信息
-                        store: viewModel.memberContextStoreForBinding,
-                        inviteUseCase: dependencies.memberInviteUseCase,
-                        // 接受邀请完成后刷新首页数据
-                        onBindingAccepted: {
-                            Task {
-                                await viewModel.refresh()
-                                await viewModel.fetchPendingInvitesIfNeeded()
-                            }
-                        }
-                    )
-                }
-            }
-
-        // MARK: 待处理家庭成员邀请列表弹窗
-        case .pendingInvites:
-            PendingMemberInvitesView(viewModel: viewModel)
-
-        // MARK: 成员功能模块配置流程弹窗
-        case .memberModuleSetup(let member):
-            MemberSetupFlowView(
-                mode: .maintain(member), // 模式：维护已有成员模块配置
-                store: viewModel.memberContextStoreForBinding,
-                homeDependencies: dependencies,
-                // 模块配置/成员创建完成：选中该成员并刷新首页
-                onMemberCreated: { member in
-                    viewModel.selectMember(member.id)
-                    Task { await viewModel.refresh() }
-                }
-            )
-
-        // MARK: 家庭成员分享弹窗
-        case .share(let member):
-            ShareSheet(
-                member: member, // 需要分享的目标成员
-                shareUseCase: dependencies.shareMemberUseCase,
-                inviteUseCase: dependencies.memberInviteUseCase
-            )
-
-        // MARK: 任务中心弹窗
-        case .taskCenter:
-            CompatibleNavigationContainer {
-                TaskCenterViewController(
-                    memberID: viewModel.selectedMemberID, // 当前选中成员ID，用于过滤对应任务
-                    taskManager: dependencies.taskManager // 任务管理核心管理器
-                )
-            }
-        }
-    }
-    // MARK: - 首页全屏弹窗内容构建器
-    /// 根据全屏弹窗枚举类型渲染对应全屏页面视图
-    /// - Parameter cover: 首页全屏弹窗枚举，区分病历上传、自定义相机等场景
-    /// - Returns: 对应场景的全屏视图内容
-    @ViewBuilder
-    private func homeFullScreenCoverContent(_ cover: HomeFullScreenCover) -> some View {
-        switch cover {
-        // MARK: 医疗病历/单据上传全屏页
-        case .medicalDocumentUpload:
-            // 兼容导航容器，提供页面导航栏能力
-            CompatibleNavigationContainer {
-                    MedicalDocumentUploadHostView(
-                        viewModel: medicalDocumentUploadViewModel, // 病历上传页视图模型
-                        aiSettingsViewModel: dependencies.aiSettingsViewModel // AI识别配置视图模型
-                    )
-                }
-
-        // MARK: 自定义相机拍摄全屏页
-        case .customCamera:
-            CustomCameraHomeView {
-                // 相机页面关闭回调：清空当前全屏弹窗标识，退出全屏
-                activeFullScreenCover = nil
-            }
-
-        // MARK: 家庭成员详情全屏页
-        case .memberDetail(let memberID):
-            memberDetailFullScreenCover(memberID: memberID)
-        }
-    }
-
-    @ViewBuilder
-    private func memberDetailFullScreenCover(memberID: Int) -> some View {
-        CompatibleNavigationContainer {
-            MemberDetailView(
-                memberID: memberID,
-                bindingUseCase: dependencies.manageMemberBindingUseCase,
-                moduleSetupUseCase: dependencies.memberModuleSetupUseCase,
-                nutritionGoalUseCase: dependencies.nutritionDependencies.goalUseCase,
-                nutritionDashboardUseCase: dependencies.nutritionDependencies.dashboardUseCase,
-                homeDependencies: dependencies,
-                memberContextStore: viewModel.memberContextStoreForBinding,
-                memberAPI: dependencies.medicalMemberAPI,
-                shareUseCase: dependencies.shareMemberUseCase,
-                onClose: {
-                    activeFullScreenCover = nil
-                },
-                onEdit: {
-                    if let member = viewModel.dashboard?.members.first(where: { $0.id == memberID }) {
-                        viewModel.activeSheet = .addMember(.edit(member))
-                    }
-                },
-                onDeleted: {
-                    activeFullScreenCover = nil
-                    Task { await viewModel.refresh() }
-                }
-            )
-        }
-    }
-    
     // MARK: - 顶部家庭成员选择栏组件
     /// 左侧待邀请通知按钮 + 横向滚动成员选择标签 + 新增成员按钮
     private var memberSelectorBar: some View {

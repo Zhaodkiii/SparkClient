@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 // MARK: - 筛选条件
 
@@ -124,6 +125,14 @@ struct TaskFilterSelection: Equatable, Sendable {
     var priority: TaskPriorityFilter?
     var time: TaskTimeFilter?
 
+    var advancedActiveCount: Int {
+        [type, priority, time].compactMap { $0 }.count
+    }
+
+    var hasAdvancedFilters: Bool {
+        advancedActiveCount > 0
+    }
+
     func apply(
         to tasks: [HealthTask],
         now: Date = Date(),
@@ -135,6 +144,12 @@ struct TaskFilterSelection: Equatable, Sendable {
                 && (priority?.matches(task.priority) ?? true)
                 && (time?.matches(task, now: now, calendar: calendar) ?? true)
         }
+    }
+
+    mutating func resetAdvancedFilters() {
+        type = nil
+        priority = nil
+        time = nil
     }
 }
 
@@ -189,6 +204,28 @@ extension HealthTask.Priority {
             return NSLocalizedString("task.priority.low", comment: "低优先级")
         }
     }
+
+    var accentColor: Color {
+        switch self {
+        case .high:
+            return Color(uiColor: .systemRed)
+        case .medium:
+            return Color(uiColor: .systemOrange)
+        case .low:
+            return Color(uiColor: .secondaryLabel)
+        }
+    }
+
+    var backgroundColor: Color {
+        switch self {
+        case .high:
+            return Color(uiColor: .systemRed).opacity(0.12)
+        case .medium:
+            return Color(uiColor: .systemYellow).opacity(0.18)
+        case .low:
+            return Color(uiColor: .tertiarySystemFill)
+        }
+    }
 }
 
 extension HealthTask.RepeatType {
@@ -213,6 +250,34 @@ extension HealthTask.Source {
             return NSLocalizedString("task.source.ai", comment: "AI 生成")
         case .report:
             return NSLocalizedString("task.source.report", comment: "报告")
+        }
+    }
+}
+
+extension HealthTask.TaskType {
+    var accentColor: Color {
+        switch self {
+        case .medical:
+            return Color(uiColor: .systemBlue)
+        case .exercise:
+            return Color(uiColor: .systemGreen)
+        case .diet:
+            return Color(uiColor: .systemOrange)
+        }
+    }
+
+    var backgroundColor: Color {
+        accentColor.opacity(0.12)
+    }
+
+    var iconName: String {
+        switch self {
+        case .medical:
+            return "cross.case.fill"
+        case .exercise:
+            return "figure.walk"
+        case .diet:
+            return "fork.knife"
         }
     }
 }

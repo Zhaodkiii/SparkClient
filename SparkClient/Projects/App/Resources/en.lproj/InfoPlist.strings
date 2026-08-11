@@ -4,8 +4,8 @@
 "NSHealthShareUsageDescription" = "Look Health reads steps, weight, sleep, and heart rate to show basic health information.";
 "NSHealthUpdateUsageDescription" = "Look Health writes health records only when you choose to save them.";
 "NSLocalNetworkUsageDescription" = "Look Health uses the local network to connect to the server for account verification and data sync.";
-"NSLocationAlwaysAndWhenInUseUsageDescription" = "Look Health uses your location in chats to search nearby places and plan routes.";
-"NSLocationWhenInUseUsageDescription" = "Look Health uses your location in chats to search nearby places and plan routes.";
+"NSLocationAlwaysAndWhenInUseUsageDescription" = "Look Health uses your location to search nearby places, plan routes, and preview weather for your current location.";
+"NSLocationWhenInUseUsageDescription" = "Look Health uses your location to search nearby places, plan routes, and preview weather for your current location.";
 "NSMicrophoneUsageDescription" = "Look Health uses the microphone to record voice messages for AI health assistant conversations.";
 "NSPhotoLibraryAddUsageDescription" = "Look Health saves processed medical reports and case photos to your photo library when you choose to save them.";
 "NSPhotoLibraryUsageDescription" = "Look Health uses your photo library to select images in chats and preview them before sending.";

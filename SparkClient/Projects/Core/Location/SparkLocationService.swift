@@ -2,12 +2,32 @@ import CoreLocation
 import Foundation
 
 enum SparkLocationService {
+    nonisolated static func authorizationStatus() -> CLAuthorizationStatus {
+        CLLocationManager().authorizationStatus
+    }
+
     nonisolated static func hasWhenInUsePermission() -> Bool {
-        switch CLLocationManager.authorizationStatus() {
+        switch authorizationStatus() {
         case .authorizedAlways, .authorizedWhenInUse:
             return true
         default:
             return false
+        }
+    }
+
+    static func requestWhenInUseAuthorization() async -> CLAuthorizationStatus {
+        let status = authorizationStatus()
+        guard status == .notDetermined else { return status }
+
+        return await withCheckedContinuation { continuation in
+            let manager = CLLocationManager()
+            let delegate = OneShotAuthorizationDelegate { status in
+                continuation.resume(returning: status)
+            }
+            delegate.manager = manager
+            delegate.retainSelf = delegate
+            manager.delegate = delegate
+            manager.requestWhenInUseAuthorization()
         }
     }
 
@@ -27,6 +47,7 @@ enum SparkLocationService {
             let delegate = OneShotLocationDelegate { result in
                 continuation.resume(with: result)
             }
+            delegate.manager = manager
             delegate.retainSelf = delegate
             manager.delegate = delegate
             manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
@@ -35,7 +56,27 @@ enum SparkLocationService {
     }
 }
 
+private final class OneShotAuthorizationDelegate: NSObject, CLLocationManagerDelegate {
+    var manager: CLLocationManager?
+    var retainSelf: OneShotAuthorizationDelegate?
+    private let completion: (CLAuthorizationStatus) -> Void
+
+    init(completion: @escaping (CLAuthorizationStatus) -> Void) {
+        self.completion = completion
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
+        guard status != .notDetermined else { return }
+        completion(status)
+        manager.delegate = nil
+        self.manager = nil
+        retainSelf = nil
+    }
+}
+
 private final class OneShotLocationDelegate: NSObject, CLLocationManagerDelegate {
+    var manager: CLLocationManager?
     var retainSelf: OneShotLocationDelegate?
     private let completion: (Result<(latitude: Double, longitude: Double), Error>) -> Void
 
@@ -57,6 +98,8 @@ private final class OneShotLocationDelegate: NSObject, CLLocationManagerDelegate
 
     private func finish(_ result: Result<(latitude: Double, longitude: Double), Error>) {
         completion(result)
+        manager?.delegate = nil
+        manager = nil
         retainSelf = nil
     }
 }

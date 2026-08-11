@@ -72,86 +72,22 @@ struct AppCoordinatorView: View {
                         }
                     }
                 } else {
-                    if #available(iOS 26.0, *) {
-                        IOS26TabBarView(
-                            session: session,
-                            routeStore: mainTab.routeStore,
-                            homeDependencies: mainTab.homeDependencies,
-                            knowledgeDependencies: mainTab.knowledgeDependencies,
-                            popularScienceDependencies: mainTab.popularScienceDependencies,
-                            taskManager: mainTab.taskManager,
-                            homeViewModel: mainTab.homeViewModel,
-                            medicalDocumentUploadViewModel: mainTab.medicalDocumentUploadViewModel,
-                            knowledgeViewModel: mainTab.knowledgeViewModel,
-                            popularScienceViewModel: mainTab.popularScienceViewModel,
-                            chatStateStore: mainTab.chatStateStore,
-                            chatListViewModel: mainTab.chatListViewModel,
-                            chatDetailViewModel: mainTab.chatDetailViewModel,
-                            deepTutorChatViewModel: mainTab.deepTutorChatViewModel,
-                            settingsViewModel: mainTab.settingsViewModel,
-                            accountManagementViewModel: mainTab.accountManagementViewModel,
-                            aiSettingsViewModel: mainTab.aiSettingsViewModel,
-                            versionUpdateCoordinator: mainTab.versionUpdateCoordinator,
-                            upgradeLoginViewModel: mainTab.upgradeLoginViewModel,
-                            pushAdapter: mainTab.pushAdapter,
-                            externalMedicalDocumentImportCoordinator: mainTab.externalMedicalDocumentImportCoordinator,
-                            launchIntentCoordinator: mainTab.launchIntentCoordinator
-                        )
-                        .environmentObject(mainTab.memberContextStore)
-                        .id(session.accountID)
-                        .onAppear {
-                            mainTab.launchIntentCoordinator.updateReadiness {
-                                $0.isSignedIn = true
-                                $0.accountID = session.accountID
-                                $0.isAccountPrepared = true
-                                $0.isOnboardingBlocking = false
-                            }
+                    SignedInMainTabHostView(session: session, mainTab: mainTab)
+                    .environmentObject(mainTab.memberContextStore)
+                    .id(session.accountID)
+                    .onAppear {
+                        mainTab.launchIntentCoordinator.updateReadiness {
+                            $0.isSignedIn = true
+                            $0.accountID = session.accountID
+                            $0.isAccountPrepared = true
+                            $0.isOnboardingBlocking = false
                         }
-                        .task(id: session.accountID) {
-                            await versionUpdateCoordinator.checkOnLaunchIfNeeded(force: true)
-                        }
-                    } else {
-                        MainTabCoordinatorView(
-                            session: session,
-                            routeStore: mainTab.routeStore,
-                            homeDependencies: mainTab.homeDependencies,
-                            knowledgeDependencies: mainTab.knowledgeDependencies,
-                            popularScienceDependencies: mainTab.popularScienceDependencies,
-                            taskManager: mainTab.taskManager,
-                            homeViewModel: mainTab.homeViewModel,
-                            medicalDocumentUploadViewModel: mainTab.medicalDocumentUploadViewModel,
-                            knowledgeViewModel: mainTab.knowledgeViewModel,
-                            popularScienceViewModel: mainTab.popularScienceViewModel,
-                            chatStateStore: mainTab.chatStateStore,
-                            chatListViewModel: mainTab.chatListViewModel,
-                            chatDetailViewModel: mainTab.chatDetailViewModel,
-                            deepTutorChatViewModel: mainTab.deepTutorChatViewModel,
-                            settingsViewModel: mainTab.settingsViewModel,
-                            accountManagementViewModel: mainTab.accountManagementViewModel,
-                            aiSettingsViewModel: mainTab.aiSettingsViewModel,
-                            versionUpdateCoordinator: mainTab.versionUpdateCoordinator,
-                            upgradeLoginViewModel: mainTab.upgradeLoginViewModel,
-                            pushAdapter: mainTab.pushAdapter,
-                            externalMedicalDocumentImportCoordinator: mainTab.externalMedicalDocumentImportCoordinator,
-                            launchIntentCoordinator: mainTab.launchIntentCoordinator
-                        )
-                        .environmentObject(mainTab.memberContextStore)
-                        .id(session.accountID)
-                        .onAppear {
-                            mainTab.launchIntentCoordinator.updateReadiness {
-                                $0.isSignedIn = true
-                                $0.accountID = session.accountID
-                                $0.isAccountPrepared = true
-                                $0.isOnboardingBlocking = false
-                            }
-                        }
-                        .task(id: session.accountID) {
-                            // 通知权限仅在用户已进入已登录态后询问（含会话恢复），避免登录页弹系统对话框。
-    //                        lifecycle.requestNotificationAuthorizationIfNeeded()
-                            // 设备登记由 AppLifecycleCoordinator / DeviceRegistrationCoordinator 在启动与会话恢复时统一触发。
-                            await versionUpdateCoordinator.checkOnLaunchIfNeeded(force: true)
-                        }
-
+                    }
+                    .task(id: session.accountID) {
+                        // 通知权限仅在用户已进入已登录态后询问（含会话恢复），避免登录页弹系统对话框。
+//                        lifecycle.requestNotificationAuthorizationIfNeeded()
+                        // 设备登记由 AppLifecycleCoordinator / DeviceRegistrationCoordinator 在启动与会话恢复时统一触发。
+                        await versionUpdateCoordinator.checkOnLaunchIfNeeded(force: true)
                     }
                 }
             } else {

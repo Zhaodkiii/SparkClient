@@ -7,11 +7,14 @@ enum TaskCenterRoute: Hashable {
 
 struct TaskCenterViewController: View {
     let memberID: Int?
+    let knowledgeDependencies: KnowledgeFeatureDependencies
 
     @ObservedObject var taskManager: TaskManager
+    @ObservedObject var knowledgeViewModel: KnowledgeLibraryViewModel
     @State private var filters = TaskFilterSelection()
     @State private var path: [TaskCenterRoute] = []
     @State private var isCreating = false
+    @State private var isShowingAdvancedFilters = false
 
     var body: some View {
         CompatibleRouteNavigationContainer(path: $path, legacyStackStyle: true) {
@@ -37,24 +40,23 @@ struct TaskCenterViewController: View {
                         }
 
                         Button {
-                            isCreating = true
+                            isShowingAdvancedFilters = true
                         } label: {
-                            Image(systemName: "plus")
+                            ZStack(alignment: .topTrailing) {
+                                Image(systemName: "line.3.horizontal.decrease.circle")
+                                if filters.advancedActiveCount > 0 {
+                                    Text("\(filters.advancedActiveCount)")
+                                        .font(.caption2.bold())
+                                        .foregroundStyle(.white)
+                                        .frame(width: 16, height: 16)
+                                        .background(Color.accentColor, in: Circle())
+                                        .offset(x: 6, y: -6)
+                                }
+                            }
                         }
+                        .accessibilityLabel(NSLocalizedString("task.filter.advanced", comment: "筛选"))
                     }
                 }
-            }
-            .safeAreaInset(edge: .bottom) {
-                Button {
-                    isCreating = true
-                } label: {
-                    Label(NSLocalizedString("task.empty.create", comment: "新建任务"), systemImage: "plus.circle.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(.bar)
             }
         } destination: { route in
             switch route {
@@ -62,6 +64,8 @@ struct TaskCenterViewController: View {
                 TaskDetailView(
                     memberID: memberID,
                     taskManager: taskManager,
+                    knowledgeDependencies: knowledgeDependencies,
+                    knowledgeViewModel: knowledgeViewModel,
                     taskID: taskID
                 )
             case .statistics:
@@ -69,6 +73,11 @@ struct TaskCenterViewController: View {
                     memberID: memberID,
                     taskManager: taskManager
                 )
+            }
+        }
+        .sheet(isPresented: $isShowingAdvancedFilters) {
+            TaskAdvancedFilterSheet(filters: $filters) {
+                isShowingAdvancedFilters = false
             }
         }
         .task {

@@ -119,6 +119,27 @@ struct ChatOrchestrator: Sendable {
             )
 
             if let messageRunActor, let assistantID = assistantMessageClientID {
+                logger.info(
+                    "[CHAT_USAGE_TMP] direct_tool.start assistant=\(assistantID.uuidString) tool=\(result.toolName) outputChars=\(result.outputText.count) sideEffects=\(result.sideEffects.count)",
+                    module: .aiConfig
+                )
+                await messageRunActor.recordToolCallStarted(
+                    assistantClientMessageID: assistantID,
+                    callIndex: 0,
+                    toolCallID: nil,
+                    toolName: result.toolName
+                )
+                await messageRunActor.recordToolCallFinished(
+                    assistantClientMessageID: assistantID,
+                    callIndex: 0,
+                    toolCallID: nil,
+                    toolName: result.toolName,
+                    resultText: result.outputText
+                )
+                logger.info(
+                    "[CHAT_USAGE_TMP] direct_tool.finish assistant=\(assistantID.uuidString) tool=\(result.toolName)",
+                    module: .aiConfig
+                )
                 for effect in result.sideEffects {
                     await messageRunActor.apply(
                         .toolSideEffect(
@@ -208,6 +229,20 @@ struct ChatOrchestrator: Sendable {
             try cancellationToken?.checkCancellation()
             
             let collected: CollectedRuntimeResponse
+            if let messageRunActor, let assistantID = assistantMessageClientID {
+                logger.info(
+                    "[CHAT_USAGE_TMP] llm.request.start assistant=\(assistantID.uuidString) round=\(round) model=\(preferredModelName ?? "-") loopMessages=\(loopMessages.count)",
+                    module: .aiConfig
+                )
+                await messageRunActor.recordLLMRequestStarted(
+                    assistantClientMessageID: assistantID,
+                    callIndex: round,
+                    modelName: preferredModelName
+                )
+            }
+            let promptMessageTokenEstimate = Self.estimateTokens(for: loopMessages)
+            let promptToolTokenEstimate = Self.estimateTokens(for: activeToolDefinitions)
+            let promptTokenEstimate = promptMessageTokenEstimate + promptToolTokenEstimate
             do {
                 // MARK: 核心：调用AI模型流式生成
                 collected = try await collectRuntimeResponse(
@@ -235,6 +270,24 @@ struct ChatOrchestrator: Sendable {
             }
 
             let response = collected.response
+            if let messageRunActor, let assistantID = assistantMessageClientID {
+                let hasProviderUsage = response.promptTokens != nil && response.completionTokens != nil
+                let completionTokenEstimate = Self.estimateTokens(for: response)
+                logger.info(
+                    "[CHAT_USAGE_TMP] llm.usage.collect assistant=\(assistantID.uuidString) round=\(round) model=\(response.model) providerPrompt=\(response.promptTokens.map(String.init) ?? "nil") providerCompletion=\(response.completionTokens.map(String.init) ?? "nil") fallbackPrompt=\(promptTokenEstimate) fallbackPromptMessages=\(promptMessageTokenEstimate) fallbackPromptTools=\(promptToolTokenEstimate) fallbackCompletion=\(completionTokenEstimate) isEstimated=\(hasProviderUsage == false) toolCalls=\(response.toolCalls.count) finish=\(response.finishReason ?? "-")",
+                    module: .aiConfig
+                )
+                await messageRunActor.recordLLMUsage(
+                    assistantClientMessageID: assistantID,
+                    callIndex: round,
+                    modelName: response.model,
+                    promptTokens: response.promptTokens ?? promptTokenEstimate,
+                    completionTokens: response.completionTokens ?? completionTokenEstimate,
+                    reasoningTokens: 0,
+                    cachedPromptTokens: 0,
+                    isEstimated: hasProviderUsage == false
+                )
+            }
             let toolTrace = makeToolTrace(from: executedTools)
 
             // MARK: - AI 不调用工具 → 直接返回文本结果
@@ -362,6 +415,18 @@ struct ChatOrchestrator: Sendable {
                 
                 // 前端UI：显示工具调用中（带上模型传入参数，避免覆盖流式阶段已展示的 arguments）
                 let parsedCallArguments = toolHub.parseArguments(call.arguments)
+                if let messageRunActor, let assistantID = assistantMessageClientID {
+                    logger.info(
+                        "[CHAT_USAGE_TMP] tool.start assistant=\(assistantID.uuidString) round=\(round) toolCallID=\(call.id) tool=\(call.name) argsChars=\(call.arguments.count)",
+                        module: .aiConfig
+                    )
+                    await messageRunActor.recordToolCallStarted(
+                        assistantClientMessageID: assistantID,
+                        callIndex: round,
+                        toolCallID: call.id,
+                        toolName: call.name
+                    )
+                }
                 await emitToolPartial(
                     answer: roundAnswer,
                     reasoning: roundReasoning,
@@ -387,6 +452,19 @@ struct ChatOrchestrator: Sendable {
                     endpoint: nil,
                     privacyPolicyURL: nil
                 )
+                if let messageRunActor, let assistantID = assistantMessageClientID {
+                    logger.info(
+                        "[CHAT_USAGE_TMP] tool.finish assistant=\(assistantID.uuidString) round=\(round) toolCallID=\(call.id) tool=\(call.name) outputChars=\(toolResult.outputText.count) awaitingUser=\(toolResult.isAwaitingUserInput)",
+                        module: .aiConfig
+                    )
+                    await messageRunActor.recordToolCallFinished(
+                        assistantClientMessageID: assistantID,
+                        callIndex: round,
+                        toolCallID: call.id,
+                        toolName: call.name,
+                        resultText: toolResult.outputText
+                    )
+                }
 
                 // 工具执行完成 → 前端显示「参数 + 输出」，供气泡与工具详情 Sheet 共用
                 await emitToolPartial(
@@ -940,6 +1018,65 @@ struct ChatOrchestrator: Sendable {
         value
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
+    }
+
+    private static func estimateTokens(for messages: [AIRuntimeMessage]) -> Int {
+        let characterCount = messages.reduce(0) { partial, message in
+            var total = partial
+            total += message.normalizedTextContent?.count ?? 0
+            total += message.reasoningContent?.count ?? 0
+            total += message.name?.count ?? 0
+            total += message.toolCallID?.count ?? 0
+            if let toolCalls = message.toolCalls {
+                total += toolCalls.reduce(0) { callPartial, call in
+                    callPartial + call.id.count + call.name.count + call.arguments.count
+                }
+            }
+            return total
+        }
+        return ChatBillingEstimate.estimateTokens(textCharacterCount: characterCount)
+    }
+
+    private static func estimateTokens(for tools: [AIRuntimeToolDefinition]) -> Int {
+        guard tools.isEmpty == false else { return 0 }
+        let characterCount = tools.reduce(0) { partial, tool in
+            partial
+                + tool.name.count
+                + tool.summary.count
+                + tool.required.reduce(0) { $0 + $1.count }
+                + estimateCharacters(for: tool.properties)
+        }
+        return ChatBillingEstimate.estimateTokens(textCharacterCount: characterCount)
+    }
+
+    private static func estimateCharacters(for properties: [String: AIRuntimeToolProperty]) -> Int {
+        properties.reduce(0) { partial, entry in
+            partial + entry.key.count + estimateCharacters(for: entry.value)
+        }
+    }
+
+    private static func estimateCharacters(for property: AIRuntimeToolProperty) -> Int {
+        var total = property.type.count
+        total += property.description.count
+        total += property.enumValues?.reduce(0) { $0 + $1.count } ?? 0
+        total += property.format?.count ?? 0
+        total += property.objectRequired?.reduce(0) { $0 + $1.count } ?? 0
+        if let objectProperties = property.objectProperties {
+            total += estimateCharacters(for: objectProperties)
+        }
+        if let arrayItems = property.arrayItems {
+            total += estimateCharacters(for: arrayItems)
+        }
+        return total
+    }
+
+    private static func estimateTokens(for response: AIRuntimeTextResponse) -> Int {
+        var characterCount = response.text.count
+        characterCount += response.reasoningText?.count ?? 0
+        characterCount += response.toolCalls.reduce(0) { partial, call in
+            partial + call.id.count + call.name.count + call.arguments.count
+        }
+        return ChatBillingEstimate.estimateTokens(textCharacterCount: characterCount)
     }
 
     private func shortID(_ value: Int?) -> String {

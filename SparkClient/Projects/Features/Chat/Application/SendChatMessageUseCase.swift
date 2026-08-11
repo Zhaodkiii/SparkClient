@@ -310,7 +310,8 @@ struct SendChatMessageUseCase: Sendable {
             try await messageRunActor.startAssistantMessage(
                 threadID: thread.id,
                 assistantClientMessageID: assistantClientMessageID,
-                modelName: resolvedRow.name
+                modelName: resolvedRow.name,
+                priceTier: resolvedRow.priceTier
             )
             let visibleHistory = await repository.loadMessages(threadID: thread.id, limit: nil, before: nil)
             // 回调：用户消息已落库
@@ -573,7 +574,8 @@ struct SendChatMessageUseCase: Sendable {
             try await messageRunActor.startAssistantMessage(
                 threadID: thread.id,
                 assistantClientMessageID: assistantClientMessageID,
-                modelName: resolvedRow.name
+                modelName: resolvedRow.name,
+                priceTier: resolvedRow.priceTier
             )
 
             var healthContextForAI: String?

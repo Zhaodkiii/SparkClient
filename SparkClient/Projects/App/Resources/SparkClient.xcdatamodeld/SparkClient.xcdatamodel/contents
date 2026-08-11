@@ -168,6 +168,46 @@
         <attribute name="toolCallID" optional="YES" attributeType="String"/>
         <attribute name="updatedAt" attributeType="Date" usesScalarValueType="NO"/>
     </entity>
+    <entity name="ChatMessageUsageEventEntity" representedClassName="ChatMessageUsageEventEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="cachedPromptTokens" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="callIndex" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="completionTokens" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="eventType" attributeType="String" defaultValueString="llmUsageReceived"/>
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="isEstimated" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="messageID" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="modelName" optional="YES" attributeType="String"/>
+        <attribute name="ownerAccountID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="promptTokens" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="reasoningTokens" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="runID" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="threadID" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="toolCallID" optional="YES" attributeType="String"/>
+        <attribute name="toolName" optional="YES" attributeType="String"/>
+        <attribute name="totalTokens" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+    </entity>
+    <entity name="ChatMessageUsageSummaryEntity" representedClassName="ChatMessageUsageSummaryEntity" syncable="YES" codeGenerationType="class">
+        <attribute name="cachedPromptTokens" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="completionTokens" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="currencyCode" attributeType="String" defaultValueString="USD"/>
+        <attribute name="estimatedAmount" attributeType="Decimal" defaultValueString="0"/>
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="isEstimated" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="llmCallCount" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="messageID" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="modelName" optional="YES" attributeType="String"/>
+        <attribute name="ownerAccountID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="priceTier" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="promptTokens" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="reasoningTokens" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="source" attributeType="String" defaultValueString="providerUsage"/>
+        <attribute name="threadID" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="toolCallCount" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="totalTokens" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="updatedAt" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
     <entity name="ChatSyncCursorEntity" representedClassName="ChatSyncCursorEntity" syncable="YES" codeGenerationType="class">
         <attribute name="key" attributeType="String"/>
         <attribute name="ownerAccountID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>

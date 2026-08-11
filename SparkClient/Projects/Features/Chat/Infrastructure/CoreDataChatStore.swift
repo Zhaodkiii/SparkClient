@@ -6,6 +6,8 @@ actor CoreDataChatStore {
         static let thread = "ChatThreadEntity"
         static let message = "ChatMessageEntity"
         static let messageBlock = "ChatMessageBlockEntity"
+        static let messageUsageEvent = "ChatMessageUsageEventEntity"
+        static let messageUsageSummary = "ChatMessageUsageSummaryEntity"
         static let cursor = "ChatSyncCursorEntity"
         static let downloadJob = "ChatAttachmentDownloadEntity"
     }
@@ -450,6 +452,17 @@ actor CoreDataChatStore {
         }) ?? []
     }
 
+    func loadUsageSummary(clientMessageID: UUID) async -> ChatMessageUsageSummary? {
+        (try? await kernel.read { context, accountID in
+            guard let accountID else { return nil }
+            return try Self.fetchUsageSummary(
+                context: context,
+                ownerAccountID: accountID,
+                messageID: clientMessageID
+            ).flatMap(Self.toUsageSummary)
+        }) ?? nil
+    }
+
     func countMessages(threadID: UUID) async -> Int {
         (try? await kernel.read { context, accountID in
             guard let accountID else { return 0 }
@@ -603,6 +616,88 @@ actor CoreDataChatStore {
                     kind: .messagesUpdated,
                     affectedClientMessageIDs: [clientMessageID],
                     affectsThreadList: change.1
+                )
+            )
+        }
+    }
+
+    func appendUsageEvent(_ event: ChatMessageUsageEvent) async {
+        let threadID = try? await kernel.writeWithoutNotification { context, accountID in
+            let row = NSEntityDescription.insertNewObject(forEntityName: EntityName.messageUsageEvent, into: context)
+            row.setValue(event.id, forKey: "id")
+            row.setValue(accountID, forKey: Field.ownerAccountID)
+            row.setValue(event.messageID, forKey: "messageID")
+            row.setValue(event.threadID, forKey: "threadID")
+            row.setValue(event.runID, forKey: "runID")
+            row.setValue(event.eventType.rawValue, forKey: "eventType")
+            row.setValue(Int64(event.callIndex), forKey: "callIndex")
+            row.setValue(event.modelName, forKey: "modelName")
+            row.setValue(event.toolCallID, forKey: "toolCallID")
+            row.setValue(event.toolName, forKey: "toolName")
+            row.setValue(Int64(event.promptTokens), forKey: "promptTokens")
+            row.setValue(Int64(event.completionTokens), forKey: "completionTokens")
+            row.setValue(Int64(event.reasoningTokens), forKey: "reasoningTokens")
+            row.setValue(Int64(event.cachedPromptTokens), forKey: "cachedPromptTokens")
+            row.setValue(Int64(event.totalTokens), forKey: "totalTokens")
+            row.setValue(event.isEstimated, forKey: "isEstimated")
+            row.setValue(event.createdAt, forKey: "createdAt")
+            return event.threadID
+        }
+        logger.info(
+            "[CHAT_USAGE_TMP] db.event.append type=\(event.eventType.rawValue) assistant=\(event.messageID.uuidString) thread=\(event.threadID.uuidString) callIndex=\(event.callIndex) prompt=\(event.promptTokens) completion=\(event.completionTokens) total=\(event.totalTokens) estimated=\(event.isEstimated) toolCallID=\(event.toolCallID ?? "-") tool=\(event.toolName ?? "-") persisted=\(threadID != nil)",
+            module: .aiConfig
+        )
+        if let threadID {
+            await kernel.postChangeNotification(
+                ChatConversationChangeEvent(
+                    threadID: threadID,
+                    kind: .messagesUpdated,
+                    affectedClientMessageIDs: [event.messageID],
+                    affectsThreadList: false
+                )
+            )
+        }
+    }
+
+    func upsertUsageSummary(_ summary: ChatMessageUsageSummary) async {
+        let threadID = try? await kernel.writeWithoutNotification { context, accountID in
+            let row = try Self.fetchUsageSummary(
+                context: context,
+                ownerAccountID: accountID,
+                messageID: summary.messageID
+            ) ?? NSEntityDescription.insertNewObject(forEntityName: EntityName.messageUsageSummary, into: context)
+            row.setValue(summary.id, forKey: "id")
+            row.setValue(accountID, forKey: Field.ownerAccountID)
+            row.setValue(summary.messageID, forKey: "messageID")
+            row.setValue(summary.threadID, forKey: "threadID")
+            row.setValue(summary.modelName, forKey: "modelName")
+            row.setValue(Int16(summary.priceTier), forKey: "priceTier")
+            row.setValue(summary.currencyCode, forKey: "currencyCode")
+            row.setValue(Int64(summary.promptTokens), forKey: "promptTokens")
+            row.setValue(Int64(summary.completionTokens), forKey: "completionTokens")
+            row.setValue(Int64(summary.reasoningTokens), forKey: "reasoningTokens")
+            row.setValue(Int64(summary.cachedPromptTokens), forKey: "cachedPromptTokens")
+            row.setValue(Int64(summary.totalTokens), forKey: "totalTokens")
+            row.setValue(Int64(summary.llmCallCount), forKey: "llmCallCount")
+            row.setValue(Int64(summary.toolCallCount), forKey: "toolCallCount")
+            row.setValue(NSDecimalNumber(decimal: summary.estimatedAmount), forKey: "estimatedAmount")
+            row.setValue(summary.isEstimated, forKey: "isEstimated")
+            row.setValue(summary.source.rawValue, forKey: "source")
+            row.setValue(summary.createdAt, forKey: "createdAt")
+            row.setValue(summary.updatedAt, forKey: "updatedAt")
+            return summary.threadID
+        }
+        logger.info(
+            "[CHAT_USAGE_TMP] db.summary.upsert assistant=\(summary.messageID.uuidString) thread=\(summary.threadID.uuidString) prompt=\(summary.promptTokens) completion=\(summary.completionTokens) total=\(summary.totalTokens) llmCalls=\(summary.llmCallCount) toolCalls=\(summary.toolCallCount) amount=\(summary.estimatedAmount) currency=\(summary.currencyCode) source=\(summary.source.rawValue) estimated=\(summary.isEstimated) persisted=\(threadID != nil)",
+            module: .aiConfig
+        )
+        if let threadID {
+            await kernel.postChangeNotification(
+                ChatConversationChangeEvent(
+                    threadID: threadID,
+                    kind: .messagesUpdated,
+                    affectedClientMessageIDs: [summary.messageID],
+                    affectsThreadList: false
                 )
             )
         }
@@ -1297,6 +1392,20 @@ actor CoreDataChatStore {
         return try context.fetch(request).first
     }
 
+    private static func fetchUsageSummary(
+        context: NSManagedObjectContext,
+        ownerAccountID: Int64,
+        messageID: UUID
+    ) throws -> NSManagedObject? {
+        let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.messageUsageSummary)
+        request.fetchLimit = 1
+        request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            ownerPredicate(ownerAccountID),
+            NSPredicate(format: "messageID == %@", messageID as CVarArg),
+        ])
+        return try context.fetch(request).first
+    }
+
     private static func fillMessage(
         object: NSManagedObject,
         message: ChatMessage,
@@ -1757,7 +1866,59 @@ actor CoreDataChatStore {
             createdAt: createdAt,
             serverUpdatedAt: object.value(forKey: "serverUpdatedAt") as? Date,
             isTombstone: object.value(forKey: "isTombstone") as? Bool ?? false,
-            modelName: object.value(forKey: "modelName") as? String
+            modelName: object.value(forKey: "modelName") as? String,
+            usageSummary: try fetchUsageSummary(
+                context: context,
+                ownerAccountID: ownerAccountID,
+                messageID: clientMessageID
+            ).flatMap(toUsageSummary)
+        )
+    }
+
+    private static func toUsageSummary(_ object: NSManagedObject) -> ChatMessageUsageSummary? {
+        guard
+            let id = object.value(forKey: "id") as? UUID,
+            let messageID = object.value(forKey: "messageID") as? UUID,
+            let threadID = object.value(forKey: "threadID") as? UUID,
+            let currencyCode = object.value(forKey: "currencyCode") as? String,
+            let sourceRaw = object.value(forKey: "source") as? String,
+            let source = ChatUsageSource(rawValue: sourceRaw),
+            let createdAt = object.value(forKey: "createdAt") as? Date,
+            let updatedAt = object.value(forKey: "updatedAt") as? Date
+        else {
+            return nil
+        }
+
+        let estimatedAmount: Decimal
+        if let decimal = object.value(forKey: "estimatedAmount") as? Decimal {
+            estimatedAmount = decimal
+        } else if let number = object.value(forKey: "estimatedAmount") as? NSDecimalNumber {
+            estimatedAmount = number.decimalValue
+        } else if let number = object.value(forKey: "estimatedAmount") as? NSNumber {
+            estimatedAmount = number.decimalValue
+        } else {
+            estimatedAmount = 0
+        }
+
+        return ChatMessageUsageSummary(
+            id: id,
+            messageID: messageID,
+            threadID: threadID,
+            modelName: object.value(forKey: "modelName") as? String,
+            priceTier: intValue(object.value(forKey: "priceTier")) ?? 0,
+            currencyCode: currencyCode,
+            promptTokens: intValue(object.value(forKey: "promptTokens")) ?? 0,
+            completionTokens: intValue(object.value(forKey: "completionTokens")) ?? 0,
+            reasoningTokens: intValue(object.value(forKey: "reasoningTokens")) ?? 0,
+            cachedPromptTokens: intValue(object.value(forKey: "cachedPromptTokens")) ?? 0,
+            totalTokens: intValue(object.value(forKey: "totalTokens")) ?? 0,
+            llmCallCount: intValue(object.value(forKey: "llmCallCount")) ?? 0,
+            toolCallCount: intValue(object.value(forKey: "toolCallCount")) ?? 0,
+            estimatedAmount: estimatedAmount,
+            isEstimated: object.value(forKey: "isEstimated") as? Bool ?? false,
+            source: source,
+            createdAt: createdAt,
+            updatedAt: updatedAt
         )
     }
 

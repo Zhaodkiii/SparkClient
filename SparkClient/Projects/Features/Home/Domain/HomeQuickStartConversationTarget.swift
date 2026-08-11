@@ -35,6 +35,6 @@ final class HomeQuickStartConversationPreferenceStore: ObservableObject {
         let rawValue = defaults.string(forKey: Self.storageKey)
         self.target = rawValue
             .flatMap(HomeQuickStartConversationTarget.init(rawValue:))
-            ?? .deepTutorChat
+            ?? .chat
     }
 }

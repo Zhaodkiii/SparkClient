@@ -782,6 +782,7 @@ nonisolated struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
     let serverUpdatedAt: Date?
     let isTombstone: Bool
     let modelName: String?
+    let usageSummary: ChatMessageUsageSummary?
 
     nonisolated var threadID: UUID { threadId }
     nonisolated var clientMessageID: UUID { clientMessageId }
@@ -798,7 +799,8 @@ nonisolated struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
         createdAt: Date = Date(),
         serverUpdatedAt: Date? = nil,
         isTombstone: Bool = false,
-        modelName: String? = nil
+        modelName: String? = nil,
+        usageSummary: ChatMessageUsageSummary? = nil
     ) {
         self.id = id
         self.threadId = threadID
@@ -811,6 +813,7 @@ nonisolated struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
         self.serverUpdatedAt = serverUpdatedAt
         self.isTombstone = isTombstone
         self.modelName = modelName
+        self.usageSummary = usageSummary
     }
 
 }

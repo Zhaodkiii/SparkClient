@@ -51,6 +51,7 @@ protocol ChatThreadStoring: Sendable {
 protocol ChatMessageStoring: Sendable {
     func loadMessages(threadID: UUID, limit: Int?, before: Date?) async -> [ChatMessage]
     func loadMessages(clientMessageIDs: [UUID]) async -> [ChatMessage]
+    func loadUsageSummary(clientMessageID: UUID) async -> ChatMessageUsageSummary?
     func countMessages(threadID: UUID) async -> Int
     func latestServerActivity(for threadID: UUID) async -> Date?
     func appendMessage(_ message: ChatMessage) async throws -> ChatMessage
@@ -70,6 +71,8 @@ protocol ChatMessageStoring: Sendable {
     func loadOutboxMessages(limit: Int) async -> [ChatMessage]
     func loadPendingMessageBlocks(limit: Int) async -> [ChatPendingMessageBlock]
     func markMessageBlocksSynced(ids: [UUID]) async
+    func appendUsageEvent(_ event: ChatMessageUsageEvent) async
+    func upsertUsageSummary(_ summary: ChatMessageUsageSummary) async
 }
 
 extension ChatMessageStoring {
