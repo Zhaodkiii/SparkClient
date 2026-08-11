@@ -16,6 +16,10 @@ struct IOS26HomeView: View {
     let actionHandler: IOS26HomeDashboardActionHandler
     @ObservedObject var chatListViewModel: ChatListViewModel
     @ObservedObject var deepTutorChatViewModel: DeepTutorChatViewModel
+    @ObservedObject var settingsViewModel: SettingsViewModel
+    @ObservedObject var aiSettingsViewModel: AISettingsViewModel
+    @ObservedObject var versionUpdateCoordinator: AppVersionUpdateCoordinator
+    let onSettingsAccountEntryTap: () -> Void
 
     @State private var hasLoaded = false
     @Binding var activeFullScreenCover: HomeFullScreenCover?
@@ -45,7 +49,24 @@ private extension IOS26HomeView {
             await viewModel.refresh()
             await taskManager.syncIncremental(memberID: viewModel.selectedMemberID)
         }
-        .navigationBarHidden(true)
+        .navigationTitle(L10n.text("ios26.home.title"))
+        .navigationBarTitleDisplayMode(.large)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                MainNavigationLink {
+                    SettingsView(
+                        viewModel: settingsViewModel,
+                        aiSettingsViewModel: aiSettingsViewModel,
+                        versionUpdateCoordinator: versionUpdateCoordinator,
+                        session: session,
+                        onAccountEntryTap: onSettingsAccountEntryTap
+                    )
+                } label: {
+                    Image(systemName: "gearshape")
+                }
+                .accessibilityLabel(L10n.text("settings.title"))
+            }
+        }
     }
 
     var contentWithPresentation: some View {

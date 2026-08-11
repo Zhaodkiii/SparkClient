@@ -71,7 +71,7 @@ struct IOS26TabBarView: View {
                 homeContainer
             }
 
-            Tab(L10n.text("tab.chat"), systemImage: "bubble.left.and.bubble.right.fill", value: AppRouteStore.RootTab.chat) {
+            Tab(L10n.text("tab.chat"), systemImage: "bubble.left.and.bubble.right.fill", value: AppRouteStore.RootTab.chat,role: .search) {
                 chatContainer
             }
 
@@ -89,13 +89,13 @@ struct IOS26TabBarView: View {
 //                deepTutorContainer
 //            }
             
-            Tab(L10n.text("tab.search"), systemImage: "magnifyingglass", value: AppRouteStore.RootTab.search, role: .search) {
-                IOS26SearchTabView()
-            }
+//            Tab(L10n.text("tab.search"), systemImage: "magnifyingglass", value: AppRouteStore.RootTab.search, role: .search) {
+//                IOS26SearchTabView()
+//            }
 
-            Tab(L10n.text("tab.settings"), systemImage: "gearshape.fill", value: AppRouteStore.RootTab.settings) {
-                settingsContainer
-            }
+//            Tab(L10n.text("tab.settings"), systemImage: "gearshape.fill", value: AppRouteStore.RootTab.settings) {
+//                settingsContainer
+//            }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
         .sheet(isPresented: $showsDeviceAccountUpgradeSheet) {
@@ -132,6 +132,10 @@ struct IOS26TabBarView: View {
                 actionHandler: homeDashboardActionHandler,
                 chatListViewModel: chatListViewModel,
                 deepTutorChatViewModel: deepTutorChatViewModel,
+                settingsViewModel: settingsViewModel,
+                aiSettingsViewModel: aiSettingsViewModel,
+                versionUpdateCoordinator: versionUpdateCoordinator,
+                onSettingsAccountEntryTap: handleAccountEntryTap,
                 activeFullScreenCover: $activeHomeFullScreenCover
             )
         } destination: { route in

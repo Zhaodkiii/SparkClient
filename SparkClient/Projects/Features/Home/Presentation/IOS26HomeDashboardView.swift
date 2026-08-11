@@ -62,7 +62,7 @@ struct IOS26HomeDashboardView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                header
+//                header
                 memberStrip
                 taskSummarySection
                 primaryActions
