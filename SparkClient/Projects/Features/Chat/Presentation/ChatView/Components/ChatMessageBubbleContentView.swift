@@ -53,9 +53,8 @@ struct ChatMessageBubbleContentView: View {
     let savingNutritionCardIDs: Set<UUID>
     let onStructuredHealthCardAction: (ChatStructuredHealthCardAction) -> Void
     let onNutritionCardAction: (ChatNutritionCardAction) -> Void
-    let onCaptureOpenCamera: () -> Void
-    let onCaptureOpenPhotoLibrary: () -> Void
-    let onCaptureOpenFiles: () -> Void
+    let onCaptureAttachmentsPicked: (ChatCaptureMessageCardPayload, [ChatComposerAttachmentPreview]) -> Void
+    let onCaptureCancel: (ChatCaptureMessageCardPayload) -> Void
     let onSmallTaskCardOpen: (ChatSmallTaskMessageCardPayload) -> Void
     let onPresentToolPreview: (ToolPreviewPrompt, ChatRenderContext) -> Void
     let fileTransferService: FileTransferService
@@ -125,9 +124,8 @@ struct ChatMessageBubbleContentView: View {
             onToolConsentCardShowDetails: onToolConsentCardShowDetails,
             onStructuredHealthCardAction: onStructuredHealthCardAction,
             onNutritionCardAction: onNutritionCardAction,
-            onCaptureOpenCamera: onCaptureOpenCamera,
-            onCaptureOpenPhotoLibrary: onCaptureOpenPhotoLibrary,
-            onCaptureOpenFiles: onCaptureOpenFiles,
+            onCaptureAttachmentsPicked: onCaptureAttachmentsPicked,
+            onCaptureCancel: onCaptureCancel,
             onSmallTaskCardOpen: onSmallTaskCardOpen,
             onPresentToolPreview: onPresentToolPreview,
             fileTransferService: fileTransferService,

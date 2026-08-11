@@ -41,9 +41,8 @@ struct ChatRenderContext {
     let onToolConsentCardShowDetails: (ChatToolConsentCard) -> Void
     let onStructuredHealthCardAction: (ChatStructuredHealthCardAction) -> Void  // 健康卡片操作
     let onNutritionCardAction: (ChatNutritionCardAction) -> Void                // 营养卡片操作
-    let onCaptureOpenCamera: () -> Void                    // 打开相机
-    let onCaptureOpenPhotoLibrary: () -> Void              // 打开相册
-    let onCaptureOpenFiles: () -> Void                    // 打开文件
+    let onCaptureAttachmentsPicked: (ChatCaptureMessageCardPayload, [ChatComposerAttachmentPreview]) -> Void
+    let onCaptureCancel: (ChatCaptureMessageCardPayload) -> Void
     let onSmallTaskCardOpen: (ChatSmallTaskMessageCardPayload) -> Void
     /// 展示工具详情全局 Sheet（由消息行注入，传入预览载荷与当前渲染上下文）。
     let onPresentToolPreview: (ToolPreviewPrompt, ChatRenderContext) -> Void
@@ -95,9 +94,8 @@ extension ChatRenderContext {
             onToolConsentCardShowDetails: onToolConsentCardShowDetails,
             onStructuredHealthCardAction: onStructuredHealthCardAction,
             onNutritionCardAction: onNutritionCardAction,
-            onCaptureOpenCamera: onCaptureOpenCamera,
-            onCaptureOpenPhotoLibrary: onCaptureOpenPhotoLibrary,
-            onCaptureOpenFiles: onCaptureOpenFiles,
+            onCaptureAttachmentsPicked: onCaptureAttachmentsPicked,
+            onCaptureCancel: onCaptureCancel,
             onSmallTaskCardOpen: onSmallTaskCardOpen,
             onPresentToolPreview: onPresentToolPreview,
             fileTransferService: fileTransferService,

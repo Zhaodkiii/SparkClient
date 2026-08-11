@@ -1,5 +1,4 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
 private struct ChatSwiftUIConversationInput: Equatable {
     let threadID: UUID
@@ -35,7 +34,6 @@ struct ChatSwiftUIConversationView: View {
     let isLoadingMoreMessages: Bool
     let lockBottomViewport: Bool
     let scrollToBottomRequestGeneration: UInt64
-    @Binding var showCaptureFileImporter: Bool
 
     @StateObject private var refreshCoordinator: ConversationMessageListRefreshCoordinator
     @StateObject private var streamBuffer = ChatSwiftUIStreamEventBuffer()
@@ -61,8 +59,7 @@ struct ChatSwiftUIConversationView: View {
         hasMoreMessages: Bool,
         isLoadingMoreMessages: Bool,
         lockBottomViewport: Bool,
-        scrollToBottomRequestGeneration: UInt64,
-        showCaptureFileImporter: Binding<Bool>
+        scrollToBottomRequestGeneration: UInt64
     ) {
         self.threadID = threadID
         self.stateStore = stateStore
@@ -83,7 +80,6 @@ struct ChatSwiftUIConversationView: View {
         self.isLoadingMoreMessages = isLoadingMoreMessages
         self.lockBottomViewport = lockBottomViewport
         self.scrollToBottomRequestGeneration = scrollToBottomRequestGeneration
-        _showCaptureFileImporter = showCaptureFileImporter
         _refreshCoordinator = StateObject(
             wrappedValue: ConversationMessageListRefreshCoordinator(
                 threadID: threadID,
@@ -131,7 +127,6 @@ struct ChatSwiftUIConversationView: View {
                             conversationAppearance: conversationAppearance,
                             taskManager: taskManager,
                             logger: logger,
-                            onCaptureOpenFiles: { showCaptureFileImporter = true },
                             onHeightChangingUpdate: { update in
                                 update()
                                 scrollIfNeeded(proxy: proxy, frame: frame, animated: false)
@@ -170,19 +165,6 @@ struct ChatSwiftUIConversationView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .chatScrollDismissesKeyboardInteractively()
-        .fileImporter(
-            isPresented: $showCaptureFileImporter,
-            allowedContentTypes: [.pdf, .plainText, .image, .jpeg, .png],
-            allowsMultipleSelection: true
-        ) { result in
-            guard case .success(let urls) = result else { return }
-            Task {
-                let attachments = await ChatComposerAttachmentImporter.importFiles(urls: urls)
-                await MainActor.run {
-                    detailViewModel.enqueueComposerAttachments(attachments, for: threadID)
-                }
-            }
-        }
     }
 
     private var rowSpacing: CGFloat {
@@ -286,7 +268,6 @@ private struct ChatSwiftUIConversationMessageRow: View {
     let conversationAppearance: ChatConversationAppearancePreferences
     let taskManager: TaskManager
     let logger: Logger
-    let onCaptureOpenFiles: () -> Void
     let onHeightChangingUpdate: (@escaping () -> Void) -> Void
 
     var body: some View {
@@ -306,7 +287,6 @@ private struct ChatSwiftUIConversationMessageRow: View {
             conversationAppearance: conversationAppearance,
             taskManager: taskManager,
             logger: logger,
-            onCaptureOpenFiles: onCaptureOpenFiles,
             onHeightChangingUpdate: onHeightChangingUpdate
         )
         .transaction { transaction in

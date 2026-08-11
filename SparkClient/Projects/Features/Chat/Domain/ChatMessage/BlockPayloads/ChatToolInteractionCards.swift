@@ -17,6 +17,17 @@ nonisolated struct ChatToolQuestionCard: Codable, Equatable, Identifiable, Senda
     let createdAt: Date
     var updatedAt: Date
 
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case completionID = "completionId"
+        case prompt
+        case answers
+        case status
+        case resultText
+        case createdAt
+        case updatedAt
+    }
+
     init(
         id: UUID = UUID(),
         completionID: UUID,
@@ -48,6 +59,18 @@ nonisolated struct ChatToolMemberSelectionCard: Codable, Equatable, Identifiable
     var resultText: String?
     let createdAt: Date
     var updatedAt: Date
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case completionID = "completionId"
+        case prompt
+        case selectedMemberID = "selectedMemberId"
+        case selectedMemberName
+        case status
+        case resultText
+        case createdAt
+        case updatedAt
+    }
 
     init(
         id: UUID = UUID(),
@@ -82,6 +105,17 @@ nonisolated struct ChatHealthResourceCandidateSelectionCard: Codable, Equatable,
     let createdAt: Date
     var updatedAt: Date
 
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case completionID = "completionId"
+        case prompt
+        case selectedCandidates
+        case status
+        case resultText
+        case createdAt
+        case updatedAt
+    }
+
     init(
         id: UUID = UUID(),
         completionID: UUID,
@@ -112,6 +146,17 @@ nonisolated struct ChatToolConsentCard: Codable, Equatable, Identifiable, Sendab
     var resultText: String?
     let createdAt: Date
     var updatedAt: Date
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case completionID = "completionId"
+        case prompt
+        case decision
+        case status
+        case resultText
+        case createdAt
+        case updatedAt
+    }
 
     init(
         id: UUID = UUID(),

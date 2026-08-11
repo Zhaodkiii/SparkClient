@@ -569,9 +569,6 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
                     conversationAppearance: conversationAppearance,
                     taskManager: taskManager,
                     logger: logger,
-                    onCaptureOpenFiles: { [weak self] in
-                        self?.onCommand?(.captureOpenFiles)
-                    },
                     onHeightChangingUpdate: { [weak self] update in
                         self?.performHeightChangingUpdate(affectedItemID: msg.clientMessageID, update)
                     }

@@ -163,10 +163,13 @@ extension ChatMessageBlock {
             // 14. 快捷捕获卡片（相机/相册/文件）
         case .captureCard(let captureCard):
             ChatCaptureTypeMessageCard(
-                cardType: captureCard.cardType,
-                onOpenCamera: context.onCaptureOpenCamera,
-                onOpenPhotoLibrary: context.onCaptureOpenPhotoLibrary,
-                onOpenFiles: context.onCaptureOpenFiles
+                payload: captureCard,
+                onAttachmentsPicked: { attachments in
+                    context.onCaptureAttachmentsPicked(captureCard, attachments)
+                },
+                onCancel: {
+                    context.onCaptureCancel(captureCard)
+                }
             )
             
             // 15. HTML 内容预览

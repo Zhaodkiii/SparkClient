@@ -30,6 +30,13 @@ protocol ChatInlineToolInteractionCardSink: AnyObject {
         completionID: UUID,
         toolCallID: String?
     ) async -> Bool
+
+    func presentInlineAttachmentCaptureCard(
+        threadID: UUID?,
+        prompt: ToolAttachmentCapturePrompt,
+        completionID: UUID,
+        toolCallID: String?
+    ) async -> Bool
 }
 
 enum ToolInteractionCancelReason: String, Sendable {
@@ -69,6 +76,7 @@ final class ToolInteractionCoordinator: ObservableObject {
         case member(CheckedContinuation<InteractionResult<Int>, Never>)
         /// 健康资料候选确认回调
         case healthResourceCandidates(CheckedContinuation<InteractionResult<[HealthResourceToolCandidateDTO]>, Never>)
+        case attachmentCapture(CheckedContinuation<InteractionResult<ToolAttachmentCaptureResult>, Never>)
     }
 
     /// 等待用户操作后的结果类型
@@ -77,6 +85,7 @@ final class ToolInteractionCoordinator: ObservableObject {
         case question(InteractionResult<ToolQuestionAnswer>)
         case member(InteractionResult<Int>)
         case healthResourceCandidates(InteractionResult<[HealthResourceToolCandidateDTO]>)
+        case attachmentCapture(InteractionResult<ToolAttachmentCaptureResult>)
         case toolPreviewDismissed
         case systemMessageSettingsDismissed
         case askReportPickerDismissed
@@ -96,6 +105,7 @@ final class ToolInteractionCoordinator: ObservableObject {
     private var inlineMemberContinuations: [UUID: CheckedContinuation<InteractionResult<Int>, Never>] = [:]
     private var inlineHealthResourceCandidateContinuations: [UUID: CheckedContinuation<InteractionResult<[HealthResourceToolCandidateDTO]>, Never>] = [:]
     private var inlineConsentContinuations: [UUID: CheckedContinuation<InteractionResult<ToolConsentDecision>, Never>] = [:]
+    private var inlineAttachmentCaptureContinuations: [UUID: CheckedContinuation<InteractionResult<ToolAttachmentCaptureResult>, Never>] = [:]
     weak var inlineCardSink: (any ChatInlineToolInteractionCardSink)?
     private var interactionPreferences: ChatToolInteractionPreferences = .default
 
@@ -138,6 +148,10 @@ final class ToolInteractionCoordinator: ObservableObject {
         let consentContinuations = inlineConsentContinuations
         inlineConsentContinuations.removeAll()
         consentContinuations.values.forEach { $0.resume(returning: .cancelled) }
+
+        let attachmentContinuations = inlineAttachmentCaptureContinuations
+        inlineAttachmentCaptureContinuations.removeAll()
+        attachmentContinuations.values.forEach { $0.resume(returning: .cancelled) }
     }
 
     func hasPendingInlineInteraction(completionID: UUID) -> Bool {
@@ -145,6 +159,7 @@ final class ToolInteractionCoordinator: ObservableObject {
             || inlineMemberContinuations[completionID] != nil
             || inlineHealthResourceCandidateContinuations[completionID] != nil
             || inlineConsentContinuations[completionID] != nil
+            || inlineAttachmentCaptureContinuations[completionID] != nil
     }
 
     // MARK: - Public API 对外接口
@@ -330,6 +345,32 @@ final class ToolInteractionCoordinator: ObservableObject {
         }
     }
 
+    func requestAttachmentCapture(
+        threadID: UUID?,
+        prompt: ToolAttachmentCapturePrompt,
+        toolCallID: String? = nil
+    ) async -> InteractionResult<ToolAttachmentCaptureResult> {
+        SparkLogger.log(
+            level: .info,
+            module: .general,
+            message: "[CHAT-000017][ToolInteraction] requestAttachmentCapture thread=\(threadID?.uuidString ?? "-") prompt=\(prompt.id.uuidString) type=\(prompt.cardType.rawValue) toolCall=\(toolCallID ?? "-") hasInlineSink=\(inlineCardSink != nil)"
+        )
+        if let inlineCardSink {
+            return await requestInlineAttachmentCapture(
+                threadID: threadID,
+                prompt: prompt,
+                toolCallID: toolCallID,
+                sink: inlineCardSink
+            )
+        }
+        SparkLogger.log(
+            level: .warning,
+            module: .general,
+            message: "[CHAT-000017][ToolInteraction] requestAttachmentCapture cancelled: missing inline sink prompt=\(prompt.id.uuidString)"
+        )
+        return .cancelled
+    }
+
     /// 关闭工具预览
     func dismissToolPreview(id: UUID) {
         guard activePresentation?.id == id, pendingOutcome == nil else { return }
@@ -448,6 +489,40 @@ final class ToolInteractionCoordinator: ObservableObject {
         continuation.resume(returning: .cancelled)
     }
 
+    func completeInlineAttachmentCapture(id: UUID, result: ToolAttachmentCaptureResult) {
+        guard let continuation = inlineAttachmentCaptureContinuations.removeValue(forKey: id) else {
+            SparkLogger.log(
+                level: .warning,
+                module: .general,
+                message: "[CHAT-000017][ToolInteraction] completeInlineAttachmentCapture ignored: no continuation completion=\(id.uuidString) count=\(result.attachments.count)"
+            )
+            return
+        }
+        SparkLogger.log(
+            level: .info,
+            module: .general,
+            message: "[CHAT-000017][ToolInteraction] completeInlineAttachmentCapture resume completion=\(id.uuidString) type=\(result.cardType.rawValue) count=\(result.attachments.count) contextChars=\(result.modelContextText.count)"
+        )
+        continuation.resume(returning: .success(result))
+    }
+
+    func cancelInlineAttachmentCapture(id: UUID) {
+        guard let continuation = inlineAttachmentCaptureContinuations.removeValue(forKey: id) else {
+            SparkLogger.log(
+                level: .warning,
+                module: .general,
+                message: "[CHAT-000017][ToolInteraction] cancelInlineAttachmentCapture ignored: no continuation completion=\(id.uuidString)"
+            )
+            return
+        }
+        SparkLogger.log(
+            level: .info,
+            module: .general,
+            message: "[CHAT-000017][ToolInteraction] cancelInlineAttachmentCapture resume completion=\(id.uuidString)"
+        )
+        continuation.resume(returning: .cancelled)
+    }
+
     private func requestInlineQuestionAnswer(
         threadID: UUID?,
         prompt: ToolQuestionPrompt,
@@ -542,6 +617,41 @@ final class ToolInteractionCoordinator: ObservableObject {
                 if didPresent == false {
                     await MainActor.run {
                         self.cancelInlineConsent(id: completionID)
+                    }
+                }
+            }
+        }
+    }
+
+    private func requestInlineAttachmentCapture(
+        threadID: UUID?,
+        prompt: ToolAttachmentCapturePrompt,
+        toolCallID: String?,
+        sink: any ChatInlineToolInteractionCardSink
+    ) async -> InteractionResult<ToolAttachmentCaptureResult> {
+        let completionID = UUID()
+        SparkLogger.log(
+            level: .info,
+            module: .general,
+            message: "[CHAT-000017][ToolInteraction] requestInlineAttachmentCapture create continuation completion=\(completionID.uuidString) prompt=\(prompt.id.uuidString) type=\(prompt.cardType.rawValue)"
+        )
+        return await withCheckedContinuation { continuation in
+            inlineAttachmentCaptureContinuations[completionID] = continuation
+            Task {
+                let didPresent = await sink.presentInlineAttachmentCaptureCard(
+                    threadID: threadID,
+                    prompt: prompt,
+                    completionID: completionID,
+                    toolCallID: toolCallID
+                )
+                SparkLogger.log(
+                    level: didPresent ? .info : .warning,
+                    module: .general,
+                    message: "[CHAT-000017][ToolInteraction] requestInlineAttachmentCapture present result completion=\(completionID.uuidString) didPresent=\(didPresent)"
+                )
+                if didPresent == false {
+                    await MainActor.run {
+                        self.cancelInlineAttachmentCapture(id: completionID)
                     }
                 }
             }
@@ -660,6 +770,8 @@ final class ToolInteractionCoordinator: ObservableObject {
         case (.member(let c), .member(let r)):
             c.resume(returning: r)
         case (.healthResourceCandidates(let c), .healthResourceCandidates(let r)):
+            c.resume(returning: r)
+        case (.attachmentCapture(let c), .attachmentCapture(let r)):
             c.resume(returning: r)
         default:
             break

@@ -27,7 +27,6 @@ final class ConversationMessageListRefreshCoordinator: ObservableObject, Convers
 /// 会话消息列表 UI 命令（同步事件，避免 Representable 累积函数类型字段）。
 enum ConversationListCommand: Equatable {
     case loadMore
-    case captureOpenFiles
 }
 
 /// SwiftUI 桥接 UIKit 会话消息列表（增量 diff + 底部锚定）。

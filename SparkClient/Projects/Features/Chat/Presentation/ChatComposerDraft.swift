@@ -1,13 +1,13 @@
 import Foundation
 import UniformTypeIdentifiers
 
-enum ChatComposerAttachmentSource: String, Sendable {
+enum ChatComposerAttachmentSource: String, Codable, Sendable {
     case photoLibrary
     case camera
     case document
 }
 
-enum ChatComposerAttachmentKind: String, Equatable, Sendable {
+enum ChatComposerAttachmentKind: String, Codable, Equatable, Sendable {
     case image
     case pdf
     case file

@@ -23,7 +23,6 @@ struct ChatConversationMessageRow: View {
     let conversationAppearance: ChatConversationAppearancePreferences
     let taskManager: TaskManager
     let logger: Logger
-    let onCaptureOpenFiles: () -> Void
     let onHeightChangingUpdate: (@escaping () -> Void) -> Void
 
     private var messageActionUseCase: any ChatMessageActionUseCase {
@@ -208,9 +207,8 @@ struct ChatConversationMessageRow: View {
             savingNutritionCardIDs: [],
             onStructuredHealthCardAction: { _ in },
             onNutritionCardAction: { _ in },
-            onCaptureOpenCamera: {},
-            onCaptureOpenPhotoLibrary: {},
-            onCaptureOpenFiles: {},
+            onCaptureAttachmentsPicked: { _, _ in },
+            onCaptureCancel: { _ in },
             onSmallTaskCardOpen: { _ in },
             onPresentToolPreview: { _, _ in },
             fileTransferService: detailViewModel.attachmentFileTransferService,
@@ -371,13 +369,33 @@ struct ChatConversationMessageRow: View {
             savingNutritionCardIDs: detailViewModel.savingNutritionCardIDs,
             onStructuredHealthCardAction: handleStructuredHealthCardAction,
             onNutritionCardAction: handleNutritionCardAction,
-            onCaptureOpenCamera: {
-                stateStore.setCameraPresented(true, for: threadID)
+            onCaptureAttachmentsPicked: { card, attachments in
+                logger.info(
+                    "[CHAT-000017][MessageRow] onCaptureAttachmentsPicked thread=\(threadID.uuidString) message=\(message.clientMessageID.uuidString) card=\(card.id.uuidString) completion=\(card.completionID?.uuidString ?? "-") status=\(card.status.rawValue) count=\(attachments.count) names=\(attachments.map(\.displayName).joined(separator: ","))",
+                    module: .general
+                )
+                Task {
+                    await detailViewModel.submitInlineCaptureCardAttachments(
+                        threadID: threadID,
+                        message: message,
+                        card: card,
+                        attachments: attachments
+                    )
+                }
             },
-            onCaptureOpenPhotoLibrary: {
-                stateStore.setPhotoPickerPresented(true, for: threadID)
+            onCaptureCancel: { card in
+                logger.info(
+                    "[CHAT-000017][MessageRow] onCaptureCancel thread=\(threadID.uuidString) message=\(message.clientMessageID.uuidString) card=\(card.id.uuidString) completion=\(card.completionID?.uuidString ?? "-") status=\(card.status.rawValue)",
+                    module: .general
+                )
+                Task {
+                    await detailViewModel.cancelInlineCaptureCard(
+                        threadID: threadID,
+                        message: message,
+                        card: card
+                    )
+                }
             },
-            onCaptureOpenFiles: onCaptureOpenFiles,
             onSmallTaskCardOpen: { payload in
                 activeSmallTaskPayload = payload
             },

@@ -1524,6 +1524,49 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         return true
     }
 
+    func presentInlineAttachmentCaptureCard(
+        threadID: UUID?,
+        prompt: ToolAttachmentCapturePrompt,
+        completionID: UUID,
+        toolCallID: String?
+    ) async -> Bool {
+        guard let target = await inlineToolInteractionTargetMessage(threadID: threadID) else {
+            logger.warning(
+                "[CHAT-000017][ViewModel] presentInlineAttachmentCaptureCard failed: no target message thread=\(threadID?.uuidString ?? "-") completion=\(completionID.uuidString) type=\(prompt.cardType.rawValue) toolCall=\(toolCallID ?? "-")",
+                module: .general
+            )
+            return false
+        }
+        let associationID = inlineToolAssociationID(toolCallID: toolCallID, completionID: completionID)
+        let payload = ChatCaptureMessageCardPayload(
+            completionID: completionID,
+            cardType: prompt.cardType,
+            sourceToolCallID: associationID
+        )
+        let block = ChatMessageBlock(
+            id: ChatStableBlockID.rich(
+                messageID: target.clientMessageID,
+                toolCallID: associationID,
+                kind: .captureCard
+            ),
+            anchor: .toolCall(associationID),
+            kind: .captureCard,
+            toolCallID: associationID,
+            parentToolCallID: associationID,
+            nodeRole: .toolPresentation,
+            captureMessageCard: payload,
+            orderKey: nextInlineToolCardOrderKey(for: target),
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        await persistInlineToolInteractionBlock(threadID: target.threadID, message: target, block: block)
+        logger.info(
+            "[CHAT-000017][ViewModel] presentInlineAttachmentCaptureCard inserted thread=\(target.threadID.uuidString) message=\(target.clientMessageID.uuidString) card=\(payload.id.uuidString) completion=\(completionID.uuidString) type=\(prompt.cardType.rawValue) association=\(associationID)",
+            module: .general
+        )
+        return true
+    }
+
     func submitInlineToolQuestionCard(
         threadID: UUID,
         message: ChatMessage,
@@ -1669,6 +1712,236 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         await persistInlineToolInteractionBlock(threadID: threadID, message: message, block: updatedBlock)
         stateStore.updateMessages([message.replacingBlocks(updatedBlocks)], for: threadID)
         toolInteractionCoordinator.completeInlineConsent(id: card.completionID, decision: decision)
+    }
+
+    func submitInlineCaptureCardAttachments(
+        threadID: UUID,
+        message: ChatMessage,
+        card: ChatCaptureMessageCardPayload,
+        attachments: [ChatComposerAttachmentPreview]
+    ) async {
+        logger.info(
+            "[CHAT-000017][ViewModel] submitInlineCaptureCardAttachments enter thread=\(threadID.uuidString) message=\(message.clientMessageID.uuidString) card=\(card.id.uuidString) completion=\(card.completionID?.uuidString ?? "-") status=\(card.status.rawValue) count=\(attachments.count) names=\(attachments.map(\.displayName).joined(separator: ",")) bytes=\(attachments.map { String($0.data.count) }.joined(separator: ","))",
+            module: .general
+        )
+        guard let completionID = card.completionID else {
+            logger.warning(
+                "[CHAT-000017][ViewModel] submit aborted: missing completionID card=\(card.id.uuidString)",
+                module: .general
+            )
+            return
+        }
+        guard card.status == .pending || card.status == .failed || card.status == .selected else {
+            logger.warning(
+                "[CHAT-000017][ViewModel] submit aborted: invalid status card=\(card.id.uuidString) completion=\(completionID.uuidString) status=\(card.status.rawValue)",
+                module: .general
+            )
+            return
+        }
+        guard attachments.isEmpty == false else {
+            logger.warning(
+                "[CHAT-000017][ViewModel] submit aborted: empty attachments card=\(card.id.uuidString) completion=\(completionID.uuidString)",
+                module: .general
+            )
+            return
+        }
+        guard toolInteractionCoordinator.hasPendingInlineInteraction(completionID: completionID) else {
+            logger.warning(
+                "[CHAT-000017][ViewModel] submit aborted: no pending continuation card=\(card.id.uuidString) completion=\(completionID.uuidString)",
+                module: .general
+            )
+            return
+        }
+
+        let initialCaptured = attachments.map(makeInlineCapturedAttachment)
+        logger.info(
+            "[CHAT-000017][ViewModel] set uploading state card=\(card.id.uuidString) completion=\(completionID.uuidString) count=\(initialCaptured.count)",
+            module: .general
+        )
+        await updateInlineCaptureCard(
+            threadID: threadID,
+            messageClientID: message.clientMessageID,
+            cardID: card.id
+        ) {
+            $0.selectedAttachments = initialCaptured
+            $0.status = .uploading
+            $0.errorMessage = nil
+            $0.resultSummary = nil
+            $0.updatedAt = Date()
+        }
+
+        do {
+            var processed: [ChatInlineCapturedAttachment] = []
+            for preview in attachments {
+                var captured = makeInlineCapturedAttachment(preview)
+                logger.info(
+                    "[CHAT-000017][ViewModel] upload start card=\(card.id.uuidString) attachment=\(preview.id.uuidString) name=\(preview.displayName) kind=\(preview.kind.rawValue) source=\(preview.source.rawValue) bytes=\(preview.data.count)",
+                    module: .general
+                )
+                let record = try await fileTransferService.upload(
+                    ManagedFileUploadPayload(
+                        data: preview.data,
+                        fileName: preview.displayName,
+                        businessType: ChatSendAttachmentAssembly.chatAttachmentBusinessType,
+                        businessId: preview.id.uuidString,
+                        isPublic: false,
+                        onUploadProgress: { progress in
+                            SparkLogger.log(
+                                level: .info,
+                                module: .general,
+                                message: "[CHAT-000017][ViewModel] upload progress card=\(card.id.uuidString) attachment=\(preview.id.uuidString) name=\(preview.displayName) progress=\(String(format: "%.3f", progress))"
+                            )
+                            Task { @MainActor [weak self] in
+                                await self?.updateInlineCaptureCardAttachmentProgress(
+                                    threadID: threadID,
+                                    messageClientID: message.clientMessageID,
+                                    cardID: card.id,
+                                    attachmentID: preview.id,
+                                    progress: progress
+                                )
+                            }
+                        }
+                    )
+                )
+                let publicURL = await fileTransferService.publicHTTPSURLForObjectKey(record.objectKey)
+                captured.uploadProgress = 1
+                captured.fileID = record.id
+                captured.publicURL = publicURL
+                captured.fullCacheKey = ChatAttachment.makeFullCacheKey(
+                    fileUUID: record.fileUuid,
+                    fileName: record.originalName
+                )
+                captured.fileMd5 = record.fileMd5
+                processed.append(captured)
+                logger.info(
+                    "[CHAT-000017][ViewModel] upload success card=\(card.id.uuidString) attachment=\(preview.id.uuidString) fileID=\(record.id) objectKey=\(record.objectKey ?? "-") publicURL=\(publicURL?.absoluteString ?? "-")",
+                    module: .general
+                )
+            }
+
+            logger.info(
+                "[CHAT-000017][ViewModel] set processing state card=\(card.id.uuidString) uploadedCount=\(processed.count)",
+                module: .general
+            )
+            await updateInlineCaptureCard(
+                threadID: threadID,
+                messageClientID: message.clientMessageID,
+                cardID: card.id
+            ) {
+                $0.selectedAttachments = processed
+                $0.status = .processing
+                $0.errorMessage = nil
+                $0.updatedAt = Date()
+            }
+
+            var finalAttachments: [ChatInlineCapturedAttachment] = []
+            for (index, preview) in attachments.enumerated() {
+                var captured = processed[index]
+                logger.info(
+                    "[CHAT-000017][ViewModel] ocr start card=\(card.id.uuidString) attachment=\(preview.id.uuidString) name=\(preview.displayName)",
+                    module: .general
+                )
+                captured.ocrText = try await recognizeInlineCaptureAttachment(preview)
+                logger.info(
+                    "[CHAT-000017][ViewModel] ocr success card=\(card.id.uuidString) attachment=\(preview.id.uuidString) textCount=\(captured.ocrText?.count ?? 0)",
+                    module: .general
+                )
+                if preview.kind == .image {
+                    logger.info(
+                        "[CHAT-000017][ViewModel] image compress start card=\(card.id.uuidString) attachment=\(preview.id.uuidString) bytes=\(preview.data.count)",
+                        module: .general
+                    )
+                    let compressed = await Task.detached(priority: .utility) {
+                        ChatAIImageCompressor.compressForAI(imageData: preview.data)
+                    }.value
+                    captured.compressedByteCount = compressed?.count
+                    logger.info(
+                        "[CHAT-000017][ViewModel] image compress done card=\(card.id.uuidString) attachment=\(preview.id.uuidString) compressedBytes=\(captured.compressedByteCount.map(String.init) ?? "-")",
+                        module: .general
+                    )
+                }
+                finalAttachments.append(captured)
+            }
+
+            let contextText = makeAttachmentCaptureModelContext(
+                cardType: card.cardType,
+                attachments: finalAttachments
+            )
+            let summary = makeAttachmentCaptureSummary(attachments: finalAttachments)
+            await updateInlineCaptureCard(
+                threadID: threadID,
+                messageClientID: message.clientMessageID,
+                cardID: card.id
+            ) {
+                $0.selectedAttachments = finalAttachments
+                $0.status = .completed
+                $0.errorMessage = nil
+                $0.resultSummary = summary
+                $0.updatedAt = Date()
+            }
+            logger.info(
+                "[CHAT-000017][ViewModel] complete continuation card=\(card.id.uuidString) completion=\(completionID.uuidString) finalCount=\(finalAttachments.count) contextChars=\(contextText.count)",
+                module: .general
+            )
+            toolInteractionCoordinator.completeInlineAttachmentCapture(
+                id: completionID,
+                result: ToolAttachmentCaptureResult(
+                    cardType: card.cardType,
+                    attachments: finalAttachments,
+                    modelContextText: contextText
+                )
+            )
+        } catch {
+            await updateInlineCaptureCard(
+                threadID: threadID,
+                messageClientID: message.clientMessageID,
+                cardID: card.id
+            ) {
+                $0.status = .failed
+                $0.errorMessage = error.localizedDescription
+                $0.updatedAt = Date()
+            }
+            logger.error(
+                "[CHAT-000017][ViewModel] submit failed card=\(card.id.uuidString) completion=\(completionID.uuidString) error=\(error.localizedDescription)",
+                module: .general
+            )
+            notificationClient.error(error.localizedDescription, title: nil, source: "chat.capture_card.upload")
+        }
+    }
+
+    func cancelInlineCaptureCard(
+        threadID: UUID,
+        message: ChatMessage,
+        card: ChatCaptureMessageCardPayload
+    ) async {
+        guard let completionID = card.completionID else {
+            logger.warning(
+                "[CHAT-000017][ViewModel] cancel aborted: missing completionID card=\(card.id.uuidString)",
+                module: .general
+            )
+            return
+        }
+        guard toolInteractionCoordinator.hasPendingInlineInteraction(completionID: completionID) else {
+            logger.warning(
+                "[CHAT-000017][ViewModel] cancel aborted: no pending continuation card=\(card.id.uuidString) completion=\(completionID.uuidString)",
+                module: .general
+            )
+            return
+        }
+        logger.info(
+            "[CHAT-000017][ViewModel] cancel card=\(card.id.uuidString) completion=\(completionID.uuidString)",
+            module: .general
+        )
+        await updateInlineCaptureCard(
+            threadID: threadID,
+            messageClientID: message.clientMessageID,
+            cardID: card.id
+        ) {
+            $0.status = .cancelled
+            $0.resultSummary = "用户已取消上传材料。"
+            $0.updatedAt = Date()
+        }
+        toolInteractionCoordinator.cancelInlineAttachmentCapture(id: completionID)
     }
 
     func showInlineToolConsentDetails(
@@ -1908,6 +2181,186 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
             return next
         }
         return nil
+    }
+
+    private func currentMessage(threadID: UUID, clientMessageID: UUID) async -> ChatMessage? {
+        if let local = stateStore.conversationListItems(for: threadID).first(where: { $0.clientMessageID == clientMessageID }) {
+            return local
+        }
+        return await loadChatMessagesUseCase.execute(clientMessageIDs: [clientMessageID]).first
+    }
+
+    private func updateInlineCaptureCard(
+        threadID: UUID,
+        messageClientID: UUID,
+        cardID: UUID,
+        mutate: (inout ChatCaptureMessageCardPayload) -> Void
+    ) async {
+        guard let message = await currentMessage(threadID: threadID, clientMessageID: messageClientID) else {
+            logger.warning(
+                "[CHAT-000017][ViewModel] update card failed: message not found thread=\(threadID.uuidString) message=\(messageClientID.uuidString) card=\(cardID.uuidString)",
+                module: .general
+            )
+            return
+        }
+        guard let updatedBlocks = replacingInlineCaptureCard(in: message.blocks, cardID: cardID, mutate: mutate),
+              let updatedBlock = updatedBlocks.first(where: { $0.captureMessageCard?.id == cardID }) else {
+            logger.warning(
+                "[CHAT-000017][ViewModel] update card failed: card block not found thread=\(threadID.uuidString) message=\(messageClientID.uuidString) card=\(cardID.uuidString) blocks=\(message.blocks.count)",
+                module: .general
+            )
+            return
+        }
+        let didApply = await chatRepository.upsertMessageBlock(
+            clientMessageID: message.clientMessageID,
+            block: updatedBlock,
+            markPendingForSync: true
+        )
+        guard didApply else {
+            logger.warning(
+                "[CHAT-000017][ViewModel] update card failed: repository rejected block thread=\(threadID.uuidString) message=\(messageClientID.uuidString) card=\(cardID.uuidString)",
+                module: .general
+            )
+            return
+        }
+        stateStore.updateMessages([message.replacingBlocks(updatedBlocks)], for: threadID)
+        stateStore.requestScrollToBottom(for: threadID)
+        if let payload = updatedBlock.captureMessageCard {
+            logger.info(
+                "[CHAT-000017][ViewModel] update card applied thread=\(threadID.uuidString) message=\(messageClientID.uuidString) card=\(cardID.uuidString) status=\(payload.status.rawValue) selected=\(payload.selectedAttachments.count)",
+                module: .general
+            )
+        }
+    }
+
+    private func updateInlineCaptureCardAttachmentProgress(
+        threadID: UUID,
+        messageClientID: UUID,
+        cardID: UUID,
+        attachmentID: UUID,
+        progress: Double
+    ) async {
+        await updateInlineCaptureCard(
+            threadID: threadID,
+            messageClientID: messageClientID,
+            cardID: cardID
+        ) {
+            guard let index = $0.selectedAttachments.firstIndex(where: { $0.id == attachmentID }) else { return }
+            $0.selectedAttachments[index].uploadProgress = max(0, min(1, progress))
+            $0.status = .uploading
+            $0.updatedAt = Date()
+        }
+    }
+
+    private func replacingInlineCaptureCard(
+        in blocks: [ChatMessageBlock],
+        cardID: UUID,
+        mutate: (inout ChatCaptureMessageCardPayload) -> Void
+    ) -> [ChatMessageBlock]? {
+        for (index, block) in blocks.enumerated() {
+            guard var payload = block.captureMessageCard, payload.id == cardID else { continue }
+            mutate(&payload)
+            var next = blocks
+            next[index] = block.replacingPayload(
+                .captureCard(payload),
+                status: .ready,
+                revision: block.revision + 1,
+                updatedAt: Date()
+            )
+            return next
+        }
+        return nil
+    }
+
+    private func makeInlineCapturedAttachment(_ preview: ChatComposerAttachmentPreview) -> ChatInlineCapturedAttachment {
+        ChatInlineCapturedAttachment(
+            id: preview.id,
+            source: captureSource(from: preview.source),
+            kind: preview.kind,
+            displayName: preview.displayName,
+            mimeType: preview.mimeType,
+            byteCount: preview.data.count,
+            localPreviewURL: preview.previewInput.fileURL
+        )
+    }
+
+    private func captureSource(from source: ChatComposerAttachmentSource) -> ChatCaptureAttachmentSource {
+        switch source {
+        case .camera: return .camera
+        case .photoLibrary: return .photoLibrary
+        case .document: return .document
+        }
+    }
+
+    private func recognizeInlineCaptureAttachment(_ preview: ChatComposerAttachmentPreview) async throws -> String? {
+        let result: OCRRecognition
+        if preview.kind == .image {
+            result = try await ocrOrchestrator.recognize(
+                imageData: preview.data,
+                options: .fastPreview
+            )
+        } else {
+            let ext = (preview.displayName as NSString).pathExtension
+            let suffix = ext.isEmpty ? "file" : ext
+            let tempURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("chat-capture-\(preview.id.uuidString).\(suffix)")
+            try preview.data.write(to: tempURL, options: [.atomic])
+            defer { try? FileManager.default.removeItem(at: tempURL) }
+            result = try await ocrDocumentExtractor.extractText(
+                from: tempURL,
+                orchestrator: ocrOrchestrator,
+                options: .fastPreview
+            )
+        }
+        let trimmed = result.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func makeAttachmentCaptureSummary(attachments: [ChatInlineCapturedAttachment]) -> String {
+        if attachments.count == 1, let first = attachments.first {
+            return "已上传 \(first.displayName)，AI 将继续基于该材料回答。"
+        }
+        return "已上传 \(attachments.count) 个文件，AI 将继续基于这些材料回答。"
+    }
+
+    private func makeAttachmentCaptureModelContext(
+        cardType: ChatCaptureCardType,
+        attachments: [ChatInlineCapturedAttachment]
+    ) -> String {
+        var lines: [String] = [
+            "【用户已通过上传卡片补充材料】",
+            "卡片类型：\(cardType.rawValue)",
+            "材料数量：\(attachments.count)"
+        ]
+        for (index, attachment) in attachments.enumerated() {
+            lines.append("")
+            lines.append("\(index + 1). \(attachment.displayName)")
+            lines.append("- 来源：\(attachment.source.rawValue)")
+            lines.append("- 类型：\(attachment.kind.rawValue)")
+            lines.append("- 大小：\(attachment.byteCount) bytes")
+            if let mimeType = attachment.mimeType {
+                lines.append("- MIME：\(mimeType)")
+            }
+            if let fileID = attachment.fileID {
+                lines.append("- OSS file_id：\(fileID)")
+            }
+            if let url = attachment.publicURL {
+                lines.append("- OSS URL：\(url.absoluteString)")
+            }
+            if let compressedByteCount = attachment.compressedByteCount {
+                lines.append("- AI 压缩图片大小：\(compressedByteCount) bytes")
+            }
+            let ocrText = attachment.ocrText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if ocrText.isEmpty == false {
+                lines.append("- OCR/文本抽取：")
+                lines.append(String(ocrText.prefix(8_000)))
+            } else {
+                lines.append("- OCR/文本抽取：无可用文本；如模型支持视觉，请结合上传图片/文件信息继续分析。")
+            }
+        }
+        lines.append("")
+        lines.append("请基于以上用户刚刚上传的材料继续完成原始请求；不要声称没有收到材料。")
+        return lines.joined(separator: "\n")
     }
 
     private func inlineToolQuestionResultText(
