@@ -10,6 +10,12 @@ struct AISettingsMemoryTooling {
     let memoryPreferencesUseCase: MemoryPreferencesUseCase
 }
 
+enum SmallTaskVersionDisplay: Equatable {
+    case version(Int)
+    case localCustom
+    case unversioned
+}
+
 /// AI 设置页面的核心视图模型
 /// 负责管理AI配置、模型、厂商密钥的加载、编辑、保存与状态同步
 /// 所有UI操作均在主线程执行
@@ -63,6 +69,7 @@ final class AISettingsViewModel: ObservableObject {
     private let providerCoordinator: ProviderSettingsCoordinator
     /// 模型目录协调器
     private let modelCoordinator: ModelCatalogCoordinator
+    private let autoSmallTaskRegistryStore: UserDefaultsAutoSmallTaskRegistryStore
     
     // MARK: - 私有属性
     /// 最后一次持久化的快照（用于对比是否有修改）
@@ -109,6 +116,7 @@ final class AISettingsViewModel: ObservableObject {
         providerModelCatalogService: ProviderModelCatalogService = ProviderModelCatalogService(),
         providerCoordinator: ProviderSettingsCoordinator = ProviderSettingsCoordinator(),
         modelCoordinator: ModelCatalogCoordinator = ModelCatalogCoordinator(),
+        autoSmallTaskRegistryStore: UserDefaultsAutoSmallTaskRegistryStore = UserDefaultsAutoSmallTaskRegistryStore(),
         ownerAccountIDForLoad: Int64? = nil,
         aiConfigAPI: SparkAIConfigAPI? = nil,
         aiConfigCenter: AIConfigCenter? = nil,
@@ -123,6 +131,7 @@ final class AISettingsViewModel: ObservableObject {
         self.providerModelCatalogService = providerModelCatalogService
         self.providerCoordinator = providerCoordinator
         self.modelCoordinator = modelCoordinator
+        self.autoSmallTaskRegistryStore = autoSmallTaskRegistryStore
         self.aiConfigAPI = aiConfigAPI
         self.aiConfigCenter = aiConfigCenter
         self.pushAdapter = pushAdapter
@@ -993,6 +1002,20 @@ final class AISettingsViewModel: ObservableObject {
         (snapshot.smallTasks.filter { $0.source == .local }.map(\.id).max() ?? 0) + 1
     }
 
+    func smallTaskVersionDisplay(for task: SmallTask) -> SmallTaskVersionDisplay? {
+        guard task.source == .local else { return nil }
+        guard let definition = builtInAutoSmallTaskDefinition(forCode: task.code) else {
+            return task.code.hasPrefix("Local_") ? .localCustom : .unversioned
+        }
+
+        if let ownerAccountIDForLoad,
+           let record = autoSmallTaskRegistryStore.load(userID: ownerAccountIDForLoad, businessKey: definition.businessKey),
+           record.smallTaskCode == task.code {
+            return .version(record.definitionVersion)
+        }
+        return .version(definition.definitionVersion)
+    }
+
     /// 初始化模型可见性（如需要则持久化）
     @discardableResult
     func initializeModelVisibilityAndPersistIfNeeded() async -> Bool {
@@ -1048,6 +1071,13 @@ final class AISettingsViewModel: ObservableObject {
         if let model = snapshot.allModels.last {
             appendScenarioBindings(for: model, scenarios: [AIScenario.chat.rawValue], aiToolScenarios: SparkToolName.all)
         }
+    }
+
+    private func builtInAutoSmallTaskDefinition(forCode code: String) -> AutoSmallTaskDefinition? {
+        [
+            BuiltInAutoSmallTaskCatalog.healthExamPlan,
+            BuiltInAutoSmallTaskCatalog.reportInterpretation
+        ].first { $0.smallTaskCode == code }
     }
 
     private func appendScenarioBindings(for model: AllModels, scenarios: [String], aiToolScenarios: [String]) {

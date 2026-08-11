@@ -465,6 +465,7 @@ struct ChatView: View {
                 threadID: threadID,
                 stateStore: stateStore,
                 detailViewModel: detailViewModel,
+                aiSettingsViewModel: aiSettingsViewModel,
                 knowledgeDependencies: knowledgeDependencies,
                 knowledgeViewModel: knowledgeViewModel,
                 uiStateStore: uiStateStore,
@@ -486,6 +487,7 @@ struct ChatView: View {
                 threadID: threadID,
                 stateStore: stateStore,
                 detailViewModel: detailViewModel,
+                aiSettingsViewModel: aiSettingsViewModel,
                 knowledgeDependencies: knowledgeDependencies,
                 knowledgeViewModel: knowledgeViewModel,
                 uiStateStore: uiStateStore,
@@ -881,6 +883,7 @@ private struct ChatConversationMessageListContainer: View {
     let threadID: UUID
     @ObservedObject var stateStore: ChatStateStore
     @ObservedObject var detailViewModel: ChatDetailViewModel
+    @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     let knowledgeDependencies: KnowledgeFeatureDependencies
     @ObservedObject var knowledgeViewModel: KnowledgeLibraryViewModel
     @ObservedObject var uiStateStore: ChatMessageUIStateStore
@@ -903,6 +906,7 @@ private struct ChatConversationMessageListContainer: View {
         threadID: UUID,
         stateStore: ChatStateStore,
         detailViewModel: ChatDetailViewModel,
+        aiSettingsViewModel: AISettingsViewModel,
         knowledgeDependencies: KnowledgeFeatureDependencies,
         knowledgeViewModel: KnowledgeLibraryViewModel,
         uiStateStore: ChatMessageUIStateStore,
@@ -922,6 +926,7 @@ private struct ChatConversationMessageListContainer: View {
         self.threadID = threadID
         self.stateStore = stateStore
         self.detailViewModel = detailViewModel
+        self.aiSettingsViewModel = aiSettingsViewModel
         self.knowledgeDependencies = knowledgeDependencies
         self.knowledgeViewModel = knowledgeViewModel
         self.uiStateStore = uiStateStore
@@ -950,6 +955,7 @@ private struct ChatConversationMessageListContainer: View {
             threadID: threadID,
             stateStore: stateStore,
             detailViewModel: detailViewModel,
+            aiSettingsViewModel: aiSettingsViewModel,
             knowledgeDependencies: knowledgeDependencies,
             knowledgeViewModel: knowledgeViewModel,
             uiStateStore: uiStateStore,

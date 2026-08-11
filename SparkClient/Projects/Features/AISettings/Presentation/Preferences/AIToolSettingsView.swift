@@ -1,6 +1,6 @@
 import SwiftUI
 
-private enum AIToolSettingsSource: String {
+enum AIToolSettingsSource: String {
     case deepTutorChat
     case chat
 
@@ -12,7 +12,7 @@ private enum AIToolSettingsSource: String {
     }
 }
 
-private enum AIToolAvailability: String {
+enum AIToolAvailability: String {
     case available
     case requiresSearchSettings
     case requiresWeatherSettings
@@ -44,7 +44,7 @@ private enum AIToolAvailability: String {
     }
 }
 
-private enum AIToolMountMode: String {
+enum AIToolMountMode: String {
     case automatic
     case conditional
     case userToggleable
@@ -61,7 +61,7 @@ private enum AIToolMountMode: String {
     }
 }
 
-private enum AIToolRelatedDestination {
+enum AIToolRelatedDestination {
     case search
     case weather
 
@@ -75,7 +75,7 @@ private enum AIToolRelatedDestination {
     }
 }
 
-private struct AIToolSettingsItem: Identifiable {
+struct AIToolSettingsItem: Identifiable {
     let id: String
     let displayName: String
     let definition: AIRuntimeToolDefinition
@@ -86,7 +86,7 @@ private struct AIToolSettingsItem: Identifiable {
     let relatedDestination: AIToolRelatedDestination?
 }
 
-private struct AIToolSettingsGroup: Identifiable {
+struct AIToolSettingsGroup: Identifiable {
     let id: String
     let title: String
     let subtitle: String
@@ -440,7 +440,7 @@ private struct AIToolListRow: View {
     }
 }
 
-private struct AIToolDetailView: View {
+struct AIToolDetailView: View {
     let tool: AIToolSettingsItem
     @ObservedObject var viewModel: AISettingsViewModel
 
@@ -578,6 +578,42 @@ private struct AIToolDetailView: View {
     }
 }
 
+struct AIToolDetailDestinationView: View {
+    let toolName: String
+    @ObservedObject var viewModel: AISettingsViewModel
+
+    var body: some View {
+        if let tool = AIToolCatalog.tool(named: toolName) {
+            AIToolDetailView(tool: tool, viewModel: viewModel)
+        } else {
+            List {
+                Section {
+                    Text(toolName)
+                        .font(.body.monospaced())
+                        .textSelection(.enabled)
+                    Text(
+                        L10n.text(
+                            "ai_settings.ai_tools.detail.unknown_tool",
+                            fallback: "This tool is not in the local tool catalog.",
+                            comment: "Unknown AI tool detail"
+                        )
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle(
+                L10n.text(
+                    "ai_settings.ai_tools.detail.unknown_tool_title",
+                    fallback: "Unknown tool",
+                    comment: "Unknown AI tool title"
+                )
+            )
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
 private enum ChatToolInteractionPreferenceTarget {
     case memberSelection
     case question
@@ -698,7 +734,7 @@ private struct AIToolBadge: View {
     }
 }
 
-private enum AIToolCatalog {
+enum AIToolCatalog {
     static let defaultExpandedChatGroupIDs: Set<String> = []
 
     static func deepTutorTools() -> [AIToolSettingsItem] {
@@ -718,6 +754,17 @@ private enum AIToolCatalog {
                 relatedDestination: relatedDestination(for: tool)
             )
         }
+    }
+
+    static func tool(named toolName: String) -> AIToolSettingsItem? {
+        let normalized = normalizeToolName(toolName)
+        return (chatTools() + deepTutorTools()).first {
+            normalizeToolName($0.definition.name) == normalized
+        }
+    }
+
+    static func displayTitle(for toolName: String) -> String {
+        tool(named: toolName)?.displayName ?? toolName
     }
 
     static func chatToolGroups() -> [AIToolSettingsGroup] {

@@ -32,6 +32,10 @@ protocol ChatInlineToolInteractionCardSink: AnyObject {
     ) async -> Bool
 }
 
+enum ToolInteractionCancelReason: String, Sendable {
+    case userStoppedGeneration
+}
+
 /// 工具交互协调器
 /// 核心作用：**串行处理**工具相关的人机交互（授权同意/回答问题/选择成员）
 /// 设计特点：与具体UI展示形态解耦，只负责调度逻辑，保证同一时间只弹出一个交互窗口
@@ -101,6 +105,46 @@ final class ToolInteractionCoordinator: ObservableObject {
 
     func updateInteractionPreferences(_ preferences: ChatToolInteractionPreferences) {
         interactionPreferences = preferences
+    }
+
+    func cancelAllPendingInteractions(reason: ToolInteractionCancelReason) {
+        if let activePresentation, pendingOutcome == nil {
+            pendingOutcome = defaultOutcome(for: activePresentation.snapshot)
+            resumeUserGate()
+        } else {
+            activePresentation = nil
+            pendingOutcome = nil
+            resumeUserGate()
+        }
+
+        let queuedWork = queue
+        queue.removeAll()
+        queuedWork.forEach { work in
+            resumeCompletion(work: work, outcome: defaultOutcome(for: work.snapshot))
+        }
+
+        let questionContinuations = inlineQuestionContinuations
+        inlineQuestionContinuations.removeAll()
+        questionContinuations.values.forEach { $0.resume(returning: .cancelled) }
+
+        let memberContinuations = inlineMemberContinuations
+        inlineMemberContinuations.removeAll()
+        memberContinuations.values.forEach { $0.resume(returning: .cancelled) }
+
+        let healthResourceContinuations = inlineHealthResourceCandidateContinuations
+        inlineHealthResourceCandidateContinuations.removeAll()
+        healthResourceContinuations.values.forEach { $0.resume(returning: .cancelled) }
+
+        let consentContinuations = inlineConsentContinuations
+        inlineConsentContinuations.removeAll()
+        consentContinuations.values.forEach { $0.resume(returning: .cancelled) }
+    }
+
+    func hasPendingInlineInteraction(completionID: UUID) -> Bool {
+        inlineQuestionContinuations[completionID] != nil
+            || inlineMemberContinuations[completionID] != nil
+            || inlineHealthResourceCandidateContinuations[completionID] != nil
+            || inlineConsentContinuations[completionID] != nil
     }
 
     // MARK: - Public API 对外接口

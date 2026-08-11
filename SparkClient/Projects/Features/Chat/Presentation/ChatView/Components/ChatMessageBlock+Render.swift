@@ -177,7 +177,10 @@ extension ChatMessageBlock {
             
             // 16. 小任务卡片
         case .smallTaskCard(let payload):
-            ChatSmallTaskMessageCard(payload: payload)
+            ChatSmallTaskMessageCard(
+                payload: payload,
+                onOpen: context.onSmallTaskCardOpen
+            )
             
             // 17. 文件附件块
         case .fileAttachments(let attachments):

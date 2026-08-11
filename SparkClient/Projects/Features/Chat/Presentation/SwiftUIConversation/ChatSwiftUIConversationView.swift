@@ -19,6 +19,7 @@ struct ChatSwiftUIConversationView: View {
     let threadID: UUID
     @ObservedObject var stateStore: ChatStateStore
     @ObservedObject var detailViewModel: ChatDetailViewModel
+    @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     let knowledgeDependencies: KnowledgeFeatureDependencies
     @ObservedObject var knowledgeViewModel: KnowledgeLibraryViewModel
     @ObservedObject var uiStateStore: ChatMessageUIStateStore
@@ -45,6 +46,7 @@ struct ChatSwiftUIConversationView: View {
         threadID: UUID,
         stateStore: ChatStateStore,
         detailViewModel: ChatDetailViewModel,
+        aiSettingsViewModel: AISettingsViewModel,
         knowledgeDependencies: KnowledgeFeatureDependencies,
         knowledgeViewModel: KnowledgeLibraryViewModel,
         uiStateStore: ChatMessageUIStateStore,
@@ -65,6 +67,7 @@ struct ChatSwiftUIConversationView: View {
         self.threadID = threadID
         self.stateStore = stateStore
         self.detailViewModel = detailViewModel
+        self.aiSettingsViewModel = aiSettingsViewModel
         self.knowledgeDependencies = knowledgeDependencies
         self.knowledgeViewModel = knowledgeViewModel
         self.uiStateStore = uiStateStore
@@ -118,6 +121,7 @@ struct ChatSwiftUIConversationView: View {
                             frame: frame,
                             stateStore: stateStore,
                             detailViewModel: detailViewModel,
+                            aiSettingsViewModel: aiSettingsViewModel,
                             knowledgeDependencies: knowledgeDependencies,
                             knowledgeViewModel: knowledgeViewModel,
                             uiStateStore: uiStateStore,
@@ -272,6 +276,7 @@ private struct ChatSwiftUIConversationMessageRow: View {
     let frame: ChatSwiftUIConversationFrame
     @ObservedObject var stateStore: ChatStateStore
     @ObservedObject var detailViewModel: ChatDetailViewModel
+    @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     let knowledgeDependencies: KnowledgeFeatureDependencies
     @ObservedObject var knowledgeViewModel: KnowledgeLibraryViewModel
     @ObservedObject var uiStateStore: ChatMessageUIStateStore
@@ -291,6 +296,7 @@ private struct ChatSwiftUIConversationMessageRow: View {
             visibleMessages: frame.visibleMessages,
             stateStore: stateStore,
             detailViewModel: detailViewModel,
+            aiSettingsViewModel: aiSettingsViewModel,
             knowledgeDependencies: knowledgeDependencies,
             knowledgeViewModel: knowledgeViewModel,
             uiStateStore: uiStateStore,

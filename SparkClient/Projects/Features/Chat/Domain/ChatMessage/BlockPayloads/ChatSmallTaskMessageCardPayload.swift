@@ -1,6 +1,6 @@
 import Foundation
 
-nonisolated struct ChatSmallTaskMessageCardPayload: Codable, Equatable, Sendable {
+nonisolated struct ChatSmallTaskMessageCardPayload: Codable, Equatable, Hashable, Identifiable, Sendable {
     var id: Int
     var code: String
     var name: String

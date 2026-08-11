@@ -695,6 +695,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
 
         logger.info("用户中断 AI 生成，thread=\(shortID(threadID))", module: .general)
         let assistantClientMessageID = currentGenerationAssistantClientMessageID
+        toolInteractionCoordinator.cancelAllPendingInteractions(reason: .userStoppedGeneration)
         currentGenerationCancellationToken?.cancel()
         currentGenerationTask?.cancel()
         stateStore.setSending(false)
@@ -1530,6 +1531,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         responses: [ToolQuestionResponse]
     ) async {
         guard card.status == .pending else { return }
+        guard toolInteractionCoordinator.hasPendingInlineInteraction(completionID: card.completionID) else { return }
         let resultText = inlineToolQuestionResultText(
             questions: card.prompt.questions,
             responses: responses
@@ -1562,6 +1564,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         memberID: Int
     ) async {
         guard card.status == .pending, memberID > 0 else { return }
+        guard toolInteractionCoordinator.hasPendingInlineInteraction(completionID: card.completionID) else { return }
         let memberName = memberContextStore.context.members.first(where: { $0.id == memberID })?.name
             ?? L10n.text("chat.composer.member_profile.unknown")
         await updateThreadMemberBinding(memberID, for: threadID)
@@ -1591,6 +1594,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         card: ChatHealthResourceCandidateSelectionCard
     ) async {
         guard card.status == .pending else { return }
+        guard toolInteractionCoordinator.hasPendingInlineInteraction(completionID: card.completionID) else { return }
         guard let updatedBlocks = replacingInlineHealthResourceCandidateCard(
             in: message.blocks,
             cardID: card.id,
@@ -1615,10 +1619,12 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         card: ChatHealthResourceCandidateSelectionCard
     ) async {
         guard card.status == .pending else { return }
+        guard toolInteractionCoordinator.hasPendingInlineInteraction(completionID: card.completionID) else { return }
         let selectionResult = await toolInteractionCoordinator.requestHealthResourceCandidateSelectionSheet(prompt: card.prompt)
         guard case .success(let selected) = selectionResult else {
             return
         }
+        guard toolInteractionCoordinator.hasPendingInlineInteraction(completionID: card.completionID) else { return }
         guard let updatedBlocks = replacingInlineHealthResourceCandidateCard(
             in: message.blocks,
             cardID: card.id,
@@ -1646,6 +1652,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         decision: ToolConsentDecision
     ) async {
         guard card.status == .pending else { return }
+        guard toolInteractionCoordinator.hasPendingInlineInteraction(completionID: card.completionID) else { return }
         guard let updatedBlocks = replacingInlineToolConsentCard(
             in: message.blocks,
             cardID: card.id,

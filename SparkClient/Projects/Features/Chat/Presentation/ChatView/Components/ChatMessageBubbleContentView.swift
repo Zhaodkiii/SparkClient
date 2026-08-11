@@ -56,6 +56,7 @@ struct ChatMessageBubbleContentView: View {
     let onCaptureOpenCamera: () -> Void
     let onCaptureOpenPhotoLibrary: () -> Void
     let onCaptureOpenFiles: () -> Void
+    let onSmallTaskCardOpen: (ChatSmallTaskMessageCardPayload) -> Void
     let onPresentToolPreview: (ToolPreviewPrompt, ChatRenderContext) -> Void
     let fileTransferService: FileTransferService
     let medicalQueryAPI: SparkMedicalQueryAPI
@@ -127,6 +128,7 @@ struct ChatMessageBubbleContentView: View {
             onCaptureOpenCamera: onCaptureOpenCamera,
             onCaptureOpenPhotoLibrary: onCaptureOpenPhotoLibrary,
             onCaptureOpenFiles: onCaptureOpenFiles,
+            onSmallTaskCardOpen: onSmallTaskCardOpen,
             onPresentToolPreview: onPresentToolPreview,
             fileTransferService: fileTransferService,
             medicalQueryAPI: medicalQueryAPI,
@@ -365,37 +367,44 @@ struct ChatMessageBubbleContentView: View {
 
 struct ChatSmallTaskMessageCard: View {
     let payload: ChatSmallTaskMessageCardPayload
+    var onOpen: ((ChatSmallTaskMessageCardPayload) -> Void)?
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: payload.displayIcon)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(.white)
-                .frame(width: 34, height: 34)
-                .background(Circle().fill(Color.white.opacity(0.18)))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(payload.name)
-                    .font(.subheadline.weight(.semibold))
+        Button {
+            onOpen?(payload)
+        } label: {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: payload.displayIcon)
+                    .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(.white)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(width: 34, height: 34)
+                    .background(Circle().fill(Color.white.opacity(0.18)))
 
-                if payload.displayBrief.isEmpty == false {
-                    Text(payload.displayBrief)
-                        .font(.caption)
-                        .foregroundStyle(.white.opacity(0.82))
-                        .lineLimit(3)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(payload.name)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
+
+                    if payload.displayBrief.isEmpty == false {
+                        Text(payload.displayBrief)
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.82))
+                            .lineLimit(3)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
+                Spacer(minLength: 0)
             }
+            .padding(12)
+            .frame(maxWidth: 260, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.white.opacity(0.12))
+            )
         }
-        .padding(12)
-        .frame(maxWidth: 260, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.white.opacity(0.12))
-        )
+        .buttonStyle(.plain)
     }
 }
 

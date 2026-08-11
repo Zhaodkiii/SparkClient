@@ -15,7 +15,12 @@ struct IOS26HomeDashboardActionHandler {
     func handle(_ action: IOS26HomeActionItem.Kind) {
         switch action {
         case .checkupPlan:
-            Task { await openCheckupPlanInChat() }
+            Task {
+                await openAutoSmallTaskInChat(
+                    mode: .checkupPlan,
+                    definition: BuiltInAutoSmallTaskCatalog.healthExamPlan
+                )
+            }
         case .reportInterpretation:
             Task { await openQuickStart(mode: .reportInterpretation) }
         case .medication:
@@ -36,19 +41,30 @@ struct IOS26HomeDashboardActionHandler {
         }
     }
 
-    private func openCheckupPlanInChat() async {
-        let mode = ChatQuickStartMode.checkupPlan
+    private func openAutoSmallTaskInChat(
+        mode: ChatQuickStartMode,
+        definition: AutoSmallTaskDefinition
+    ) async {
         let source = "ios26_home_\(mode.rawValue)"
-        let definition = BuiltInAutoSmallTaskCatalog.healthExamPlan
-        let smallTask: SmallTask
+        let registration: AutoSmallTaskRegistrationResult
         do {
-            smallTask = try await autoSmallTaskRegistry.registerIfNeeded(
+            registration = try await autoSmallTaskRegistry.registerOrMigrateIfNeeded(
                 definition: definition,
                 userID: ownerAccountID
             )
         } catch {
             notificationClient.error(
-                L10n.text("chat.auto_small_task.init_failed", fallback: "体检计划小任务初始化失败，请稍后重试。"),
+                L10n.text("chat.auto_small_task.init_failed", fallback: "小任务初始化失败，请稍后重试。"),
+                title: mode.title,
+                source: "ios26_home"
+            )
+            await openChat(mode: mode)
+            return
+        }
+
+        guard registration.isRunnable, let smallTask = registration.smallTask else {
+            notificationClient.error(
+                L10n.text("chat.auto_small_task.init_failed", fallback: "小任务初始化失败，请稍后重试。"),
                 title: mode.title,
                 source: "ios26_home"
             )
@@ -71,7 +87,18 @@ struct IOS26HomeDashboardActionHandler {
     private func openQuickStart(mode: DeepTutorQuickStartMode) async {
         switch quickStartPreferenceStore.target {
         case .chat:
-            await openChat(mode: ChatQuickStartMode(deepTutorMode: mode))
+            switch mode {
+            case .checkupPlan:
+                await openAutoSmallTaskInChat(
+                    mode: .checkupPlan,
+                    definition: BuiltInAutoSmallTaskCatalog.healthExamPlan
+                )
+            case .reportInterpretation:
+                await openAutoSmallTaskInChat(
+                    mode: .reportInterpretation,
+                    definition: BuiltInAutoSmallTaskCatalog.reportInterpretation
+                )
+            }
         case .deepTutorChat:
             await openDeepTutor(mode: mode)
         }

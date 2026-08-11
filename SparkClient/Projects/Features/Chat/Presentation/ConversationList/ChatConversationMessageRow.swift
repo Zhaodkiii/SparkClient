@@ -6,12 +6,14 @@ struct ChatConversationMessageRow: View {
     @State private var rowWidth: CGFloat = 0
     @State private var bubbleMenuConfig: ChatBubbleMenuConfig?
     @State private var textSelectionPayload: ChatSelectableTextPayload?
+    @State private var activeSmallTaskPayload: ChatSmallTaskMessageCardPayload?
 
     let threadID: UUID
     let message: ChatMessage
     let visibleMessages: [ChatMessage]
     @ObservedObject var stateStore: ChatStateStore
     @ObservedObject var detailViewModel: ChatDetailViewModel
+    @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     let knowledgeDependencies: KnowledgeFeatureDependencies
     @ObservedObject var knowledgeViewModel: KnowledgeLibraryViewModel
     @ObservedObject var uiStateStore: ChatMessageUIStateStore
@@ -98,6 +100,13 @@ struct ChatConversationMessageRow: View {
                     }
                 }
             }
+        }
+        .navigationDestination(item: $activeSmallTaskPayload) { payload in
+            SmallTaskDetailView(
+                viewModel: aiSettingsViewModel,
+                taskCode: payload.code,
+                source: payload.source
+            )
         }
     }
 
@@ -202,6 +211,7 @@ struct ChatConversationMessageRow: View {
             onCaptureOpenCamera: {},
             onCaptureOpenPhotoLibrary: {},
             onCaptureOpenFiles: {},
+            onSmallTaskCardOpen: { _ in },
             onPresentToolPreview: { _, _ in },
             fileTransferService: detailViewModel.attachmentFileTransferService,
             medicalQueryAPI: detailViewModel.sparkMedicalQueryAPI,
@@ -368,6 +378,9 @@ struct ChatConversationMessageRow: View {
                 stateStore.setPhotoPickerPresented(true, for: threadID)
             },
             onCaptureOpenFiles: onCaptureOpenFiles,
+            onSmallTaskCardOpen: { payload in
+                activeSmallTaskPayload = payload
+            },
             onPresentToolPreview: { prompt, renderContext in
                 detailViewModel.presentToolDetailPreview(prompt: prompt, renderContext: renderContext)
             },

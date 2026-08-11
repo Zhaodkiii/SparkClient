@@ -5,24 +5,54 @@ struct SmallTasksSettingsView: View {
 
     /// 当前正在编辑的任务（nil = 不展示 sheet）
     @State private var editingTask: SmallTask?
+    @State private var selectedSource: TaskSource = .local
 
     /// 删除确认
     @State private var pendingDelete: SmallTask?
 
-    /// 本地任务列表
-    private var localTasks: [SmallTask] {
-        viewModel.snapshot.smallTasks
-            .filter { $0.source == .local }
+    private var filteredTasks: [SmallTask] {
+        viewModel.effectiveSmallTasks
+            .filter { $0.source == selectedSource }
             .sorted { $0.code < $1.code }
     }
 
     var body: some View {
         List {
             Section {
-                if localTasks.isEmpty {
+                Picker(
+                    L10n.text(
+                        "ai_settings.small_tasks.source.filter",
+                        fallback: "Source",
+                        comment: "Small task source filter"
+                    ),
+                    selection: $selectedSource
+                ) {
                     Text(
                         L10n.text(
-                            "ai_settings.small_tasks.empty",
+                            "ai_settings.small_tasks.source.local",
+                            fallback: "Local",
+                            comment: "Local small tasks"
+                        )
+                    )
+                    .tag(TaskSource.local)
+
+                    Text(
+                        L10n.text(
+                            "ai_settings.small_tasks.source.service",
+                            fallback: "Service",
+                            comment: "Service small tasks"
+                        )
+                    )
+                    .tag(TaskSource.service)
+                }
+                .pickerStyle(.segmented)
+            }
+
+            Section {
+                if filteredTasks.isEmpty {
+                    Text(
+                        L10n.text(
+                            selectedSource.emptyLocalizationKey,
                             fallback: "No small tasks",
                             comment: "Empty small tasks list"
                         )
@@ -30,22 +60,26 @@ struct SmallTasksSettingsView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
                 } else {
-                    ForEach(localTasks) { task in
-                        Button {
-                            /// ✅ 直接赋值，驱动 sheet
-                            editingTask = task
+                    ForEach(filteredTasks) { task in
+                        MainNavigationLink {
+                            SmallTaskDetailView(
+                                viewModel: viewModel,
+                                taskCode: task.code,
+                                source: task.source
+                            )
                         } label: {
                             SmallTaskRow(task: task)
                         }
-                        .buttonStyle(.plain)
                         .swipeActions {
-                            Button(role: .destructive) {
-                                pendingDelete = task
-                            } label: {
-                                Label(
-                                    L10n.text("common.delete", fallback: "Delete", comment: "Delete action"),
-                                    systemImage: "trash"
-                                )
+                            if task.source == .local {
+                                Button(role: .destructive) {
+                                    pendingDelete = task
+                                } label: {
+                                    Label(
+                                        L10n.text("common.delete", fallback: "Delete", comment: "Delete action"),
+                                        systemImage: "trash"
+                                    )
+                                }
                             }
                         }
                     }
@@ -61,14 +95,13 @@ struct SmallTasksSettingsView: View {
         )
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    /// ✅ 新建任务（传 nil 表示创建）
-                    editingTask = nil
-                    /// ⚠️ 这里不能触发 sheet，所以需要一个“占位对象”
-                    /// 推荐方式：用一个 dummy task
-                    editingTask = SmallTask.newDraft(id: viewModel.nextLocalSmallTaskID())
-                } label: {
-                    Image(systemName: "plus")
+                if selectedSource == .local {
+                    Button {
+                        editingTask = nil
+                        editingTask = SmallTask.newDraft(id: viewModel.nextLocalSmallTaskID())
+                    } label: {
+                        Image(systemName: "plus")
+                    }
                 }
             }
         }
@@ -85,7 +118,6 @@ struct SmallTasksSettingsView: View {
                     Task {
                         await viewModel.upsertLocalSmallTaskAndPersist(updatedTask)
                     }
-                    /// 关闭 sheet
                     editingTask = nil
                 }
             }
@@ -122,6 +154,10 @@ struct SmallTasksSettingsView: View {
                 pendingDelete = nil
             }
         }
+        .task {
+            await viewModel.loadIfNeeded()
+            await viewModel.refreshEffectiveSmallTasks()
+        }
     }
 }
 
@@ -134,15 +170,47 @@ private struct SmallTaskRow: View {
                 .foregroundStyle(.blue)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(task.name)
+                HStack(spacing: 8) {
+                    Text(task.name)
+
+                    Text(task.source.localizedTitle)
+                        .font(.caption2)
+                        .foregroundStyle(task.source == .local ? .blue : .purple)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background((task.source == .local ? Color.blue : Color.purple).opacity(0.12))
+                        .clipShape(Capsule())
+                }
 
                 Text(task.brief.isEmpty ? task.code : task.brief)
                     .font(.footnote)
                     .foregroundStyle(.secondary)
+                    .lineLimit(2)
             }
         }
     }
 }
+
+private extension TaskSource {
+    var localizedTitle: String {
+        switch self {
+        case .local:
+            return L10n.text("ai_settings.small_tasks.source.local", fallback: "Local", comment: "Local small task source")
+        case .service:
+            return L10n.text("ai_settings.small_tasks.source.service", fallback: "Service", comment: "Service small task source")
+        }
+    }
+
+    var emptyLocalizationKey: String {
+        switch self {
+        case .local:
+            return "ai_settings.small_tasks.empty.local"
+        case .service:
+            return "ai_settings.small_tasks.empty.service"
+        }
+    }
+}
+
 extension SmallTask {
 
     /// 创建一个“草稿任务”（用于 UI 编辑）

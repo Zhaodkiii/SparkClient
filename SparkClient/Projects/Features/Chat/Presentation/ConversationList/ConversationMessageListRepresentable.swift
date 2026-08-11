@@ -35,6 +35,7 @@ struct ConversationMessageListRepresentable: UIViewControllerRepresentable {
     let threadID: UUID
     @ObservedObject var stateStore: ChatStateStore
     @ObservedObject var detailViewModel: ChatDetailViewModel
+    @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     let knowledgeDependencies: KnowledgeFeatureDependencies
     @ObservedObject var knowledgeViewModel: KnowledgeLibraryViewModel
     @ObservedObject var uiStateStore: ChatMessageUIStateStore
@@ -105,6 +106,7 @@ struct ConversationMessageListRepresentable: UIViewControllerRepresentable {
     private func wire(vc: ConversationMessageListViewController) {
         vc.stateStore = stateStore
         vc.detailViewModel = detailViewModel
+        vc.aiSettingsViewModel = aiSettingsViewModel
         vc.knowledgeDependencies = knowledgeDependencies
         vc.knowledgeViewModel = knowledgeViewModel
         vc.uiStateStore = uiStateStore
