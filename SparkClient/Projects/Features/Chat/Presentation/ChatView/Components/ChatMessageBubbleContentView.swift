@@ -41,6 +41,9 @@ struct ChatMessageBubbleContentView: View {
     let onSaveKnowledgeCard: (ChatKnowledgeCard) -> Void
     let onKnowledgeCardSaved: (ChatKnowledgeCard) -> Void
     let onTaskCardAction: (TaskCard.Action) -> Void
+    let onTaskCardOpen: (TaskCard, ChatMessage) -> Void
+    let onTaskCardPreviewSave: (TaskCardPreviewContext, TaskCard) async throws -> HealthTask
+    let onTaskCardPreviewEdit: (TaskCardPreviewContext, TaskCardPreviewEditResult) async -> Void
     let onPendingMemberToolSelect: (PendingMemberToolCard, Int?) -> Void
     let onToolQuestionCardSubmit: (ChatToolQuestionCard, [ToolQuestionResponse]) -> Void
     let onToolMemberSelectionCardSubmit: (ChatToolMemberSelectionCard, Int) -> Void
@@ -114,6 +117,9 @@ struct ChatMessageBubbleContentView: View {
             onSaveKnowledgeCard: onSaveKnowledgeCard,
             onKnowledgeCardSaved: onKnowledgeCardSaved,
             onTaskCardAction: onTaskCardAction,
+            onTaskCardOpen: onTaskCardOpen,
+            onTaskCardPreviewSave: onTaskCardPreviewSave,
+            onTaskCardPreviewEdit: onTaskCardPreviewEdit,
             onPendingMemberToolSelect: onPendingMemberToolSelect,
             onToolQuestionCardSubmit: onToolQuestionCardSubmit,
             onToolMemberSelectionCardSubmit: onToolMemberSelectionCardSubmit,

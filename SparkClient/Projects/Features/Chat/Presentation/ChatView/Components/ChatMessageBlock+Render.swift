@@ -216,6 +216,9 @@ extension ChatMessageBlock {
                 TaskCardCell(
                     card: card,
                     memberContextStore: context.memberContextStore,
+                    onOpenPreview: { selectedCard in
+                        context.onTaskCardOpen(selectedCard, context.message)
+                    },
                     onAction: context.onTaskCardAction,
                     isLoading: context.taskCardLoadingIDs.contains(card.id)
                 )

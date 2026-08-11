@@ -111,14 +111,22 @@ final class TaskManager: ObservableObject {
         }
     }
 
-    func createTask(payload: TaskCreatePayload) async throws {
-        guard let taskService else { return }
+    @discardableResult
+    func createTaskReturningTask(payload: TaskCreatePayload) async throws -> HealthTask {
+        guard let taskService else {
+            throw TaskManagerError.taskServiceNotConfigured
+        }
         let task = try await taskService.createTask(payload: payload)
         merge(tasks: [task])
         if task.status == .pending {
             await notificationManager.registerTaskNotification(for: task)
         }
         refreshStatisticsStore(memberID: task.member)
+        return task
+    }
+
+    func createTask(payload: TaskCreatePayload) async throws {
+        _ = try await createTaskReturningTask(payload: payload)
     }
 
     func updateTask(taskID: Int, payload: TaskUpdatePayload, scope: TaskRepeatEditScope = .instance) async throws {
@@ -224,6 +232,17 @@ final class TaskManager: ObservableObject {
             tasks: scopedTasks(memberID: memberID),
             executions: memberID.map { member in executions.filter { $0.member == member } } ?? executions
         )
+    }
+}
+
+enum TaskManagerError: LocalizedError {
+    case taskServiceNotConfigured
+
+    var errorDescription: String? {
+        switch self {
+        case .taskServiceNotConfigured:
+            return NSLocalizedString("task.error.service_not_configured", comment: "任务服务未配置")
+        }
     }
 }
 

@@ -3,6 +3,7 @@ import SwiftUI
 struct TaskCardCell: View {
     let card: TaskCard
     @ObservedObject var memberContextStore: MemberContextStore
+    let onOpenPreview: (TaskCard) -> Void
     let onAction: (TaskCard.Action) -> Void
     var isLoading: Bool = false
 
@@ -82,6 +83,10 @@ struct TaskCardCell: View {
             }
         }
         .padding(12)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onOpenPreview(card)
+        }
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground))

@@ -2619,6 +2619,15 @@
 "task.empty.create" = "New Task";
 "task.empty.refresh" = "Sync Again";
 "task.sync.last" = "Last sync: %@";
+"task.preview.title" = "Task Preview";
+"task.preview.status.pending" = "Unsaved";
+"task.preview.edit" = "Edit Draft";
+"task.preview.edit_title" = "Edit Task Draft";
+"task.preview.save" = "Save Task";
+"task.preview.saving" = "Saving...";
+"task.preview.save_failed" = "Failed to save. Please try again.";
+"task.preview.missing_member" = "Select a member first.";
+"task.error.service_not_configured" = "Task service is not configured.";
 "task.detail.title" = "Task Detail";
 "task.detail.no_reminder" = "No reminder time";
 "task.detail.business_unavailable" = "Business info unavailable";
@@ -2628,6 +2637,7 @@
 "task.detail.executions" = "Recent Executions";
 "task.detail.no_executions" = "No execution records";
 "task.field.business_type" = "Linked business type";
+"task.field.business_id" = "Business ID";
 "task.related.section" = "Linked business";
 "task.related.loading" = "Loading related content";
 "task.related.not_found" = "Related local content was not found";

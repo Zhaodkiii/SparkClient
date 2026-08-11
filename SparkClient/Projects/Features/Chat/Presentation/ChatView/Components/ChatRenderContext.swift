@@ -31,6 +31,9 @@ struct ChatRenderContext {
     let onSaveKnowledgeCard: (ChatKnowledgeCard) -> Void   // 保存知识库卡片
     let onKnowledgeCardSaved: (ChatKnowledgeCard) -> Void
     let onTaskCardAction: (TaskCard.Action) -> Void        // 任务卡片操作（完成/删除等）
+    let onTaskCardOpen: (TaskCard, ChatMessage) -> Void
+    let onTaskCardPreviewSave: (TaskCardPreviewContext, TaskCard) async throws -> HealthTask
+    let onTaskCardPreviewEdit: (TaskCardPreviewContext, TaskCardPreviewEditResult) async -> Void
     let onPendingMemberToolSelect: (PendingMemberToolCard, Int?) -> Void  // 待处理成员工具选择
     let onToolQuestionCardSubmit: (ChatToolQuestionCard, [ToolQuestionResponse]) -> Void
     let onToolMemberSelectionCardSubmit: (ChatToolMemberSelectionCard, Int) -> Void
@@ -84,6 +87,9 @@ extension ChatRenderContext {
             onSaveKnowledgeCard: onSaveKnowledgeCard,
             onKnowledgeCardSaved: onKnowledgeCardSaved,
             onTaskCardAction: onTaskCardAction,
+            onTaskCardOpen: onTaskCardOpen,
+            onTaskCardPreviewSave: onTaskCardPreviewSave,
+            onTaskCardPreviewEdit: onTaskCardPreviewEdit,
             onPendingMemberToolSelect: onPendingMemberToolSelect,
             onToolQuestionCardSubmit: onToolQuestionCardSubmit,
             onToolMemberSelectionCardSubmit: onToolMemberSelectionCardSubmit,

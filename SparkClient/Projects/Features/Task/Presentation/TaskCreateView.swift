@@ -4,6 +4,7 @@ struct TaskCreateView: View {
     enum Mode {
         case create
         case edit(taskID: Int, scope: TaskRepeatEditScope)
+        case previewEdit(initialDraft: TaskCreateFormDraft)
     }
 
     enum CreationTab: String, CaseIterable, Identifiable {
@@ -26,6 +27,7 @@ struct TaskCreateView: View {
     @ObservedObject var taskManager: TaskManager
     let mode: Mode
     let onDismiss: () -> Void
+    let onPreviewSaveDraft: ((TaskCreateFormDraft) -> Void)?
 
     @State private var tab: CreationTab = .manual
     @State private var draft = TaskCreateFormDraft()
@@ -34,14 +36,37 @@ struct TaskCreateView: View {
     @State private var isSaving = false
     @State private var saveError: String?
 
+    init(
+        memberID: Int?,
+        taskManager: TaskManager,
+        mode: Mode,
+        onDismiss: @escaping () -> Void,
+        onPreviewSaveDraft: ((TaskCreateFormDraft) -> Void)? = nil
+    ) {
+        self.memberID = memberID
+        self._taskManager = ObservedObject(wrappedValue: taskManager)
+        self.mode = mode
+        self.onDismiss = onDismiss
+        self.onPreviewSaveDraft = onPreviewSaveDraft
+    }
+
     private var isEditMode: Bool {
         if case .edit = mode { return true }
         return false
     }
 
+    private var isPreviewEditMode: Bool {
+        if case .previewEdit = mode { return true }
+        return false
+    }
+
+    private var isFixedManualMode: Bool {
+        isEditMode || isPreviewEditMode
+    }
+
     var body: some View {
         Form {
-            if isEditMode == false {
+            if isFixedManualMode == false {
                 Section {
                     Picker("task_create_mode", selection: $tab) {
                         ForEach(CreationTab.allCases) { item in
@@ -52,7 +77,7 @@ struct TaskCreateView: View {
                 }
             }
 
-            if tab == .ai && isEditMode == false {
+            if tab == .ai && isFixedManualMode == false {
                 aiSection
             } else {
                 manualSection
@@ -90,6 +115,8 @@ struct TaskCreateView: View {
             return NSLocalizedString("task.create.title", comment: "创建任务")
         case .edit:
             return NSLocalizedString("task.edit.title", comment: "修改任务")
+        case .previewEdit:
+            return NSLocalizedString("task.preview.edit_title", comment: "修改任务草稿")
         }
     }
 
@@ -180,10 +207,17 @@ struct TaskCreateView: View {
     }
 
     private func loadEditDraftIfNeeded() {
-        guard case .edit(let taskID, _) = mode,
-              let task = taskManager.task(for: taskID) else { return }
-        draft = TaskCreateFormDraft.from(task: task)
-        tab = .manual
+        switch mode {
+        case .create:
+            break
+        case .edit(let taskID, _):
+            guard let task = taskManager.task(for: taskID) else { return }
+            draft = TaskCreateFormDraft.from(task: task)
+            tab = .manual
+        case .previewEdit(let initialDraft):
+            draft = initialDraft
+            tab = .manual
+        }
     }
 
     private func parseAIJSON() {
@@ -198,20 +232,21 @@ struct TaskCreateView: View {
     }
 
     private func save() async {
-        guard let memberID else {
-            saveError = NSLocalizedString("task.error.member_required", comment: "请先选择成员")
-            return
-        }
-
         isSaving = true
         defer { isSaving = false }
 
         do {
             switch mode {
             case .create:
+                guard let memberID else {
+                    saveError = NSLocalizedString("task.error.member_required", comment: "请先选择成员")
+                    return
+                }
                 try await taskManager.createTask(payload: draft.makeCreatePayload(memberID: memberID))
             case .edit(let taskID, let scope):
                 try await taskManager.updateTask(taskID: taskID, payload: draft.makeUpdatePayload(), scope: scope)
+            case .previewEdit:
+                onPreviewSaveDraft?(draft)
             }
             onDismiss()
         } catch {

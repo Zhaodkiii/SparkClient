@@ -1250,24 +1250,56 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
     }
 
     private func confirmTaskCard(threadID: UUID, message: ChatMessage, card: TaskCard) async {
-        guard let memberID = validatedTaskCardMemberID(card.member) else { return }
+        do {
+            _ = try await saveTaskCard(threadID: threadID, message: message, card: card)
+            logger.info("任务卡片直接创建任务成功 card_id=\(card.id)", module: .general)
+        } catch {
+            logger.error("任务卡片直接创建任务失败 card_id=\(card.id) error=\(error.localizedDescription)", module: .general)
+        }
+    }
+
+    func saveTaskCardPreview(
+        threadID: UUID,
+        message: ChatMessage,
+        card: TaskCard
+    ) async throws -> HealthTask {
+        try await saveTaskCard(threadID: threadID, message: message, card: card)
+    }
+
+    func updateTaskCardPreviewDraft(
+        threadID: UUID,
+        message: ChatMessage,
+        cardID: Int,
+        result: TaskCardPreviewEditResult
+    ) async {
+        await updateTaskCard(threadID: threadID, message: message, cardID: cardID) {
+            $0 = TaskCardPreviewMapper.applying(result.draft, to: $0)
+            $0.updatedAt = result.updatedAt
+        }
+    }
+
+    private func saveTaskCard(
+        threadID: UUID,
+        message: ChatMessage,
+        card: TaskCard
+    ) async throws -> HealthTask {
+        guard let memberID = validatedTaskCardMemberID(card.member) else {
+            throw TaskCardPreviewSaveError.missingMember
+        }
         var cardToCreate = card
         cardToCreate.member = memberID
         cardToCreate.taskPayload = Self.taskPayload(card.taskPayload, settingMemberID: memberID)
 
-        do {
-            let payload = ChatTaskPayloadBuilder.build(from: cardToCreate)
-            try await taskManager.createTask(payload: payload)
-            logger.info("任务卡片直接创建任务成功 card_id=\(card.id)", module: .general)
-            await updateTaskCard(threadID: threadID, message: message, cardID: card.id) {
-                $0.member = memberID
-                $0.taskPayload = cardToCreate.taskPayload
-                $0.status = .confirmed
-                $0.updatedAt = Date()
-            }
-        } catch {
-            logger.error("任务卡片直接创建任务失败 card_id=\(card.id) error=\(error.localizedDescription)", module: .general)
+        let payload = ChatTaskPayloadBuilder.build(from: cardToCreate)
+        let createdTask = try await taskManager.createTaskReturningTask(payload: payload)
+        await updateTaskCard(threadID: threadID, message: message, cardID: card.id) {
+            $0.member = memberID
+            $0.taskPayload = cardToCreate.taskPayload
+            $0.status = .confirmed
+            $0.confirmedTask = createdTask.id
+            $0.updatedAt = Date()
         }
+        return createdTask
     }
 
     private func validatedTaskCardMemberID(_ memberID: Int?) -> Int? {
@@ -1361,6 +1393,17 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
     private func shortID(_ value: Int?) -> String {
         guard let value else { return "-" }
         return String(value)
+    }
+
+    enum TaskCardPreviewSaveError: LocalizedError {
+        case missingMember
+
+        var errorDescription: String? {
+            switch self {
+            case .missingMember:
+                return NSLocalizedString("task.preview.missing_member", comment: "请先选择成员")
+            }
+        }
     }
 
     // MARK: - 等待成员工具：成员选择写入

@@ -18,6 +18,17 @@ struct TaskCreateFormDraft: Equatable {
     var dietCalorieTarget: Int = 500
     var dietFoodRecommend: String = ""
 
+    var previewBusinessType: String {
+        switch type {
+        case .medical:
+            return "medical.\(medicalTaskType)"
+        case .exercise:
+            return "exercise"
+        case .diet:
+            return "diet"
+        }
+    }
+
     func makeCreatePayload(memberID: Int) -> TaskCreatePayload {
         let formatter = ISO8601DateFormatter.taskFormatter
         let medicalPayload: TaskMedicalPayload?
@@ -73,7 +84,7 @@ struct TaskCreateFormDraft: Equatable {
             dueTime: formatter.string(from: dueTime),
             repeatType: repeatType,
             priority: priority,
-            businessType: businessType(for: type),
+            businessType: previewBusinessType,
             businessID: "",
             extra: [:],
             taskMedical: medicalPayload,
@@ -169,12 +180,8 @@ struct TaskCreateFormDraft: Equatable {
         return draft
     }
 
-    private func businessType(for type: HealthTask.TaskType) -> String {
-        switch type {
-        case .medical: return "medical.\(medicalTaskType)"
-        case .exercise: return "exercise"
-        case .diet: return "diet"
-        }
+    static func from(card: TaskCard) -> TaskCreateFormDraft {
+        TaskCardPreviewMapper.makeDraft(from: card)
     }
 }
 

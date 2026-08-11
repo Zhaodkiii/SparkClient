@@ -2619,6 +2619,15 @@
 "task.empty.create" = "新建任务";
 "task.empty.refresh" = "重新同步";
 "task.sync.last" = "上次同步: %@";
+"task.preview.title" = "任务预览";
+"task.preview.status.pending" = "待保存";
+"task.preview.edit" = "本地修改";
+"task.preview.edit_title" = "修改任务草稿";
+"task.preview.save" = "保存任务";
+"task.preview.saving" = "保存中...";
+"task.preview.save_failed" = "保存失败，请稍后重试";
+"task.preview.missing_member" = "请先选择成员";
+"task.error.service_not_configured" = "任务服务未配置";
 "task.detail.title" = "任务详情";
 "task.detail.no_reminder" = "未设置提醒时间";
 "task.detail.business_unavailable" = "业务信息暂不可用";
@@ -2628,6 +2637,7 @@
 "task.detail.executions" = "最近执行记录";
 "task.detail.no_executions" = "暂无执行记录";
 "task.field.business_type" = "关联业务类型";
+"task.field.business_id" = "业务 ID";
 "task.related.section" = "关联业务";
 "task.related.loading" = "正在加载关联内容";
 "task.related.not_found" = "未找到本地关联内容";

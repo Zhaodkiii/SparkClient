@@ -7,6 +7,7 @@ struct ChatConversationMessageRow: View {
     @State private var bubbleMenuConfig: ChatBubbleMenuConfig?
     @State private var textSelectionPayload: ChatSelectableTextPayload?
     @State private var activeSmallTaskPayload: ChatSmallTaskMessageCardPayload?
+    @State private var activeTaskDetailMode: TaskDetailMode?
 
     let threadID: UUID
     let message: ChatMessage
@@ -107,6 +108,30 @@ struct ChatConversationMessageRow: View {
                 source: payload.source
             )
         }
+        .navigationDestination(item: $activeTaskDetailMode) { mode in
+            TaskDetailView(
+                memberID: nil,
+                taskManager: taskManager,
+                knowledgeDependencies: knowledgeDependencies,
+                knowledgeViewModel: knowledgeViewModel,
+                mode: mode,
+                onPreviewSave: { previewContext, card in
+                    try await detailViewModel.saveTaskCardPreview(
+                        threadID: threadID,
+                        message: message,
+                        card: card
+                    )
+                },
+                onPreviewEdit: { previewContext, result in
+                    await detailViewModel.updateTaskCardPreviewDraft(
+                        threadID: threadID,
+                        message: message,
+                        cardID: previewContext.card.id,
+                        result: result
+                    )
+                }
+            )
+        }
     }
 
     /// 带长按手势的气泡，替代系统 contextMenu
@@ -195,6 +220,22 @@ struct ChatConversationMessageRow: View {
             onSaveKnowledgeCard: { _ in },
             onKnowledgeCardSaved: { _ in },
             onTaskCardAction: { _ in },
+            onTaskCardOpen: { card, _ in openTaskCard(card) },
+            onTaskCardPreviewSave: { _, card in
+                try await detailViewModel.saveTaskCardPreview(
+                    threadID: threadID,
+                    message: message,
+                    card: card
+                )
+            },
+            onTaskCardPreviewEdit: { previewContext, result in
+                await detailViewModel.updateTaskCardPreviewDraft(
+                    threadID: threadID,
+                    message: message,
+                    cardID: previewContext.card.id,
+                    result: result
+                )
+            },
             onPendingMemberToolSelect: { _, _ in },
             onToolQuestionCardSubmit: { _, _ in },
             onToolMemberSelectionCardSubmit: { _, _ in },
@@ -288,6 +329,22 @@ struct ChatConversationMessageRow: View {
                 uiStateStore.setKnowledgeCardSaved(true, for: card.id)
             },
             onTaskCardAction: handleTaskCardAction,
+            onTaskCardOpen: { card, _ in openTaskCard(card) },
+            onTaskCardPreviewSave: { _, card in
+                try await detailViewModel.saveTaskCardPreview(
+                    threadID: threadID,
+                    message: message,
+                    card: card
+                )
+            },
+            onTaskCardPreviewEdit: { previewContext, result in
+                await detailViewModel.updateTaskCardPreviewDraft(
+                    threadID: threadID,
+                    message: message,
+                    cardID: previewContext.card.id,
+                    result: result
+                )
+            },
             onPendingMemberToolSelect: { card, memberID in
                 Task {
                     await detailViewModel.setPendingMemberToolSelection(
@@ -611,6 +668,35 @@ struct ChatConversationMessageRow: View {
                 await detailViewModel.handleTaskCardAction(threadID: threadID, message: message, action: action)
             }
         }
+    }
+
+    private func openTaskCard(_ card: TaskCard) {
+        if card.status == .confirmed, let taskID = resolvedTaskID(for: card) {
+            activeTaskDetailMode = .normal(taskID: taskID)
+            return
+        }
+        if card.status == .confirmed {
+            activeTaskDetailMode = .preview(TaskCardPreviewContext(
+                threadID: threadID,
+                messageClientID: message.clientMessageID,
+                card: card
+            ))
+            return
+        }
+        activeTaskDetailMode = .preview(TaskCardPreviewContext(
+            threadID: threadID,
+            messageClientID: message.clientMessageID,
+            card: card
+        ))
+    }
+
+    private func resolvedTaskID(for card: TaskCard) -> Int? {
+        if let taskID = card.confirmedTask {
+            return taskID
+        }
+        return taskManager.tasks.first(where: {
+            $0.businessType == card.businessType && $0.businessID == card.businessID
+        })?.id
     }
 
     private func confirmTaskCard(_ card: TaskCard, action: TaskCard.Action) {
