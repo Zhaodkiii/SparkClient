@@ -111,13 +111,15 @@ final class AppRouteStore: ObservableObject {
     }
 
     /// `.home` 是 iOS 26 工作台；经典系统没有独立工作台，落到健康首页。
-    /// 医疗相关子页始终由 `.health` Tab 的传统 `HomeView` 承载。
+    /// iOS 26 工作台发起的设置与医疗子页由 `.home` 栈独立承载，经典系统继续复用传统 `.health` / `.settings` 栈。
     private func hostTab(for route: AppRoute) -> RootTab {
         switch route {
         case .home:
             return Self.supportsIOS26Home ? .home : .health
         case .homeMedicalList, .homeFamilyMedicineCabinet:
-            return .health
+            return Self.supportsIOS26Home ? .home : .health
+        case .settings, .aiSettings, .accountManagement:
+            return Self.supportsIOS26Home ? .home : .settings
         default:
             return route.rootTab
         }

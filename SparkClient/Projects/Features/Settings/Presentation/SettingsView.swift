@@ -3,31 +3,15 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
+    @ObservedObject var accountManagementViewModel: AccountManagementViewModel
     @ObservedObject var versionUpdateCoordinator: AppVersionUpdateCoordinator
     let session: UserSession
-    let onAccountEntryTap: () -> Void
+    @Binding var showsDeviceAccountUpgradeSheet: Bool
 
     var body: some View {
         List {
             Section(L10n.text("settings.section.account")) {
-                Button(action: onAccountEntryTap) {
-                    HStack {
-                        Label(L10n.text("settings.account_management"), systemImage: "person.crop.circle")
-                        Spacer()
-                        Text(accountTrailingText)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        Image(systemName: "chevron.right")
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.tertiary)
-                    }
-                }
-                .accessibilityHint(
-                    session.isDeviceAccount
-                        ? L10n.text("settings.account.device_not_linked.accessibility_hint")
-                        : L10n.text("settings.account_management")
-                )
+                accountEntry
             }
 
             Section(L10n.text("settings.section.ai")) {
@@ -83,6 +67,46 @@ struct SettingsView: View {
         } message: {
             Text(viewModel.errorMessage ?? "")
         }
+    }
+
+    @ViewBuilder
+    private var accountEntry: some View {
+        if session.isDeviceAccount {
+            Button {
+                showsDeviceAccountUpgradeSheet = true
+            } label: {
+                accountEntryLabel
+            }
+            .accessibilityHint(accountAccessibilityHint)
+        } else {
+            MainNavigationLink {
+                AccountManagementView(viewModel: accountManagementViewModel, session: session)
+            } label: {
+                accountEntryLabel
+            }
+            .accessibilityHint(accountAccessibilityHint)
+        }
+    }
+
+    private var accountEntryLabel: some View {
+        HStack {
+            Label(L10n.text("settings.account_management"), systemImage: "person.crop.circle")
+            Spacer()
+            Text(accountTrailingText)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+//            
+//            Image(systemName: "chevron.right")
+//                .font(.footnote.weight(.semibold))
+//                .foregroundStyle(.tertiary)
+        }
+    }
+
+    private var accountAccessibilityHint: String {
+        session.isDeviceAccount
+            ? L10n.text("settings.account.device_not_linked.accessibility_hint")
+            : L10n.text("settings.account_management")
     }
 
     private var accountTrailingText: String {

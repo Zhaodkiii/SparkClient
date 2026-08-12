@@ -17,11 +17,12 @@ struct IOS26HomeView: View {
     @ObservedObject var chatListViewModel: ChatListViewModel
     @ObservedObject var deepTutorChatViewModel: DeepTutorChatViewModel
     @ObservedObject var settingsViewModel: SettingsViewModel
+    @ObservedObject var accountManagementViewModel: AccountManagementViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     @ObservedObject var versionUpdateCoordinator: AppVersionUpdateCoordinator
-    let onSettingsAccountEntryTap: () -> Void
 
     @State private var hasLoaded = false
+    @Binding var showsDeviceAccountUpgradeSheet: Bool
     @Binding var activeFullScreenCover: HomeFullScreenCover?
     @State private var showExternalImportErrorAlert = false
 
@@ -57,9 +58,10 @@ private extension IOS26HomeView {
                     SettingsView(
                         viewModel: settingsViewModel,
                         aiSettingsViewModel: aiSettingsViewModel,
+                        accountManagementViewModel: accountManagementViewModel,
                         versionUpdateCoordinator: versionUpdateCoordinator,
                         session: session,
-                        onAccountEntryTap: onSettingsAccountEntryTap
+                        showsDeviceAccountUpgradeSheet: $showsDeviceAccountUpgradeSheet
                     )
                 } label: {
                     Image(systemName: "gearshape")

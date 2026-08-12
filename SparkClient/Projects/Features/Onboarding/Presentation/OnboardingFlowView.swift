@@ -33,9 +33,9 @@ struct OnboardingFlowView: View {
         } destination: { step in
             onboardingDestination(for: step)
         }
-        .task {
-            await bootstrapDefaultMemberIfNeeded()
-        }
+//        .task {
+//            await bootstrapDefaultMemberIfNeeded()
+//        }
     }
 
     @ViewBuilder

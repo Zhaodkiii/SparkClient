@@ -133,9 +133,10 @@ struct IOS26TabBarView: View {
                 chatListViewModel: chatListViewModel,
                 deepTutorChatViewModel: deepTutorChatViewModel,
                 settingsViewModel: settingsViewModel,
+                accountManagementViewModel: accountManagementViewModel,
                 aiSettingsViewModel: aiSettingsViewModel,
                 versionUpdateCoordinator: versionUpdateCoordinator,
-                onSettingsAccountEntryTap: handleAccountEntryTap,
+                showsDeviceAccountUpgradeSheet: $showsDeviceAccountUpgradeSheet,
                 activeFullScreenCover: $activeHomeFullScreenCover
             )
         } destination: { route in
@@ -204,20 +205,13 @@ struct IOS26TabBarView: View {
             SettingsView(
                 viewModel: settingsViewModel,
                 aiSettingsViewModel: aiSettingsViewModel,
+                accountManagementViewModel: accountManagementViewModel,
                 versionUpdateCoordinator: versionUpdateCoordinator,
                 session: session,
-                onAccountEntryTap: handleAccountEntryTap
+                showsDeviceAccountUpgradeSheet: $showsDeviceAccountUpgradeSheet
             )
         } destination: { route in
             destinationBuilder.destination(route)
-        }
-    }
-
-    private func handleAccountEntryTap() {
-        if session.isDeviceAccount {
-            showsDeviceAccountUpgradeSheet = true
-        } else {
-            routeStore.route(to: .accountManagement)
         }
     }
 

@@ -117,9 +117,10 @@ struct MainTabCoordinatorView: View {
                 SettingsView(
                     viewModel: settingsViewModel,
                     aiSettingsViewModel: aiSettingsViewModel,
+                    accountManagementViewModel: accountManagementViewModel,
                     versionUpdateCoordinator: versionUpdateCoordinator,
                     session: session,
-                    onAccountEntryTap: handleAccountEntryTap
+                    showsDeviceAccountUpgradeSheet: $showsDeviceAccountUpgradeSheet
                 )
             } destination: { route in
                 destinationBuilder.destination(route)
@@ -147,14 +148,6 @@ struct MainTabCoordinatorView: View {
         }
         .onDisappear {
             launchIntentCoordinator.updateReadiness { $0.mainTabReady = false }
-        }
-    }
-
-    private func handleAccountEntryTap() {
-        if session.isDeviceAccount {
-            showsDeviceAccountUpgradeSheet = true
-        } else {
-            routeStore.route(to: .accountManagement)
         }
     }
 
