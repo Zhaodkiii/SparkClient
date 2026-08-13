@@ -37,6 +37,14 @@ struct IOS26HomeView: View {
 
 @available(iOS 26.0, *)
 private extension IOS26HomeView {
+    var selectedMember: Member? {
+        let members = viewModel.dashboard?.members ?? viewModel.memberContextStoreForBinding.context.members
+        guard let selectedMemberID = viewModel.selectedMemberID else {
+            return members.first
+        }
+        return members.first(where: { $0.id == selectedMemberID }) ?? members.first
+    }
+
     var dashboardContent: some View {
         IOS26HomeDashboardView(
             viewModel: viewModel,
@@ -53,6 +61,9 @@ private extension IOS26HomeView {
         .navigationTitle(L10n.text("ios26.home.title"))
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                memberToolbarMenu
+            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 MainNavigationLink {
                     SettingsView(
@@ -68,6 +79,38 @@ private extension IOS26HomeView {
                 }
                 .accessibilityLabel(L10n.text("settings.title"))
             }
+        }
+    }
+
+    @ViewBuilder
+    var memberToolbarMenu: some View {
+        if let selectedMember,
+           viewModel.memberContextStoreForBinding.context.members.isEmpty == false {
+            MemberProfileBindingMenu(
+                memberContextStore: viewModel.memberContextStoreForBinding,
+                selectedMemberID: viewModel.selectedMemberID,
+                onSelect: { memberID in
+                    guard let memberID, memberID != viewModel.selectedMemberID else { return }
+                    viewModel.selectMember(memberID)
+                    triggerHaptic(style: .light)
+                }
+            ) {
+                MemberSelectorChip(
+                    member: selectedMember,
+                    badgeText: MemberSelectorChip.badgeText(for: selectedMember),
+                    isSelected: false,
+                    variant: .compactToolbar,
+                    onSelect: {},
+                    onViewDetail: {},
+                    onShare: {}
+                )
+            }
+            .accessibilityLabel(
+                String(
+                    format: L10n.text("home.medical.medication_execution.member_switch.accessibility"),
+                    selectedMember.name
+                )
+            )
         }
     }
 
@@ -177,5 +220,11 @@ private extension IOS26HomeView {
             reason: reason,
             immediate: true
         )
+    }
+
+    func triggerHaptic(style: UIImpactFeedbackGenerator.FeedbackStyle) {
+#if canImport(UIKit)
+        UIImpactFeedbackGenerator(style: style).impactOccurred()
+#endif
     }
 }

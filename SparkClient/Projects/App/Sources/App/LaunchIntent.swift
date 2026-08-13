@@ -196,7 +196,7 @@ enum HomeFullScreenCoverKind: String, Sendable {
     case memberDetail
 }
 
-/// 首页宿主展示状态，由 HomeView 上报给调度器
+/// 首页宿主展示状态，由 HealthHomeView / IOS26HomeView 上报给调度器
 struct LaunchIntentHostState: Equatable, Sendable {
     var activeSheetKind: HomeSheetKind?
     var activeFullScreenCoverKind: HomeFullScreenCoverKind?

@@ -87,6 +87,7 @@ struct AISettingsView: View {
             Section("Chat 会话设置") {
                 ChatConversationUIArchitectureSettingsSection(viewModel: viewModel)
                 ChatConversationAppearanceSettingsSection(viewModel: viewModel)
+                ChatComposerStartupSettingsSection(viewModel: viewModel)
             }
 
             Section("DeepTutorChat 对话外观") {
@@ -269,6 +270,75 @@ private struct ChatConversationAppearanceSettingsSection: View {
                     Task { await viewModel.persistSnapshotNow() }
                 }
             ))
+        }
+    }
+}
+
+private struct ChatComposerStartupSettingsSection: View {
+    @ObservedObject var viewModel: AISettingsViewModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("默认启动配置")
+                .font(.headline)
+
+            Text("新进入 Chat 会话时，下面这些开关会作为初始状态。配置按登录账号保存。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            Toggle("默认启用成员档案", isOn: Binding(
+                get: { viewModel.snapshot.chatComposerStartupPreferences.memberProfileEnabled },
+                set: { newValue in
+                    viewModel.snapshot.chatComposerStartupPreferences.memberProfileEnabled = newValue
+                    Task { await viewModel.persistSnapshotNow() }
+                }
+            ))
+
+            Toggle("默认启用工具", isOn: Binding(
+                get: { viewModel.snapshot.chatComposerStartupPreferences.useTools },
+                set: { newValue in
+                    viewModel.snapshot.chatComposerStartupPreferences.useTools = newValue
+                    Task { await viewModel.persistSnapshotNow() }
+                }
+            ))
+
+            Toggle("默认启用知识库", isOn: Binding(
+                get: { viewModel.snapshot.chatComposerStartupPreferences.useKnowledgeBag },
+                set: { newValue in
+                    viewModel.snapshot.chatComposerStartupPreferences.useKnowledgeBag = newValue
+                    Task { await viewModel.persistSnapshotNow() }
+                }
+            ))
+
+            Toggle("默认启用联网搜索", isOn: Binding(
+                get: { viewModel.snapshot.chatComposerStartupPreferences.useWebSearch },
+                set: { newValue in
+                    viewModel.snapshot.chatComposerStartupPreferences.useWebSearch = newValue
+                    Task { await viewModel.persistSnapshotNow() }
+                }
+            ))
+
+            Toggle("默认启用深度思考", isOn: Binding(
+                get: { viewModel.snapshot.chatComposerStartupPreferences.reasoningEnabled },
+                set: { newValue in
+                    viewModel.snapshot.chatComposerStartupPreferences.reasoningEnabled = newValue
+                    Task { await viewModel.persistSnapshotNow() }
+                }
+            ))
+
+            Picker("默认思考强度", selection: Binding(
+                get: { viewModel.snapshot.chatComposerStartupPreferences.reasoningEffortTier },
+                set: { newValue in
+                    viewModel.snapshot.chatComposerStartupPreferences.reasoningEffortTier = newValue
+                    Task { await viewModel.persistSnapshotNow() }
+                }
+            )) {
+                Text("0 - 不思考").tag(0)
+                Text("1 - 低").tag(1)
+                Text("2 - 中").tag(2)
+                Text("3 - 高").tag(3)
+            }
+            .pickerStyle(.menu)
         }
     }
 }

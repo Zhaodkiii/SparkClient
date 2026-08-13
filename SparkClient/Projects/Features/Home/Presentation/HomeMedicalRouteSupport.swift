@@ -54,6 +54,10 @@ enum HomeMedicalRouteSupport {
             },
             onMedicineBoxesUpdated: { boxes in
                 homeViewModel.updateMedicalCompleteData { $0.medicineBoxes = boxes }
+            },
+            selectedMemberID: homeViewModel.selectedMemberID,
+            onMemberIDSelected: { memberID in
+                Task { await homeViewModel.switchMemberAndLoad(memberID) }
             }
         )
     }

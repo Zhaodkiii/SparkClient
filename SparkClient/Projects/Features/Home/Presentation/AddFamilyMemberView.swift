@@ -633,7 +633,8 @@ struct AddFamilyMemberView: View {
                 gender: gender,
                 birthDate: birthDate
             )
-            guard member != nil else { return }
+            guard let member else { return }
+            onCreatedMemberCompleted?(member)
         case .edit(let member):
             let didSave = await store.updateMember(
                 member,

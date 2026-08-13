@@ -23,6 +23,8 @@ struct MedicationExecutionCenterPage: View {
     let onMedicationPlansChanged: (([SparkMedicalSyncAPI.RemoteMedicationPlan]) -> Void)?
     let onPrescriptionsChanged: (([SparkMedicalSyncAPI.RemotePrescription]) -> Void)?
     let onMedicineBoxesChanged: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)?
+    let selectedMemberID: Int?
+    let onMemberIDSelected: ((Int) -> Void)?
 
     @Environment(\.dismiss) private var dismiss
     @State private var selectedDate: Date
@@ -59,7 +61,9 @@ struct MedicationExecutionCenterPage: View {
         initialFocus: MedicationExecutionInitialFocus? = nil,
         onMedicationPlansChanged: (([SparkMedicalSyncAPI.RemoteMedicationPlan]) -> Void)? = nil,
         onPrescriptionsChanged: (([SparkMedicalSyncAPI.RemotePrescription]) -> Void)? = nil,
-        onMedicineBoxesChanged: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)? = nil
+        onMedicineBoxesChanged: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)? = nil,
+        selectedMemberID: Int? = nil,
+        onMemberIDSelected: ((Int) -> Void)? = nil
     ) {
         self.medicationPlans = medicationPlans
         self.medicineBoxes = medicineBoxes
@@ -79,7 +83,21 @@ struct MedicationExecutionCenterPage: View {
         self.onMedicationPlansChanged = onMedicationPlansChanged
         self.onPrescriptionsChanged = onPrescriptionsChanged
         self.onMedicineBoxesChanged = onMedicineBoxesChanged
+        self.selectedMemberID = selectedMemberID
+        self.onMemberIDSelected = onMemberIDSelected
         _selectedDate = State(initialValue: initialFocus?.scheduledAt ?? Date())
+    }
+
+    private var selectedMember: Member? {
+        guard let effectiveMemberID,
+              let memberContextStore else {
+            return nil
+        }
+        return memberContextStore.context.members.first(where: { $0.id == effectiveMemberID })
+    }
+
+    private var effectiveMemberID: Int? {
+        selectedMemberID ?? memberID ?? memberContextStore?.context.selectedMember?.id
     }
 
     private var selectedDayStart: Date {
@@ -135,7 +153,7 @@ struct MedicationExecutionCenterPage: View {
     }
 
     private var showsAsNeededCard: Bool {
-        memberID != nil && homeDependencies != nil
+        effectiveMemberID != nil && homeDependencies != nil
     }
 
     private var medicineBoxesByID: [Int: SparkMedicalSyncAPI.RemoteMedicineBox] {
@@ -162,6 +180,9 @@ struct MedicationExecutionCenterPage: View {
         .navigationTitle(L10n.text("home.medical.medication_execution.nav_title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                memberToolbarMenu
+            }
             ToolbarItem(placement: .navigationBarTrailing) {
                 AnyView(medicationListToolbarLink)
             }
@@ -182,7 +203,7 @@ struct MedicationExecutionCenterPage: View {
                 context: context,
                 isSaving: isSaving,
                 fileTransferService: fileTransferService,
-                memberID: memberID,
+                memberID: effectiveMemberID,
                 homeDependencies: homeDependencies,
                 medicineBoxes: medicineBoxes,
                 medicationPlans: medicationPlans,
@@ -213,6 +234,61 @@ struct MedicationExecutionCenterPage: View {
         .onDisappear {
             legacyDateLoadTask?.cancel()
         }
+        .onChange(of: effectiveMemberID) {
+            recordsByDayID.removeAll()
+            loadedWindow = nil
+            didApplyInitialFocus = false
+            Task {
+                await loadRecordWindow(
+                    centeredAt: selectedDayStart,
+                    preferInitialRecords: false,
+                    force: true
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var memberToolbarMenu: some View {
+        if let memberContextStore,
+           let onMemberIDSelected,
+           let selectedMember,
+           memberContextStore.context.members.isEmpty == false {
+            MemberProfileBindingMenu(
+                memberContextStore: memberContextStore,
+                selectedMemberID: effectiveMemberID,
+                homeDependencies: homeDependencies,
+                onSelect: { memberID in
+                    guard logSheet == nil else { return }
+                    guard let memberID, memberID != effectiveMemberID else { return }
+                    triggerHaptic(style: .light)
+                    onMemberIDSelected(memberID)
+                }
+            ) {
+                MemberSelectorChip(
+                    member: selectedMember,
+                    badgeText: MemberSelectorChip.badgeText(for: selectedMember),
+                    isSelected: false,
+                    variant: .compactToolbar,
+                    onSelect: {},
+                    onViewDetail: {},
+                    onShare: {}
+                )
+            }
+            .disabled(logSheet != nil)
+            .accessibilityLabel(
+                String(
+                    format: L10n.text("home.medical.medication_execution.member_switch.accessibility"),
+                    selectedMember.name
+                )
+            )
+        }
+    }
+
+    private func triggerHaptic(style: UIImpactFeedbackGenerator.FeedbackStyle) {
+#if canImport(UIKit)
+        UIImpactFeedbackGenerator(style: style).impactOccurred()
+#endif
     }
 
     @ViewBuilder
@@ -250,11 +326,11 @@ struct MedicationExecutionCenterPage: View {
     @ViewBuilder
     private var medicineBoxToolbarLink: some View {
         // 个人药箱入口：复用 FamilyMedicineCabinetPage 的 personal 模式
-        if let memberID,
+        if let effectiveMemberID,
            let homeDependencies {
             MainNavigationLink {
                 FamilyMedicineCabinetPage(
-                    entryMemberID: memberID,
+                    entryMemberID: effectiveMemberID,
                     mode: .personal,
                     initialMedicineBoxes: medicineBoxes,
                     dependencies: homeDependencies,
@@ -551,7 +627,7 @@ struct MedicationExecutionCenterPage: View {
         preferInitialRecords: Bool,
         force: Bool
     ) async {
-        guard let memberID else { return }
+        guard let effectiveMemberID else { return }
 
         let loadToken = UUID()
         activeRecordLoadToken = loadToken
@@ -593,7 +669,7 @@ struct MedicationExecutionCenterPage: View {
 
         do {
             let fetched = try await medicalQueryAPI.listMedicationRecords(
-                memberID: memberID,
+                memberID: effectiveMemberID,
                 scheduledRange: request.window.scheduledQueryRange
             )
             guard Task.isCancelled == false else { return }

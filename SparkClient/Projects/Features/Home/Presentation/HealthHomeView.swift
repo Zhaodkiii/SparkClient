@@ -3,10 +3,8 @@ import SwiftUI
 import UIKit
 #endif
 
-/// 传统健康首页。旧名 `HomeView` 暂时保留，路由层优先使用 `HealthHomeView` 表达业务语义。
-typealias HealthHomeView = HomeView
-
-struct HomeView: View {
+/// 传统健康首页。
+struct HealthHomeView: View {
     let dependencies: HomeFeatureDependencies
     @ObservedObject var viewModel: HomeViewModel
     @ObservedObject var medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
@@ -243,7 +241,7 @@ struct HomeView: View {
                     ForEach(viewModel.dashboard?.members ?? []) { member in
                         MemberSelectorChip(
                             member: member, // 当前成员模型
-                            badgeText: memberBadgeText(for: member), // 成员附属标签文字（如身份/营养标识）
+                            badgeText: MemberSelectorChip.badgeText(for: member), // 成员附属标签文字（如身份/营养标识）
                             isSelected: member.id == viewModel.selectedMemberID, // 是否为当前选中成员
                             onSelect: {
                                 // 选中该成员
@@ -593,12 +591,6 @@ struct HomeView: View {
         }
     }
 
-    private func memberBadgeText(for member: Member) -> String {
-        let display = MemberRelationshipCatalog.displayTitle(for: member.relationship)
-        guard let first = display.first else { return "·" }
-        return String(first)
-    }
-
     private func medicalCardTitle(for kind: HomeDashboard.MedicalCard.Kind) -> String {
         switch kind {
         case .medicalCases:
@@ -638,84 +630,10 @@ struct HomeView: View {
     }
 }
 
-/// Member chip with a per-instance action menu (matches Health member button + `confirmationDialog` pattern).
-private struct MemberSelectorChip: View {
-    let member: Member
-    let badgeText: String
-    let isSelected: Bool
-    let onSelect: () -> Void
-    let onViewDetail: () -> Void
-    let onShare: () -> Void
-
-    @State private var showActionMenu = false
-
-    var body: some View {
-        Button {
-            if isSelected {
-                showActionMenu = true
-            } else {
-                onSelect()
-            }
-        } label: {
-            HStack(spacing: 8) {
-                Circle()
-                    .fill(Color.accentColor.opacity(isSelected ? 0.25 : 0.14))
-                    .frame(width: 28, height: 28)
-                    .overlay {
-                        Text(badgeText)
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(isSelected ? Color.accentColor.opacity(0.95) : .accentColor)
-                    }
-
-                Text(member.name)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                    .foregroundStyle(isSelected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
-
-                if isSelected {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.95))
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(isSelected ? Color.accentColor : Color(uiColor: .secondarySystemGroupedBackground))
-            )
-            .overlay(
-                Capsule(style: .continuous)
-                    .strokeBorder(
-                        isSelected
-                        ? Color.clear
-                        : Color(uiColor: .quaternaryLabel).opacity(0.24),
-                        lineWidth: 1
-                    )
-            )
-            .shadow(color: .black.opacity(isSelected ? 0.10 : 0.04), radius: isSelected ? 4 : 2, x: 0, y: 2)
-        }
-        .buttonStyle(.plain)
-        .confirmationDialog(L10n.text("home.members.action_title"), isPresented: $showActionMenu, titleVisibility: .visible) {
-            Button(L10n.text("home.members.action.view_detail"), systemImage: "person.text.rectangle") {
-                onViewDetail()
-            }
-            if member.effectiveBinding.canShare {
-                Button(L10n.text("home.members.action.share"), systemImage: "square.and.arrow.up") {
-                    onShare()
-                }
-            }
-            Button(L10n.text("common.cancel"), role: .cancel) {}
-        }
-    }
-}
-
-
-
 #if DEBUG
 #Preview("Light") {
     CompatibleNavigationContainer {
-        HomeView(
+        HealthHomeView(
             dependencies: .preview,
             viewModel: .preview,
             medicalDocumentUploadViewModel: .preview(),
@@ -735,7 +653,7 @@ private struct MemberSelectorChip: View {
 
 #Preview("Dark") {
     CompatibleNavigationContainer {
-        HomeView(
+        HealthHomeView(
             dependencies: .preview,
             viewModel: .preview,
             medicalDocumentUploadViewModel: .preview(),

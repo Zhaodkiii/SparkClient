@@ -804,3 +804,141 @@ struct ChatToolConsentMessageCardView: View {
         RoundedRectangle(cornerRadius: ChatToolInteractionCardStyle.cardCornerRadius, style: .continuous)
     }
 }
+
+struct ChatLocationPermissionMessageCardView: View {
+    let card: ChatLocationPermissionCard
+    let onAction: (ChatLocationPermissionCard) -> Void
+
+    private var isResolved: Bool {
+        card.status != .pending
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            header
+
+            Text(bodyText)
+                .font(.system(size: ChatToolInteractionCardStyle.bodyFontSize))
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 12)
+
+            if isResolved {
+                resolvedSummary
+                    .padding(.top, 12)
+            } else {
+                actionButton
+                    .padding(.top, 12)
+            }
+        }
+        .padding(ChatToolInteractionCardStyle.cardPadding)
+        .background(ChatToolInteractionCardStyle.cardBackground, in: cardShape)
+        .overlay {
+            cardShape.strokeBorder(ChatToolInteractionCardStyle.borderColor, lineWidth: 1)
+        }
+        .shadow(color: Color.black.opacity(0.04), radius: 12, x: 0, y: 6)
+        .padding(.top, 8)
+    }
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "location.circle.fill")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(accentColor)
+                .frame(width: ChatToolInteractionCardStyle.badgeSize, height: ChatToolInteractionCardStyle.badgeSize)
+                .background(accentColor.opacity(0.12), in: Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: ChatToolInteractionCardStyle.headerFontSize, weight: .medium))
+                    .foregroundStyle(.primary)
+                Text(subtitle)
+                    .font(.system(size: ChatToolInteractionCardStyle.subtitleFontSize))
+                    .foregroundStyle(ChatToolInteractionCardStyle.mutedText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var actionButton: some View {
+        HStack {
+            Spacer(minLength: 0)
+            Button(actionTitle) {
+                onAction(card)
+            }
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(Color.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(accentColor, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var resolvedSummary: some View {
+        Label(card.resultText ?? resolvedText, systemImage: resolvedIcon)
+            .font(.system(size: ChatToolInteractionCardStyle.headerFontSize, weight: .semibold))
+            .foregroundStyle(resolvedColor)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private var title: String {
+        switch card.mode {
+        case .requestPermission:
+            return isResolved ? resolvedTitle : "需要位置权限"
+        case .openSettings:
+            return "无法获取当前位置"
+        }
+    }
+
+    private var subtitle: String {
+        switch card.mode {
+        case .requestPermission:
+            return "授权后将重新获取当前位置并继续回复。"
+        case .openSettings:
+            return "你可以前往系统设置开启位置权限。"
+        }
+    }
+
+    private var bodyText: String {
+        switch card.mode {
+        case .requestPermission:
+            return "AI 需要你的当前位置来完成本次查询。点击授权后，系统会弹出位置权限确认。"
+        case .openSettings:
+            return "当前应用没有位置权限，因此本次无法读取当前位置。AI 会基于无权限状态继续回答。"
+        }
+    }
+
+    private var actionTitle: String {
+        switch card.mode {
+        case .requestPermission:
+            return "允许位置"
+        case .openSettings:
+            return "打开设置"
+        }
+    }
+
+    private var accentColor: Color {
+        card.mode == .openSettings ? .orange : .accentColor
+    }
+
+    private var resolvedTitle: String {
+        card.result == .authorized ? "已允许位置权限" : "未允许位置权限"
+    }
+
+    private var resolvedText: String {
+        card.result == .authorized ? "用户已允许位置权限。" : "用户未允许位置权限。"
+    }
+
+    private var resolvedIcon: String {
+        card.result == .authorized ? "checkmark.circle.fill" : "exclamationmark.circle.fill"
+    }
+
+    private var resolvedColor: Color {
+        card.result == .authorized ? .green : .secondary
+    }
+
+    private var cardShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: ChatToolInteractionCardStyle.cardCornerRadius, style: .continuous)
+    }
+}

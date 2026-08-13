@@ -131,6 +131,20 @@ extension ChatMessageBlock {
                     onShowDetails: context.onToolConsentCardShowDetails
                 )
             }
+
+        case .locationPermissionCards(let cards):
+            ForEach(cards) { card in
+                ChatLocationPermissionMessageCardView(
+                    card: card,
+                    onAction: context.onLocationPermissionCardAction
+                )
+            }
+
+        case .weatherConfigCard(let payload):
+            ChatWeatherConfigMessageCardView(
+                payload: payload,
+                onOpen: context.onWeatherConfigCardOpen
+            )
             
             // 11. 结构化健康卡片
         case .structuredHealthCards(let blob):
@@ -149,6 +163,10 @@ extension ChatMessageBlock {
             // 12. 睡眠数据可视化
         case .sleepVisualization(let sleep):
             ChatSleepVisualizationMessageCard(model: sleep)
+
+            // 12a. 天气结果可视化
+        case .weatherVisualization(let weather):
+            WeatherResultCardView(result: weather)
 
             // 12b. 营养卡片
         case .nutritionCards(let payload):
@@ -310,6 +328,8 @@ extension ChatMessageBlock {
             return "正在结构化健康数据..."
         case .sleepVisualization:
             return "正在生成睡眠可视化..."
+        case .weatherVisualization:
+            return "正在生成天气卡片..."
         case .nutritionCards:
             return "正在生成营养卡片..."
         case .medicalRiskNotice:
@@ -332,6 +352,10 @@ extension ChatMessageBlock {
             return "等待选择健康资料..."
         case .toolConsentCards:
             return "等待数据授权..."
+        case .locationPermissionCards:
+            return "等待位置授权..."
+        case .weatherConfigCard:
+            return "正在准备天气配置卡片..."
         default:
             return "正在整理结果..."
         }

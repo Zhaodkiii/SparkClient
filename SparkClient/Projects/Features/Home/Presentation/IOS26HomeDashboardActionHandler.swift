@@ -4,6 +4,7 @@ import SwiftUI
 struct IOS26HomeDashboardActionHandler {
     let routeStore: AppRouteStore
     let homeViewModel: HomeViewModel
+    let medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
     let chatListViewModel: ChatListViewModel
     let deepTutorChatViewModel: DeepTutorChatViewModel
     let notificationClient: any NotificationClient
@@ -23,6 +24,9 @@ struct IOS26HomeDashboardActionHandler {
             }
         case .reportInterpretation:
             Task { await openQuickStart(mode: .reportInterpretation) }
+        case .reportUpload:
+            medicalDocumentUploadViewModel.reset()
+            medicalDocumentUploadViewModel.presentUploadPage()
         case .medication:
             homeViewModel.logMedicalListNavigation(kind: .medicationPlans)
             routeStore.route(to: .homeMedicalList(.medicationPlans, nil))

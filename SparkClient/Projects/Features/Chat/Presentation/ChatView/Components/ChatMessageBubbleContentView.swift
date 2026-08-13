@@ -52,6 +52,8 @@ struct ChatMessageBubbleContentView: View {
     let onToolConsentCardAllow: (ChatToolConsentCard) -> Void
     let onToolConsentCardDeny: (ChatToolConsentCard) -> Void
     let onToolConsentCardShowDetails: (ChatToolConsentCard) -> Void
+    let onLocationPermissionCardAction: (ChatLocationPermissionCard) -> Void
+    let onWeatherConfigCardOpen: (ChatWeatherConfigCardPayload) -> Void
     let savingStructuredHealthCardIDs: Set<UUID>
     let savingNutritionCardIDs: Set<UUID>
     let onStructuredHealthCardAction: (ChatStructuredHealthCardAction) -> Void
@@ -91,7 +93,9 @@ struct ChatMessageBubbleContentView: View {
                     node.render(context: renderContext)
                 }
             }
+#if DEBUG
             billingFooter
+#endif
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -129,6 +133,8 @@ struct ChatMessageBubbleContentView: View {
             onToolConsentCardAllow: onToolConsentCardAllow,
             onToolConsentCardDeny: onToolConsentCardDeny,
             onToolConsentCardShowDetails: onToolConsentCardShowDetails,
+            onLocationPermissionCardAction: onLocationPermissionCardAction,
+            onWeatherConfigCardOpen: onWeatherConfigCardOpen,
             onStructuredHealthCardAction: onStructuredHealthCardAction,
             onStructuredHealthCardOpenPreview: onStructuredHealthCardOpenPreview,
             onNutritionCardAction: onNutritionCardAction,
@@ -308,6 +314,7 @@ struct ChatMessageBubbleContentView: View {
         
     }
 
+#if DEBUG
     @ViewBuilder
     private var billingFooter: some View {
         if let billingEstimate {
@@ -326,6 +333,7 @@ struct ChatMessageBubbleContentView: View {
             .accessibilityLabel(billingEstimate.displayText)
         }
     }
+#endif
 
     private var shouldRenderErrorCard: Bool {
         message.deliveryState == .failed && message.role != .user
@@ -595,8 +603,11 @@ private enum ChatMessageTimelineProjector {
                 .toolMemberSelectionCards,
                 .healthResourceCandidateCards,
                 .toolConsentCards,
+                .locationPermissionCards,
                 .structuredHealthCards,
                 .sleepVisualization,
+                .weatherVisualization,
+                .weatherConfigCard,
                 .nutritionCards,
                 .medicalRiskNotice,
                 .workoutVisualization,
@@ -619,13 +630,13 @@ private struct ChatToolTimelineNodeView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if node.presentations.isEmpty {
-                if let toolBlock = node.toolBlock {
+                if let toolBlock = node.toolBlock, shouldRenderToolBlock(toolBlock) {
                     toolBlock.render(context: context)
                 } else {
                     ChatToolTimelinePendingView(title: "正在整理结构化数据...")
                 }
             } else {
-                if let toolBlock = node.toolBlock {
+                if let toolBlock = node.toolBlock, shouldRenderToolBlock(toolBlock) {
                     toolBlock.render(context: context)
                 }
                 ForEach(node.presentations) { presentation in
@@ -641,12 +652,24 @@ private struct ChatToolTimelineNodeView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private func shouldRenderToolBlock(_ toolBlock: ChatMessageBlock) -> Bool {
+        if toolBlock.toolName == SparkToolName.queryWeather.rawValue,
+           node.presentations.contains(where: { $0.kind == .weatherVisualization || $0.kind == .weatherConfigCard }) {
+            return false
+        }
+        return true
+    }
+
     private func pendingTitle(for kind: ChatMessageBlockKind) -> String {
         switch kind {
         case .structuredHealthCards:
             return "正在结构化健康数据..."
         case .sleepVisualization:
             return "正在生成睡眠可视化..."
+        case .weatherVisualization:
+            return "正在生成天气卡片..."
+        case .weatherConfigCard:
+            return "正在准备天气配置卡片..."
         case .nutritionCards:
             return "正在生成营养卡片..."
         case .medicalRiskNotice:
@@ -667,6 +690,8 @@ private struct ChatToolTimelineNodeView: View {
             return "等待选择健康资料..."
         case .toolConsentCards:
             return "等待数据授权..."
+        case .locationPermissionCards:
+            return "等待位置授权..."
         default:
             return "正在整理结果..."
         }

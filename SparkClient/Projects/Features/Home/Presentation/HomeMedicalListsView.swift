@@ -21,6 +21,8 @@ struct HomeMedicalListView: View {
     let onMedicationPlansUpdated: (([SparkMedicalSyncAPI.RemoteMedicationPlan]) -> Void)?
     let onPrescriptionsUpdated: (([SparkMedicalSyncAPI.RemotePrescription]) -> Void)?
     let onMedicineBoxesUpdated: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)?
+    let selectedMemberID: Int?
+    let onMemberIDSelected: ((Int) -> Void)?
 
     init(
         route: HomeMedicalListRoute,
@@ -33,7 +35,9 @@ struct HomeMedicalListView: View {
         onExaminationReportsUpdated: (([SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments]) -> Void)?,
         onMedicationPlansUpdated: (([SparkMedicalSyncAPI.RemoteMedicationPlan]) -> Void)?,
         onPrescriptionsUpdated: (([SparkMedicalSyncAPI.RemotePrescription]) -> Void)?,
-        onMedicineBoxesUpdated: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)?
+        onMedicineBoxesUpdated: (([SparkMedicalSyncAPI.RemoteMedicineBox]) -> Void)?,
+        selectedMemberID: Int? = nil,
+        onMemberIDSelected: ((Int) -> Void)? = nil
     ) {
         self.route = route
         self.completeData = completeData
@@ -46,6 +50,8 @@ struct HomeMedicalListView: View {
         self.onMedicationPlansUpdated = onMedicationPlansUpdated
         self.onPrescriptionsUpdated = onPrescriptionsUpdated
         self.onMedicineBoxesUpdated = onMedicineBoxesUpdated
+        self.selectedMemberID = selectedMemberID
+        self.onMemberIDSelected = onMemberIDSelected
     }
 
     var body: some View {
@@ -109,7 +115,9 @@ struct HomeMedicalListView: View {
                 initialFocus: initialFocus,
                 onMedicationPlansChanged: onMedicationPlansUpdated,
                 onPrescriptionsChanged: onPrescriptionsUpdated,
-                onMedicineBoxesChanged: onMedicineBoxesUpdated
+                onMedicineBoxesChanged: onMedicineBoxesUpdated,
+                selectedMemberID: selectedMemberID,
+                onMemberIDSelected: onMemberIDSelected
             )
             .onDisappear {
                 onDismiss?()

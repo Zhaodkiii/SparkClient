@@ -201,6 +201,44 @@ final class AISettingsAndResolverTests: XCTestCase {
         XCTAssertEqual(restored.scenarioModelSource(for: .chat), .trial)
     }
 
+    func testChatComposerStartupPreferencesRoundTripThroughPreferencesPayload() throws {
+        var snapshot = AISettingsSnapshot.default
+        snapshot.chatComposerStartupPreferences = ChatComposerStartupPreferences(
+            memberProfileEnabled: true,
+            useTools: true,
+            useKnowledgeBag: false,
+            useWebSearch: false,
+            reasoningEnabled: true,
+            reasoningEffortTier: 3
+        )
+
+        let data = try JSONEncoder().encode(snapshot.preferencesPayload)
+        let decoded = try JSONDecoder().decode(AISettingsSnapshot.PreferencesPayload.self, from: data)
+        let restored = AISettingsSnapshot(allModels: [], apiKeys: [], preferences: decoded)
+
+        XCTAssertEqual(restored.chatComposerStartupPreferences, snapshot.chatComposerStartupPreferences)
+    }
+
+    func testChatComposerRuntimeFlagsStartFromStartupPreferences() {
+        let prefs = ChatComposerStartupPreferences(
+            memberProfileEnabled: false,
+            useTools: true,
+            useKnowledgeBag: false,
+            useWebSearch: false,
+            reasoningEnabled: true,
+            reasoningEffortTier: 2
+        )
+
+        let flags = ChatComposerRuntimeFlags(startupPreferences: prefs)
+
+        XCTAssertTrue(flags.useTools)
+        XCTAssertFalse(flags.useKnowledgeBag)
+        XCTAssertFalse(flags.useWebSearch)
+        XCTAssertTrue(flags.reasoningEnabled)
+        XCTAssertEqual(flags.reasoningEffortTier, 2)
+        XCTAssertNil(flags.selectedChatModelName)
+    }
+
     func testChatConversationUIDefaultsToSwiftUINewArchitecture() {
         XCTAssertEqual(ChatConversationUIPreferences.fallback.architecture, .swiftUI)
         XCTAssertEqual(ChatConversationUIPreferences.fallback.swiftUIRefreshBehavior, .stable)

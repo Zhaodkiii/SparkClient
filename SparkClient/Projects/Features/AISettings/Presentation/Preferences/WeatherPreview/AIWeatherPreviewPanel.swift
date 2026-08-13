@@ -19,6 +19,7 @@ private enum AIWeatherPreviewState: Equatable {
 }
 
 private struct AIWeatherPreviewModel: Equatable {
+    var result: WeatherResult
     var provider: WeatherProviderID
     var providerName: String
     var sourceName: String
@@ -357,45 +358,18 @@ struct AIWeatherPreviewPanel: View {
     }
 
     private func loadedView(_ model: AIWeatherPreviewModel) -> some View {
-        VStack(alignment: .leading, spacing: 18) {
-            daySelector
-
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(model.temperatureText)
-                        .font(.system(size: 58, weight: .bold, design: .rounded))
-                        .minimumScaleFactor(0.72)
-                        .lineLimit(1)
-                        .foregroundStyle(AIWeatherPreviewPalette.primaryText)
-
-                    Text(model.condition)
-                        .font(.body.weight(.medium))
-                        .foregroundStyle(AIWeatherPreviewPalette.primaryText)
-                        .lineLimit(2)
-
-                    HStack(spacing: 12) {
-                        metricText(title: "H", value: model.highTemperatureText)
-                        metricText(title: "L", value: model.lowTemperatureText)
-                    }
+        WeatherResultCardView(
+            result: model.result,
+            selectedDayID: viewModel.selectedDayID,
+            days: viewModel.days.map { WeatherResultCardDay(id: $0.id, date: $0.date) },
+            showsHeader: false,
+            wrapsInCard: false,
+            onSelectDay: { dayID in
+                withAnimation(.interactiveSpring(response: 0.32, dampingFraction: 0.92)) {
+                    viewModel.selectedDayID = dayID
                 }
-
-                Spacer(minLength: 8)
-
-                Image(systemName: symbolName(for: model.condition))
-                    .font(.system(size: 54, weight: .semibold))
-                    .foregroundStyle(symbolColor(for: model.condition))
-                    .frame(width: 62, height: 62)
-                    .padding(.top, 8)
             }
-
-            VStack(spacing: 10) {
-                metricRow(icon: "wind", title: L10n.text("ai_settings.weather.preview.wind", fallback: "风速"), value: model.windText)
-                metricRow(icon: "drop.fill", title: L10n.text("ai_settings.weather.preview.humidity", fallback: "湿度"), value: model.humidityText)
-                metricRow(icon: "cloud.rain.fill", title: L10n.text("ai_settings.weather.preview.precipitation", fallback: "降水概率"), value: model.precipitationText)
-            }
-
-            sourceFooter(model)
-        }
+        )
     }
 
     private var daySelector: some View {
@@ -597,6 +571,7 @@ private extension AIWeatherPreviewDay {
 private extension AIWeatherPreviewModel {
     init(result: WeatherResult, provider: WeatherProviderID, selectedDayID: Int) {
         let isForecastDay = selectedDayID > 0
+        self.result = result
         self.provider = provider
         providerName = result.providerName
         sourceName = provider.previewSourceName

@@ -64,7 +64,7 @@ final class AppRouteStore: ObservableObject {
         case deepTutor = 6
         /// iOS 26 专用搜索 Tab。
         case search = 7
-        /// 传统健康首页（医疗档案、营养等），由 `HealthHomeView` / 旧 `HomeView` 承载。
+        /// 传统健康首页（医疗档案、营养等），由 `HealthHomeView` 承载。
         case health = 8
     }
 
@@ -111,17 +111,27 @@ final class AppRouteStore: ObservableObject {
     }
 
     /// `.home` 是 iOS 26 工作台；经典系统没有独立工作台，落到健康首页。
-    /// iOS 26 工作台发起的设置与医疗子页由 `.home` 栈独立承载，经典系统继续复用传统 `.health` / `.settings` 栈。
+    /// iOS 26 下若当前已在 `.home` / `.health` 宿主栈内，则优先沿当前宿主继续 push；
+    /// 否则再回退到默认承载链路，避免工作台与健康页互相串栈。
     private func hostTab(for route: AppRoute) -> RootTab {
         switch route {
         case .home:
             return Self.supportsIOS26Home ? .home : .health
         case .homeMedicalList, .homeFamilyMedicineCabinet:
-            return Self.supportsIOS26Home ? .home : .health
+            return currentHomeHostTab(default: Self.supportsIOS26Home ? .home : .health)
         case .settings, .aiSettings, .accountManagement:
-            return Self.supportsIOS26Home ? .home : .settings
+            return currentHomeHostTab(default: Self.supportsIOS26Home ? .home : .settings)
         default:
             return route.rootTab
+        }
+    }
+
+    private func currentHomeHostTab(default fallback: RootTab) -> RootTab {
+        switch selectedTab {
+        case .home, .health:
+            return selectedTab
+        default:
+            return fallback
         }
     }
 

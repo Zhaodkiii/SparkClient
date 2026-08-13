@@ -8,7 +8,7 @@ nonisolated enum DeepTutorCaptureCardType: String, Codable, CaseIterable, Sendab
     var title: String {
         switch self {
         case .reportPhoto:
-            return "AI智能解读报告"
+            return "整理与查看报告数据"
         case .medicineBoxPhoto:
             return "AI智能识别药盒"
         case .skinPhoto:
@@ -19,7 +19,7 @@ nonisolated enum DeepTutorCaptureCardType: String, Codable, CaseIterable, Sendab
     var subtitle: String {
         switch self {
         case .reportPhoto:
-            return "上传体检报告、化验单、影像报告或 PDF，DeepTutor 将结合材料继续解读。"
+            return "上传体检报告、化验单、影像报告或 PDF，DeepTutor 将帮助提取关键数值并整理报告信息。"
         case .medicineBoxPhoto:
             return "拍摄药盒正面和关键信息，DeepTutor 将辅助识别药品名称与用药信息。"
         case .skinPhoto:

@@ -1,6 +1,50 @@
+import CoreLocation
 import Foundation
 
 extension ToolHub {
+    private func weatherConfigCard(for error: WeatherRuntimeError) -> ChatWeatherConfigCardPayload? {
+        let actionTitle = L10n.text("ai_settings.weather.preview.open_settings", fallback: "去设置开启")
+        switch error {
+        case .disabled:
+            return ChatWeatherConfigCardPayload(
+                reason: .disabled,
+                title: "天气查询未启用",
+                message: "请先在 AI 设置里打开天气工具，再继续获取天气。",
+                actionTitle: actionTitle
+            )
+        case .missingActiveProvider:
+            return ChatWeatherConfigCardPayload(
+                reason: .missingProvider,
+                title: "还没有启用天气供应商",
+                message: "请在天气工具设置里启用一个天气供应商，聊天才能继续获取实时天气。",
+                actionTitle: actionTitle
+            )
+        case .missingAPIKey(let provider):
+            return ChatWeatherConfigCardPayload(
+                reason: .missingAPIKey,
+                title: "\(provider) 还没配置好",
+                message: "请先补充天气供应商的 API Key，再回来继续查询天气。",
+                actionTitle: actionTitle
+            )
+        case .invalidEndpoint:
+            return ChatWeatherConfigCardPayload(
+                reason: .invalidEndpoint,
+                title: "天气供应商配置有误",
+                message: "当前天气服务地址无效，请检查天气工具里的供应商配置。",
+                actionTitle: actionTitle
+            )
+        case .unsupportedProvider:
+            return ChatWeatherConfigCardPayload(
+                reason: .unsupportedProvider,
+                title: "当前天气供应商暂不支持",
+                message: "请切换到一个已支持的天气供应商后，再继续查询天气。",
+                actionTitle: actionTitle
+            )
+        default:
+            return nil
+        }
+    }
+
     func runExternalConnectorTool(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
         if invocation.name == SparkToolName.searchOnline.rawValue || invocation.name == SparkToolName.searchArxivPapers.rawValue {
             return await runWebSearchTool(invocation: invocation, context: context)
@@ -88,21 +132,25 @@ extension ToolHub {
                 module: .deepTutorChat
             )
             let markdown = result.markdown
-            let rich = makeWeatherRichBlocks(
-                result: result,
-                toolCallID: normalizedToolCallID(from: context)
+            let baseResult = ToolExecutionResult(
+                toolName: invocation.name,
+                outputText: markdown,
+                sensitive: true,
+                shouldBypassModel: false,
+                sideEffects: config.provider == .weatherKit ? [.weatherVisualization(result)] : []
             )
-            return returnWithRichBlockSideEffects(
-                context: context,
-                result: ToolExecutionResult(
-                    toolName: invocation.name,
-                    outputText: markdown,
-                    sensitive: true,
-                    shouldBypassModel: false
-                ),
-                richBlocks: rich
-            )
+            return baseResult.withToolCallID(normalizedToolCallID(from: context))
         } catch {
+            if let weatherError = error as? WeatherRuntimeError,
+               let card = weatherConfigCard(for: weatherError) {
+                return ToolExecutionResult(
+                    toolName: invocation.name,
+                    outputText: weatherError.localizedDescription,
+                    sensitive: false,
+                    shouldBypassModel: false,
+                    sideEffects: [.weatherConfigCard(card)]
+                ).withToolCallID(normalizedToolCallID(from: context))
+            }
             logger.warning(
                 "deeptutor.weather.query_failed conversation=\(shortConversationID(context.threadID)) error=\(error.localizedDescription)",
                 module: .deepTutorChat
@@ -169,6 +217,53 @@ extension ToolHub {
     }
 
     func runCurrentLocationTool(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
+        switch SparkLocationService.authorizationStatus() {
+        case .notDetermined:
+            guard let toolInteractionCoordinator else {
+                return ToolExecutionResult(
+                    toolName: invocation.name,
+                    outputText: "尚未获得定位授权，请询问用户所在城市，或引导用户开启位置权限后重试。",
+                    sensitive: false,
+                    shouldBypassModel: true
+                )
+            }
+            let permissionResult = await toolInteractionCoordinator.requestLocationPermission(
+                threadID: context.threadID,
+                toolCallID: context.pendingToolCallID
+            )
+            switch permissionResult {
+            case .success(let decision) where decision.authorized:
+                break
+            case .success(let decision):
+                return locationPermissionDeniedResult(
+                    invocation: invocation,
+                    message: "用户未授权当前位置访问（\(decision.statusDescription)）。请改为询问用户所在城市，或说明需要到系统设置开启位置权限。",
+                    includeSettingsCard: true
+                )
+            case .cancelled, .conflict:
+                return ToolExecutionResult(
+                    toolName: invocation.name,
+                    outputText: "用户尚未完成位置授权。请继续当前对话，必要时询问用户所在城市。",
+                    sensitive: false,
+                    shouldBypassModel: false
+                )
+            }
+        case .denied, .restricted:
+            return locationPermissionDeniedResult(
+                invocation: invocation,
+                message: "当前应用没有位置权限，无法获取当前位置。请改为询问用户所在城市，或说明用户可在系统设置中开启位置权限。",
+                includeSettingsCard: true
+            )
+        case .authorizedAlways, .authorizedWhenInUse:
+            break
+        @unknown default:
+            return locationPermissionDeniedResult(
+                invocation: invocation,
+                message: "当前定位权限状态不可用，无法获取当前位置。请改为询问用户所在城市。",
+                includeSettingsCard: false
+            )
+        }
+
         do {
             let coordinate = try await SparkLocationService.currentCoordinate()
             let output = """
@@ -204,6 +299,34 @@ extension ToolHub {
                 shouldBypassModel: true
             )
         }
+    }
+
+    private func locationPermissionDeniedResult(
+        invocation: ToolInvocation,
+        message: String,
+        includeSettingsCard: Bool
+    ) -> ToolExecutionResult {
+        let sideEffects: [ToolSideEffect]
+        if includeSettingsCard {
+            sideEffects = [
+                .locationPermissionCards([
+                    ChatLocationPermissionCard(
+                        mode: .openSettings,
+                        result: .denied,
+                        status: .pending
+                    )
+                ])
+            ]
+        } else {
+            sideEffects = []
+        }
+        return ToolExecutionResult(
+            toolName: invocation.name,
+            outputText: message,
+            sensitive: false,
+            shouldBypassModel: false,
+            sideEffects: sideEffects
+        )
     }
 
 

@@ -10,4 +10,15 @@ struct ChatComposerRuntimeFlags: Equatable, Sendable {
     var reasoningEffortTier: Int = 1
     /// `nil` 表示使用配置解析的默认模型（不强制 runtime override）。
     var selectedChatModelName: String?
+
+    init() {}
+
+    init(startupPreferences: ChatComposerStartupPreferences) {
+        useTools = startupPreferences.useTools
+        useKnowledgeBag = startupPreferences.useKnowledgeBag
+        useWebSearch = startupPreferences.useWebSearch
+        reasoningEnabled = startupPreferences.reasoningEnabled
+        reasoningEffortTier = startupPreferences.reasoningEffortTier
+        selectedChatModelName = nil
+    }
 }

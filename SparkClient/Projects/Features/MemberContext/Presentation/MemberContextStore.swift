@@ -57,6 +57,18 @@ final class MemberContextStore: ObservableObject {
         persistSelection(memberID)
     }
 
+    /// 新建成员成功后先乐观写入本地上下文并设为选中，等待后续远端刷新校准完整列表。
+    func upsertAndSelect(_ member: Member) {
+        var members = context.members
+        if let index = members.firstIndex(where: { $0.id == member.id }) {
+            members[index] = member
+        } else {
+            members.append(member)
+        }
+        context = MemberContext(members: members, selectedMemberID: member.id)
+        persistSelection(member.id)
+    }
+
     /// 账号完整登出清理：清除当前账号持久化选中记录，清空内存上下文与活跃账号
     func clearSessionPersistenceAndReset() {
         if let activeAccountID {

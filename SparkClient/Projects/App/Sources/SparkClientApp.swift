@@ -17,6 +17,7 @@ struct SparkClientApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView(dependencies: container.contentDependencies)
+                .tint(Color("AccentColor"))
                 .environment(\.managedObjectContext, container.coreDataStack.viewContext)
                 .task {
                     appDelegate.pushAdapter = container.pushAdapter

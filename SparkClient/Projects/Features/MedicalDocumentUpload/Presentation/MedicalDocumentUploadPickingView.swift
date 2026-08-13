@@ -90,9 +90,39 @@ struct MedicalDocumentUploadPickingView: View {
             Text(L10n.text("medical.upload.current_member"))
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
-            Text(viewModel.selectedMemberName ?? L10n.text("medical.upload.member.not_selected"))
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(.primary)
+
+            MemberProfileBindingMenu(
+                memberContextStore: viewModel.memberContextStoreForLocalForms,
+                selectedMemberID: viewModel.selectedRecognitionMemberID,
+                onSelect: { memberID in
+                    viewModel.selectRecognitionMember(memberID: memberID)
+                }
+            ) {
+                HStack(spacing: 10) {
+                    Image(systemName: "person.crop.circle")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(Color.accentColor)
+
+                    Text(viewModel.selectedMemberName ?? L10n.text("medical.upload.member.not_selected"))
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.primary)
+
+                    Spacer()
+
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(uiColor: .secondarySystemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(Color(uiColor: .separator).opacity(0.28), lineWidth: 1)
+                )
+            }
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)

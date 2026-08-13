@@ -35,6 +35,12 @@ struct MemberProfileBindingMenu<Content: View>: View {
         return members.first(where: { $0.id == selectedMemberID })
     }
 
+    private func handleMemberCreated(_ member: Member) {
+        memberContextStore.upsertAndSelect(member)
+        onSelect(member.id)
+        showAddMemberSheet = false
+    }
+
     var body: some View {
         Menu {
             if showsNoneOption {
@@ -76,9 +82,17 @@ struct MemberProfileBindingMenu<Content: View>: View {
         .sheet(isPresented: $showAddMemberSheet) {
             CompatibleNavigationContainer {
                 if let homeDependencies {
-                    MemberSetupFlowView(store: memberContextStore, homeDependencies: homeDependencies)
+                    MemberSetupFlowView(
+                        store: memberContextStore,
+                        homeDependencies: homeDependencies,
+                        onMemberCreated: handleMemberCreated
+                    )
                 } else {
-                    AddFamilyMemberView(mode: .create, store: memberContextStore)
+                    AddFamilyMemberView(
+                        mode: .create,
+                        store: memberContextStore,
+                        onCreatedMemberCompleted: handleMemberCreated
+                    )
                 }
             }
         }

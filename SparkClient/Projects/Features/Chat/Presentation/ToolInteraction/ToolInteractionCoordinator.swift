@@ -37,6 +37,17 @@ protocol ChatInlineToolInteractionCardSink: AnyObject {
         completionID: UUID,
         toolCallID: String?
     ) async -> Bool
+
+    func presentInlineLocationPermissionCard(
+        threadID: UUID?,
+        completionID: UUID,
+        toolCallID: String?
+    ) async -> Bool
+}
+
+nonisolated struct ToolLocationPermissionDecision: Equatable, Sendable {
+    let authorized: Bool
+    let statusDescription: String
 }
 
 enum ToolInteractionCancelReason: String, Sendable {
@@ -77,6 +88,7 @@ final class ToolInteractionCoordinator: ObservableObject {
         /// 健康资料候选确认回调
         case healthResourceCandidates(CheckedContinuation<InteractionResult<[HealthResourceToolCandidateDTO]>, Never>)
         case attachmentCapture(CheckedContinuation<InteractionResult<ToolAttachmentCaptureResult>, Never>)
+        case locationPermission(CheckedContinuation<InteractionResult<ToolLocationPermissionDecision>, Never>)
     }
 
     /// 等待用户操作后的结果类型
@@ -106,6 +118,7 @@ final class ToolInteractionCoordinator: ObservableObject {
     private var inlineHealthResourceCandidateContinuations: [UUID: CheckedContinuation<InteractionResult<[HealthResourceToolCandidateDTO]>, Never>] = [:]
     private var inlineConsentContinuations: [UUID: CheckedContinuation<InteractionResult<ToolConsentDecision>, Never>] = [:]
     private var inlineAttachmentCaptureContinuations: [UUID: CheckedContinuation<InteractionResult<ToolAttachmentCaptureResult>, Never>] = [:]
+    private var inlineLocationPermissionContinuations: [UUID: CheckedContinuation<InteractionResult<ToolLocationPermissionDecision>, Never>] = [:]
     weak var inlineCardSink: (any ChatInlineToolInteractionCardSink)?
     private var interactionPreferences: ChatToolInteractionPreferences = .default
 
@@ -152,6 +165,10 @@ final class ToolInteractionCoordinator: ObservableObject {
         let attachmentContinuations = inlineAttachmentCaptureContinuations
         inlineAttachmentCaptureContinuations.removeAll()
         attachmentContinuations.values.forEach { $0.resume(returning: .cancelled) }
+
+        let locationContinuations = inlineLocationPermissionContinuations
+        inlineLocationPermissionContinuations.removeAll()
+        locationContinuations.values.forEach { $0.resume(returning: .cancelled) }
     }
 
     func hasPendingInlineInteraction(completionID: UUID) -> Bool {
@@ -160,6 +177,7 @@ final class ToolInteractionCoordinator: ObservableObject {
             || inlineHealthResourceCandidateContinuations[completionID] != nil
             || inlineConsentContinuations[completionID] != nil
             || inlineAttachmentCaptureContinuations[completionID] != nil
+            || inlineLocationPermissionContinuations[completionID] != nil
     }
 
     // MARK: - Public API 对外接口
@@ -240,6 +258,18 @@ final class ToolInteractionCoordinator: ObservableObject {
                 )
             )
         }
+    }
+
+    func requestLocationPermission(
+        threadID: UUID?,
+        toolCallID: String? = nil
+    ) async -> InteractionResult<ToolLocationPermissionDecision> {
+        guard let inlineCardSink else { return .cancelled }
+        return await requestInlineLocationPermission(
+            threadID: threadID,
+            toolCallID: toolCallID,
+            sink: inlineCardSink
+        )
     }
 
     /// 请求用户选择成员
@@ -523,6 +553,16 @@ final class ToolInteractionCoordinator: ObservableObject {
         continuation.resume(returning: .cancelled)
     }
 
+    func completeInlineLocationPermission(id: UUID, decision: ToolLocationPermissionDecision) {
+        guard let continuation = inlineLocationPermissionContinuations.removeValue(forKey: id) else { return }
+        continuation.resume(returning: .success(decision))
+    }
+
+    func cancelInlineLocationPermission(id: UUID) {
+        guard let continuation = inlineLocationPermissionContinuations.removeValue(forKey: id) else { return }
+        continuation.resume(returning: .cancelled)
+    }
+
     private func requestInlineQuestionAnswer(
         threadID: UUID?,
         prompt: ToolQuestionPrompt,
@@ -652,6 +692,29 @@ final class ToolInteractionCoordinator: ObservableObject {
                 if didPresent == false {
                     await MainActor.run {
                         self.cancelInlineAttachmentCapture(id: completionID)
+                    }
+                }
+            }
+        }
+    }
+
+    private func requestInlineLocationPermission(
+        threadID: UUID?,
+        toolCallID: String?,
+        sink: any ChatInlineToolInteractionCardSink
+    ) async -> InteractionResult<ToolLocationPermissionDecision> {
+        let completionID = UUID()
+        return await withCheckedContinuation { continuation in
+            inlineLocationPermissionContinuations[completionID] = continuation
+            Task {
+                let didPresent = await sink.presentInlineLocationPermissionCard(
+                    threadID: threadID,
+                    completionID: completionID,
+                    toolCallID: toolCallID
+                )
+                if didPresent == false {
+                    await MainActor.run {
+                        self.cancelInlineLocationPermission(id: completionID)
                     }
                 }
             }

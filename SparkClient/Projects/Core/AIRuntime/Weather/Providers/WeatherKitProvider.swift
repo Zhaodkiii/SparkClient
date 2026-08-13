@@ -55,7 +55,9 @@ struct WeatherKitProvider: Sendable {
     @available(iOS 16.0, *)
     private func queryWeatherKit(_ request: WeatherQueryRequest) async throws -> WeatherResult {
         let location = CLLocation(latitude: request.latitude, longitude: request.longitude)
-        let weather = try await WeatherService.shared.weather(for: location)
+        let service = WeatherService.shared
+        let weather = try await service.weather(for: location)
+        let legalPageURL = try? await service.attribution.legalPageURL
         let normalizedRange = WeatherEndpointNormalizer.normalizedTimeRange(request.timeRange)
         let locationName = request.locationName
             ?? String(format: "%.2f, %.2f", request.latitude, request.longitude)
@@ -69,6 +71,7 @@ struct WeatherKitProvider: Sendable {
                 locationName: locationName,
                 latitude: request.latitude,
                 longitude: request.longitude,
+                legalPageURL: legalPageURL,
                 timeRange: request.timeRange,
                 observedAt: day.date,
                 temperatureC: day.highTemperature.value,
@@ -88,6 +91,7 @@ struct WeatherKitProvider: Sendable {
             locationName: locationName,
             latitude: request.latitude,
             longitude: request.longitude,
+            legalPageURL: legalPageURL,
             timeRange: request.timeRange,
             observedAt: weather.currentWeather.date,
             temperatureC: current.temperature.value,

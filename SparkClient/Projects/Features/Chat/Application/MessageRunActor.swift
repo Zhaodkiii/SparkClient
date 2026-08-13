@@ -890,7 +890,7 @@ actor MessageRunActor: ChatSideEffectSink {
                 return false
             }
             return await submitRichBlocks(blocks, assistantClientMessageID: assistantClientMessageID)
-        case .knowledgeCards, .taskCards, .captureCard, .workoutVisualization, .sleepVisualization, .nutritionCards, .externalConnectorRichBlocks:
+        case .knowledgeCards, .taskCards, .captureCard, .workoutVisualization, .sleepVisualization, .weatherVisualization, .weatherConfigCard, .nutritionCards, .locationPermissionCards, .externalConnectorRichBlocks:
             guard let blocks = ToolSideEffectBlockMapper.blocks(
                 for: effect,
                 assistantClientMessageID: assistantClientMessageID,
@@ -901,6 +901,9 @@ actor MessageRunActor: ChatSideEffectSink {
             }
             if case .sleepVisualization = effect, blocks.isEmpty {
                 logger.warning("睡眠可视化卡片发布跳过：payload 无法编码", module: .aiConfig)
+            }
+            if case .weatherVisualization = effect, blocks.isEmpty {
+                logger.warning("天气结果卡片发布跳过：payload 无法编码", module: .aiConfig)
             }
             guard blocks.isEmpty == false else { return false }
             return await submitRichBlocks(blocks, assistantClientMessageID: assistantClientMessageID)
@@ -1162,10 +1165,10 @@ actor MessageRunActor: ChatSideEffectSink {
         case .structuredHealthCards:
             // 须与父 tool 的 orderKey 绑定；无 tool 上下文时仅作兜底。
             return 2_100
-        case .sleepVisualization, .workoutVisualization, .nutritionCards, .healthResourceReference,
+        case .sleepVisualization, .weatherVisualization, .weatherConfigCard, .workoutVisualization, .nutritionCards, .healthResourceReference,
                 .captureCard, .knowledgeCards, .html, .taskCards,
                 .pendingMemberToolCards, .toolQuestionCards, .toolMemberSelectionCards,
-                .healthResourceCandidateCards, .toolConsentCards:
+                .healthResourceCandidateCards, .toolConsentCards, .locationPermissionCards:
             return 2_100
         case .medicalRiskNotice:
             return 2_900
@@ -1377,12 +1380,14 @@ private extension ChatMessageBlock {
             toolMemberSelectionCards: toolMemberSelectionCards,
             healthResourceCandidateCards: healthResourceCandidateCards,
             toolConsentCards: toolConsentCards,
+            locationPermissionCards: locationPermissionCards,
             locations: locations,
             routes: routes,
             events: events,
             healthCards: healthCards,
             structuredHealthCards: structuredHealthCards,
             sleepVisualization: sleepVisualization,
+            weatherVisualization: weatherVisualization,
             nutritionCards: nutritionCards,
             workoutVisualization: workoutVisualization,
             captureMessageCard: captureMessageCard,

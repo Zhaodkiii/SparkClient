@@ -30,6 +30,8 @@ final class ChatStateStore: ObservableObject {
     // MARK: - 输入框草稿 & 附件 状态
     /// 按会话ID存储输入框草稿内容（文本、附件、配置等）
     @Published private var composerDrafts: [UUID: ChatComposerDraft] = [:]
+    /// 新会话草稿的默认启动偏好。
+    private var composerStartupPreferences: ChatComposerStartupPreferences = .default
     /// 待发送附件上传进度（由发送业务逻辑实时回写更新）
     @Published private(set) var composerAttachmentUploadProgress: [UUID: Double] = [:]
     /// 选图后预处理/ OCR 附件状态（按附件ID维度管理）
@@ -240,7 +242,12 @@ final class ChatStateStore: ObservableObject {
     /// 获取指定会话完整草稿对象（无则返回空草稿）
     func composerDraft(for threadID: UUID?) -> ChatComposerDraft {
         guard let threadID else { return ChatComposerDraft() }
-        return composerDrafts[threadID] ?? ChatComposerDraft()
+        if let draft = composerDrafts[threadID] {
+            return draft
+        }
+        let draft = makeDefaultComposerDraft()
+        composerDrafts[threadID] = draft
+        return draft
     }
 
     /// 清空输入框全部内容（文本、附件、健康资料引用等）
@@ -339,7 +346,7 @@ final class ChatStateStore: ObservableObject {
     /// 彻底重置指定会话的整个输入草稿
     func clearComposer(for threadID: UUID?) {
         guard let threadID else { return }
-        composerDrafts[threadID] = ChatComposerDraft()
+        composerDrafts[threadID] = makeDefaultComposerDraft()
     }
 
     // MARK: - 输入框运行时配置 & 弹窗状态
@@ -358,6 +365,11 @@ final class ChatStateStore: ObservableObject {
         updateComposerDraft(for: threadID) { draft in
             draft.runtimeFlags.selectedChatModelName = name
         }
+    }
+
+    /// 更新新会话草稿的默认启动偏好。
+    func setComposerStartupPreferences(_ preferences: ChatComposerStartupPreferences) {
+        composerStartupPreferences = preferences
     }
 
     /// 控制附件菜单弹窗显示/隐藏
@@ -502,6 +514,7 @@ final class ChatStateStore: ObservableObject {
         isSending = false
         threadErrorMessages = [:]
         composerDrafts = [:]
+        composerStartupPreferences = .default
         composerAttachmentUploadProgress = [:]
         composerPreparedAttachmentStates = [:]
         messagePagingByThread = [:]
@@ -514,9 +527,15 @@ final class ChatStateStore: ObservableObject {
         update: (inout ChatComposerDraft) -> Void
     ) {
         guard let threadID else { return }
-        // 无草稿则新建空草稿
-        var draft = composerDrafts[threadID] ?? ChatComposerDraft()
+        // 无草稿则新建带默认启动偏好的草稿
+        var draft = composerDrafts[threadID] ?? makeDefaultComposerDraft()
         update(&draft)
         composerDrafts[threadID] = draft
+    }
+
+    private func makeDefaultComposerDraft() -> ChatComposerDraft {
+        var draft = ChatComposerDraft()
+        draft.runtimeFlags = ChatComposerRuntimeFlags(startupPreferences: composerStartupPreferences)
+        return draft
     }
 }

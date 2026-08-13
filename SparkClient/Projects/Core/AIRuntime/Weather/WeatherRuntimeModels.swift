@@ -19,7 +19,7 @@ enum WeatherProviderID: String, Codable, Sendable, CaseIterable {
             return .openWeather
         case "QWEATHER", "QWEATHER_KEY":
             return .qWeather
-        case "WEATHERKIT", "APPLEWEATHER", "APPLE_WEATHER":
+        case "WEATHERKIT", "APPLEWEATHER", "APPLEWEATHER_KEY", "APPLE_WEATHER", "APPLE WEATHER":
             return .weatherKit
         default:
             return WeatherProviderID(rawValue: normalized)
@@ -163,11 +163,12 @@ struct GeocodeResult: Codable, Equatable, Sendable {
     var state: String?
 }
 
-struct WeatherResult: Codable, Equatable, Sendable {
+nonisolated struct WeatherResult: Codable, Equatable, Sendable {
     var providerName: String
     var locationName: String
     var latitude: Double
     var longitude: Double
+    var legalPageURL: URL?
     var timeRange: String
     var observedAt: Date?
     var temperatureC: Double?

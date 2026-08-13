@@ -81,6 +81,16 @@ struct ChatCaptureTypeMessageCard: View {
                     .foregroundStyle(Color(uiColor: .systemRed))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+
+            if let disclaimer = spec.disclaimer {
+                Text(disclaimer)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.top, 2)
+            }
         }
         .padding(16)
         .background(
@@ -400,6 +410,7 @@ struct ChatCaptureTypeMessageCard: View {
 private struct CaptureCardSpec {
     let title: String
     let subtitle: String
+    let disclaimer: String?
     let tint: Color
     let examples: [CaptureCardExample]
     let supportsFiles: Bool
@@ -409,6 +420,7 @@ private struct CaptureCardSpec {
         case .reportPhoto:
             title = L10n.text("chat.capture_card.report.title")
             subtitle = L10n.text("chat.capture_card.report.subtitle")
+            disclaimer = L10n.text("chat.capture_card.report.disclaimer")
             tint = .blue
             examples = [
                 CaptureCardExample(title: L10n.text("chat.capture_card.report.example.flat"), icon: "doc.text.fill"),
@@ -418,6 +430,7 @@ private struct CaptureCardSpec {
         case .medicineBoxPhoto:
             title = L10n.text("chat.capture_card.medicine_box.title")
             subtitle = L10n.text("chat.capture_card.medicine_box.subtitle")
+            disclaimer = nil
             tint = .purple
             examples = [
                 CaptureCardExample(title: L10n.text("chat.capture_card.medicine_box.example.flat"), icon: "shippingbox"),
@@ -427,6 +440,7 @@ private struct CaptureCardSpec {
         case .skinPhoto:
             title = L10n.text("chat.capture_card.skin.title")
             subtitle = L10n.text("chat.capture_card.skin.subtitle")
+            disclaimer = nil
             tint = .green
             examples = []
             supportsFiles = false

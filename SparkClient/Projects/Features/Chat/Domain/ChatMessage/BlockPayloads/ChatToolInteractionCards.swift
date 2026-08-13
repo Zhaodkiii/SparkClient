@@ -178,3 +178,56 @@ nonisolated struct ChatToolConsentCard: Codable, Equatable, Identifiable, Sendab
         self.updatedAt = updatedAt
     }
 }
+
+nonisolated enum ChatLocationPermissionCardMode: String, Codable, Sendable {
+    case requestPermission
+    case openSettings
+}
+
+nonisolated enum ChatLocationPermissionCardResult: String, Codable, Sendable {
+    case authorized
+    case denied
+    case unavailable
+}
+
+nonisolated struct ChatLocationPermissionCard: Codable, Equatable, Identifiable, Sendable {
+    let id: UUID
+    let completionID: UUID?
+    let mode: ChatLocationPermissionCardMode
+    var result: ChatLocationPermissionCardResult?
+    var status: ChatInlineToolCardStatus
+    var resultText: String?
+    let createdAt: Date
+    var updatedAt: Date
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case completionID = "completionId"
+        case mode
+        case result
+        case status
+        case resultText
+        case createdAt
+        case updatedAt
+    }
+
+    init(
+        id: UUID = UUID(),
+        completionID: UUID? = nil,
+        mode: ChatLocationPermissionCardMode,
+        result: ChatLocationPermissionCardResult? = nil,
+        status: ChatInlineToolCardStatus = .pending,
+        resultText: String? = nil,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) {
+        self.id = id
+        self.completionID = completionID
+        self.mode = mode
+        self.result = result
+        self.status = status
+        self.resultText = resultText
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}

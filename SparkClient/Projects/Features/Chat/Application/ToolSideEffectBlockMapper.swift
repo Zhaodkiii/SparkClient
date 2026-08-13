@@ -95,6 +95,17 @@ nonisolated enum ToolSideEffectBlockMapper {
                     sleepVisualization: model
                 )
             ]
+        case .weatherVisualization(let result):
+            guard isEncodable(result) else { return nil }
+            return [
+                ChatMessageBlock(
+                    anchor: normalizedAnchor.map(ChatBlockAnchor.toolCall),
+                    kind: .weatherVisualization,
+                    toolCallID: normalizedAnchor,
+                    parentToolCallID: normalizedAnchor,
+                    weatherVisualization: result
+                )
+            ]
         case .nutritionCards(let cards):
             guard cards.isEmpty == false else { return nil }
             let payload = ChatNutritionCardsPayload(cards: cards)
@@ -106,6 +117,28 @@ nonisolated enum ToolSideEffectBlockMapper {
                     toolCallID: normalizedAnchor,
                     parentToolCallID: normalizedAnchor,
                     nutritionCards: payload
+                )
+            ]
+        case .locationPermissionCards(let cards):
+            guard cards.isEmpty == false, isEncodable(cards) else { return nil }
+            return [
+                ChatMessageBlock(
+                    anchor: normalizedAnchor.map(ChatBlockAnchor.toolCall),
+                    kind: .locationPermissionCards,
+                    toolCallID: normalizedAnchor,
+                    parentToolCallID: normalizedAnchor,
+                    locationPermissionCards: cards
+                )
+            ]
+        case .weatherConfigCard(let payload):
+            guard isEncodable(payload) else { return nil }
+            return [
+                ChatMessageBlock(
+                    anchor: normalizedAnchor.map(ChatBlockAnchor.toolCall),
+                    kind: .weatherConfigCard,
+                    toolCallID: normalizedAnchor,
+                    parentToolCallID: normalizedAnchor,
+                    weatherConfigCard: payload
                 )
             ]
         case .externalConnectorRichBlocks(let blocks):

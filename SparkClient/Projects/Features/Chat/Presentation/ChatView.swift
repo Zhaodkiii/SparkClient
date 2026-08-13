@@ -91,6 +91,7 @@ struct ChatView: View {
         self.homeViewModel = homeViewModel
         self.aiSettingsViewModel = aiSettingsViewModel
         self.autoSmallTaskCoordinator = autoSmallTaskCoordinator
+        self.stateStore.setComposerStartupPreferences(aiSettingsViewModel.snapshot.chatComposerStartupPreferences)
     }
     
     private var baseLayout: some View {
@@ -370,12 +371,16 @@ struct ChatView: View {
             .onAppear {
                 detailViewModel.updateCachedMemberCompleteData(homeViewModel.dashboard?.medical.completeData)
                 detailViewModel.updateToolInteractionPreferences(aiSettingsViewModel.snapshot.chatToolInteractionPreferences)
+                stateStore.setComposerStartupPreferences(aiSettingsViewModel.snapshot.chatComposerStartupPreferences)
             }
             .onChange(of: homeViewModel.dashboard?.medical.completeData) { data in
                 detailViewModel.updateCachedMemberCompleteData(data)
             }
             .onChange(of: aiSettingsViewModel.snapshot.chatToolInteractionPreferences) { preferences in
                 detailViewModel.updateToolInteractionPreferences(preferences)
+            }
+            .onChange(of: aiSettingsViewModel.snapshot.chatComposerStartupPreferences) { preferences in
+                stateStore.setComposerStartupPreferences(preferences)
             }
             .task(id: threadID) {
                 if let initialModel = await detailViewModel.refreshChatModelPicker(for: threadID) {
@@ -384,6 +389,7 @@ struct ChatView: View {
                     }
                 }
                 await detailViewModel.refreshThreadImageDeliveryMode(for: threadID)
+                await applyComposerStartupMemberBindingIfNeeded()
                 await trySendAutoSmallTaskIfReady()
             }
             .task(id: reasoningRefreshId) {
@@ -453,6 +459,14 @@ struct ChatView: View {
             stateStore: stateStore,
             detailViewModel: detailViewModel
         )
+    }
+
+    private func applyComposerStartupMemberBindingIfNeeded() async {
+        let startup = aiSettingsViewModel.snapshot.chatComposerStartupPreferences
+        guard startup.memberProfileEnabled else { return }
+        guard stateStore.selectedThread?.memberID == nil else { return }
+        guard let selectedMemberID = homeViewModel.memberContextStoreForBinding.context.selectedMemberID else { return }
+        await detailViewModel.updateThreadMemberBinding(selectedMemberID, for: threadID)
     }
     
     @ViewBuilder

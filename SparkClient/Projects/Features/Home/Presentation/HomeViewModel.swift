@@ -123,7 +123,7 @@ final class HomeViewModel: ObservableObject {
         await fetchPendingInvitesIfNeeded()
     }
 
-    /// 强制刷新首页大盘，并临时占用首屏加载锁，避免 `HomeView` 首次出现时重复拉取。
+    /// 强制刷新首页大盘，并临时占用首屏加载锁，避免 `HealthHomeView` 首次出现时重复拉取。
     func forceReload(syncRemote: Bool = true) async {
         guard case .signedIn = sessionStore.state else { return }
         guard isInitialLoadInFlight == false else { return }

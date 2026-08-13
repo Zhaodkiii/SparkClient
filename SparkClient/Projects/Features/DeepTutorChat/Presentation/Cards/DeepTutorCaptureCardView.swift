@@ -11,6 +11,13 @@ struct DeepTutorCaptureCardView: View {
             header
             guide
             actionRow
+            if let disclaimer = spec.disclaimer {
+                Text(disclaimer)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .padding(16)
         .background(
@@ -154,6 +161,15 @@ private extension DeepTutorCaptureCardView {
                 return ["正面拍摄", "药名清楚", "剂量可见"]
             case .skinPhoto:
                 return ["光线均匀", "保持清晰", "避免滤镜"]
+            }
+        }
+
+        var disclaimer: String? {
+            switch cardType {
+            case .reportPhoto:
+                return "注：AI 提取和整理结果仅供健康管理参考，不构成诊断、治疗建议或用药依据。如需医疗帮助，请咨询医生。"
+            case .medicineBoxPhoto, .skinPhoto:
+                return nil
             }
         }
     }

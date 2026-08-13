@@ -223,6 +223,10 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
         memberContextStore
     }
 
+    var selectedRecognitionMemberID: Int? {
+        recognitionMember?.id
+    }
+
     var workflowAPIForCaseLocalForms: SparkMedicalWorkflowAPI? {
         workflowAPIForLocalForms
     }
@@ -741,6 +745,18 @@ final class MedicalDocumentUploadViewModel: ObservableObject {
 
     func clearAllPreSubmitValidationIssues() {
         preSubmitValidationIssues = []
+    }
+
+    func selectRecognitionMember(memberID: Int?) {
+        if let memberID,
+           let member = memberContextStore.context.members.first(where: { $0.id == memberID }) {
+            pendingMemberOverride = member
+            selectedMemberName = member.name
+            return
+        }
+
+        pendingMemberOverride = nil
+        selectedMemberName = memberContextStore.context.selectedMember?.name
     }
 
     func prepareAndStart(files: [MedicalUploadLocalFile], kind: MedicalDocumentKind, member: Member? = nil) {

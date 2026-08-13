@@ -382,7 +382,11 @@ struct MedicationsListPage: View {
                 aiSettingsViewModel: aiSettingsViewModel,
                 onMedicationPlansChanged: onMedicationPlansChanged,
                 onPrescriptionsChanged: onPrescriptionsChanged,
-                onMedicineBoxesChanged: updateMedicineBoxes
+                onMedicineBoxesChanged: updateMedicineBoxes,
+                selectedMemberID: memberContextStore.context.selectedMember?.id,
+                onMemberIDSelected: { memberID in
+                    memberContextStore.select(memberID: memberID)
+                }
             )
         } label: {
             Label(L10n.text("home.medical.list.medications.action.execution_center", fallback: "执行"), systemImage: "checklist.checked")

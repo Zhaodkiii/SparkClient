@@ -21,6 +21,8 @@ nonisolated struct AISettingsSnapshot: Codable, Equatable, Sendable {
     var chatConversationUIPreferences: ChatConversationUIPreferences
     /// Chat 工具交互展示偏好：成员选择、用户问答可分别选择 Sheet 或会话卡片。
     var chatToolInteractionPreferences: ChatToolInteractionPreferences
+    /// Chat 会话默认启动偏好。
+    var chatComposerStartupPreferences: ChatComposerStartupPreferences
     /// DeepTutorChat 对话外观偏好。禁止与 Chat 共用字段。
     var deepTutorConversationAppearance: DeepTutorConversationAppearancePreferences
     /// 场景级模型来源选择（`AIScenario.rawValue` -> `AIModelSelectionSource.rawValue`）。
@@ -48,6 +50,7 @@ nonisolated struct AISettingsSnapshot: Codable, Equatable, Sendable {
         chatConversationAppearance: ChatConversationAppearancePreferences = .default,
         chatConversationUIPreferences: ChatConversationUIPreferences = .default,
         chatToolInteractionPreferences: ChatToolInteractionPreferences = .default,
+        chatComposerStartupPreferences: ChatComposerStartupPreferences = .default,
         deepTutorConversationAppearance: DeepTutorConversationAppearancePreferences = .default,
         scenarioModelSources: [String: AIModelSelectionSource] = [:],
         trialChatPickerDisabledModelNames: [String] = [],
@@ -70,6 +73,7 @@ nonisolated struct AISettingsSnapshot: Codable, Equatable, Sendable {
         self.chatConversationAppearance = chatConversationAppearance
         self.chatConversationUIPreferences = chatConversationUIPreferences
         self.chatToolInteractionPreferences = chatToolInteractionPreferences
+        self.chatComposerStartupPreferences = chatComposerStartupPreferences
         self.deepTutorConversationAppearance = deepTutorConversationAppearance
         self.scenarioModelSources = scenarioModelSources
         self.trialChatPickerDisabledModelNames = trialChatPickerDisabledModelNames
@@ -95,6 +99,7 @@ nonisolated struct AISettingsSnapshot: Codable, Equatable, Sendable {
         chatConversationAppearance: .default,
         chatConversationUIPreferences: .default,
         chatToolInteractionPreferences: .default,
+        chatComposerStartupPreferences: .default,
         deepTutorConversationAppearance: .default,
         scenarioModelSources: [:],
         trialChatPickerDisabledModelNames: [],
@@ -234,6 +239,7 @@ nonisolated extension AISettingsSnapshot {
         var chatConversationAppearance: ChatConversationAppearancePreferences
         var chatConversationUIPreferences: ChatConversationUIPreferences
         var chatToolInteractionPreferences: ChatToolInteractionPreferences
+        var chatComposerStartupPreferences: ChatComposerStartupPreferences
         var deepTutorConversationAppearance: DeepTutorConversationAppearancePreferences
         var scenarioModelSources: [String: AIModelSelectionSource]
         var trialChatPickerDisabledModelNames: [String]
@@ -252,6 +258,7 @@ nonisolated extension AISettingsSnapshot {
             chatConversationAppearance: .default,
             chatConversationUIPreferences: .default,
             chatToolInteractionPreferences: .default,
+            chatComposerStartupPreferences: .default,
             deepTutorConversationAppearance: .default,
             scenarioModelSources: [:],
             trialChatPickerDisabledModelNames: [],
@@ -271,6 +278,7 @@ nonisolated extension AISettingsSnapshot {
             chatConversationAppearance: ChatConversationAppearancePreferences,
             chatConversationUIPreferences: ChatConversationUIPreferences,
             chatToolInteractionPreferences: ChatToolInteractionPreferences,
+            chatComposerStartupPreferences: ChatComposerStartupPreferences,
             deepTutorConversationAppearance: DeepTutorConversationAppearancePreferences,
             scenarioModelSources: [String: AIModelSelectionSource],
             trialChatPickerDisabledModelNames: [String],
@@ -288,6 +296,7 @@ nonisolated extension AISettingsSnapshot {
             self.chatConversationAppearance = chatConversationAppearance
             self.chatConversationUIPreferences = chatConversationUIPreferences
             self.chatToolInteractionPreferences = chatToolInteractionPreferences
+            self.chatComposerStartupPreferences = chatComposerStartupPreferences
             self.deepTutorConversationAppearance = deepTutorConversationAppearance
             self.scenarioModelSources = scenarioModelSources
             self.trialChatPickerDisabledModelNames = trialChatPickerDisabledModelNames
@@ -340,6 +349,8 @@ nonisolated extension AISettingsSnapshot {
                 ?? .default
             chatToolInteractionPreferences = try container.decodeIfPresent(ChatToolInteractionPreferences.self, forKey: .key("chatToolInteractionPreferences"))
                 ?? .default
+            chatComposerStartupPreferences = try container.decodeIfPresent(ChatComposerStartupPreferences.self, forKey: .key("chatComposerStartupPreferences"))
+                ?? .default
             deepTutorConversationAppearance = try container.decodeIfPresent(DeepTutorConversationAppearancePreferences.self, forKey: .key("deepTutorConversationAppearance"))
                 ?? .default
 
@@ -362,6 +373,7 @@ nonisolated extension AISettingsSnapshot {
             try container.encode(chatConversationAppearance, forKey: .key("chatConversationAppearance"))
             try container.encode(chatConversationUIPreferences, forKey: .key("chatConversationUIPreferences"))
             try container.encode(chatToolInteractionPreferences, forKey: .key("chatToolInteractionPreferences"))
+            try container.encode(chatComposerStartupPreferences, forKey: .key("chatComposerStartupPreferences"))
             try container.encode(deepTutorConversationAppearance, forKey: .key("deepTutorConversationAppearance"))
             try container.encode(scenarioModelSources, forKey: .key("scenarioModelSources"))
             try container.encode(trialChatPickerDisabledModelNames, forKey: .key("trialChatPickerDisabledModelNames"))
@@ -384,6 +396,7 @@ nonisolated extension AISettingsSnapshot {
             chatConversationAppearance: chatConversationAppearance,
             chatConversationUIPreferences: chatConversationUIPreferences,
             chatToolInteractionPreferences: chatToolInteractionPreferences,
+            chatComposerStartupPreferences: chatComposerStartupPreferences,
             deepTutorConversationAppearance: deepTutorConversationAppearance,
             scenarioModelSources: scenarioModelSources,
             trialChatPickerDisabledModelNames: trialChatPickerDisabledModelNames,
@@ -417,6 +430,7 @@ nonisolated extension AISettingsSnapshot {
             chatConversationAppearance: preferences.chatConversationAppearance,
             chatConversationUIPreferences: preferences.chatConversationUIPreferences,
             chatToolInteractionPreferences: preferences.chatToolInteractionPreferences,
+            chatComposerStartupPreferences: preferences.chatComposerStartupPreferences,
             deepTutorConversationAppearance: preferences.deepTutorConversationAppearance,
             scenarioModelSources: preferences.scenarioModelSources,
             trialChatPickerDisabledModelNames: preferences.trialChatPickerDisabledModelNames,

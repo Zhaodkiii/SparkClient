@@ -7,6 +7,7 @@ struct IOS26HomeActionItem: Identifiable, Equatable {
     enum Kind: Equatable {
         case checkupPlan
         case reportInterpretation
+        case reportUpload
         case medication
         case familyMedicineCabinet
         case familyArchive
@@ -62,11 +63,10 @@ struct IOS26HomeDashboardView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-//                header
-                memberStrip
                 taskSummarySection
-                primaryActions
                 secondaryActions
+                primaryActions
+                
                 familyArchiveAction
             }
             .padding(.horizontal, 18)
@@ -114,87 +114,11 @@ struct IOS26HomeDashboardView: View {
         viewModel.activeSheet = .taskCenter
     }
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(greeting)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            Text(L10n.text("ios26.home.title"))
-                .font(.system(size: 30, weight: .bold))
-                .foregroundStyle(.primary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var memberStrip: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(L10n.text("ios26.home.current_member"))
-                .font(.headline)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    ForEach(viewModel.dashboard?.members ?? []) { member in
-                        memberChip(for: member)
-                    }
-
-                    Button {
-                        viewModel.activeSheet = .addMember(.create())
-                        triggerHaptic(style: .medium)
-                    } label: {
-                        Image(systemName: "plus")
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(.primary)
-                            .frame(width: 40, height: 40)
-                            .background(
-                                Circle()
-                                    .fill(Color(uiColor: .secondarySystemBackground))
-                            )
-                            .overlay(
-                                Circle()
-                                    .strokeBorder(.quaternary, lineWidth: 1)
-                            )
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(L10n.text("home.members.add.title"))
-                }
-                .padding(.vertical, 4)
-            }
-        }
-        .padding(16)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(.quaternary, lineWidth: 1)
-        }
-    }
-
-    private func memberChip(for member: Member) -> some View {
-        let isSelected = member.id == viewModel.selectedMemberID
-        return Button {
-            viewModel.selectMember(member.id)
-            triggerHaptic(style: .light)
-        } label: {
-            Text(member.name)
-                .font(.subheadline.weight(isSelected ? .semibold : .regular))
-                .foregroundStyle(isSelected ? Color.accentColor : .primary)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(
-                    Capsule()
-                        .fill(isSelected ? Color.accentColor.opacity(0.12) : Color(uiColor: .secondarySystemBackground))
-                )
-                .overlay(
-                    Capsule()
-                        .strokeBorder(isSelected ? Color.accentColor.opacity(0.4) : Color(uiColor: .quaternaryLabel), lineWidth: 1)
-                )
-        }
-        .buttonStyle(.plain)
-    }
-
     private var primaryActions: some View {
         VStack(spacing: 14) {
             actionCard(for: checkupPlanItem)
             actionCard(for: reportInterpretationItem)
+            actionCard(for: reportUploadItem)
         }
     }
 
@@ -244,6 +168,18 @@ struct IOS26HomeDashboardView: View {
             prominence: .compact,
             isEnabled: true,
             actionLabel: nil
+        )
+    }
+
+    private var reportUploadItem: IOS26HomeActionItem {
+        IOS26HomeActionItem(
+            id: .reportUpload,
+            title: L10n.text("ios26.home.action.report_upload.title", fallback: "上传报告"),
+            subtitle: L10n.text("ios26.home.action.report_upload.subtitle", fallback: "直接进入报告上传与识别页面"),
+            symbolName: "square.and.arrow.up.on.square",
+            prominence: .primary,
+            isEnabled: hasMembers,
+            actionLabel: L10n.text("ios26.home.action.start")
         )
     }
 

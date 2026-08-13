@@ -9,6 +9,7 @@ struct ChatConversationMessageRow: View {
     @State private var activeSmallTaskPayload: ChatSmallTaskMessageCardPayload?
     @State private var activeTaskDetailMode: TaskDetailMode?
     @State private var activeStructuredHealthPreview: ChatStructuredHealthCardPreviewContext?
+    @State private var activeWeatherConfigCard: ChatWeatherConfigCardPayload?
 
     let threadID: UUID
     let message: ChatMessage
@@ -153,6 +154,10 @@ struct ChatConversationMessageRow: View {
                 }
             )
         }
+        .navigationDestination(item: $activeWeatherConfigCard) { _ in
+            AIWeatherToolSettingsView(viewModel: aiSettingsViewModel)
+                .hidesMainTabBarWhenPushed()
+        }
     }
 
     /// 带长按手势的气泡，替代系统 contextMenu
@@ -265,6 +270,8 @@ struct ChatConversationMessageRow: View {
             onToolConsentCardAllow: { _ in },
             onToolConsentCardDeny: { _ in },
             onToolConsentCardShowDetails: { _ in },
+            onLocationPermissionCardAction: { _ in },
+            onWeatherConfigCardOpen: { _ in },
             savingStructuredHealthCardIDs: [],
             savingNutritionCardIDs: [],
             onStructuredHealthCardAction: { _ in },
@@ -443,6 +450,18 @@ struct ChatConversationMessageRow: View {
                         card: card
                     )
                 }
+            },
+            onLocationPermissionCardAction: { card in
+                Task {
+                    await detailViewModel.handleLocationPermissionCardAction(
+                        threadID: threadID,
+                        message: message,
+                        card: card
+                    )
+                }
+            },
+            onWeatherConfigCardOpen: { payload in
+                activeWeatherConfigCard = payload
             },
             savingStructuredHealthCardIDs: detailViewModel.savingStructuredHealthCardIDs,
             savingNutritionCardIDs: detailViewModel.savingNutritionCardIDs,

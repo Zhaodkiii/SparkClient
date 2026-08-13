@@ -55,6 +55,7 @@ struct IOS26TabBarView: View {
         IOS26HomeDashboardActionHandler(
             routeStore: routeStore,
             homeViewModel: homeViewModel,
+            medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
             chatListViewModel: chatListViewModel,
             deepTutorChatViewModel: deepTutorChatViewModel,
             notificationClient: homeDependencies.notificationClient,

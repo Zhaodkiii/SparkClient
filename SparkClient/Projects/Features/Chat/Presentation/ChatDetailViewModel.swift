@@ -1,6 +1,11 @@
 import Combine
+import CoreLocation
 import Foundation
 import SwiftUI
+
+#if canImport(UIKit)
+import UIKit
+#endif
 
 @MainActor
 final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCardSink {
@@ -1610,6 +1615,39 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         return true
     }
 
+    func presentInlineLocationPermissionCard(
+        threadID: UUID?,
+        completionID: UUID,
+        toolCallID: String?
+    ) async -> Bool {
+        guard let target = await inlineToolInteractionTargetMessage(threadID: threadID) else {
+            return false
+        }
+        let associationID = inlineToolAssociationID(toolCallID: toolCallID, completionID: completionID)
+        let card = ChatLocationPermissionCard(
+            completionID: completionID,
+            mode: .requestPermission
+        )
+        let block = ChatMessageBlock(
+            id: ChatStableBlockID.rich(
+                messageID: target.clientMessageID,
+                toolCallID: associationID,
+                kind: .locationPermissionCards
+            ),
+            anchor: .toolCall(associationID),
+            kind: .locationPermissionCards,
+            toolCallID: associationID,
+            parentToolCallID: associationID,
+            nodeRole: .toolPresentation,
+            locationPermissionCards: [card],
+            orderKey: nextInlineToolCardOrderKey(for: target),
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        await persistInlineToolInteractionBlock(threadID: target.threadID, message: target, block: block)
+        return true
+    }
+
     func submitInlineToolQuestionCard(
         threadID: UUID,
         message: ChatMessage,
@@ -1755,6 +1793,46 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         await persistInlineToolInteractionBlock(threadID: threadID, message: message, block: updatedBlock)
         stateStore.updateMessages([message.replacingBlocks(updatedBlocks)], for: threadID)
         toolInteractionCoordinator.completeInlineConsent(id: card.completionID, decision: decision)
+    }
+
+    func handleLocationPermissionCardAction(
+        threadID: UUID,
+        message: ChatMessage,
+        card: ChatLocationPermissionCard
+    ) async {
+        if card.mode == .openSettings {
+            openAppSettings()
+            return
+        }
+        guard card.status == .pending, let completionID = card.completionID else { return }
+        guard toolInteractionCoordinator.hasPendingInlineInteraction(completionID: completionID) else { return }
+
+        let status = await SparkLocationService.requestWhenInUseAuthorization()
+        let authorized = Self.isLocationAuthorized(status)
+        let result: ChatLocationPermissionCardResult = authorized ? .authorized : .denied
+        let resultText = authorized ? "用户已允许位置权限。" : "用户未允许位置权限。"
+        guard let updatedBlocks = replacingInlineLocationPermissionCard(
+            in: message.blocks,
+            cardID: card.id,
+            mutate: {
+                $0.result = result
+                $0.status = authorized ? .submitted : .cancelled
+                $0.resultText = resultText
+                $0.updatedAt = Date()
+            }
+        ) else { return }
+        guard let updatedBlock = updatedBlocks.first(where: {
+            $0.locationPermissionCards.contains(where: { $0.id == card.id })
+        }) else { return }
+        await persistInlineToolInteractionBlock(threadID: threadID, message: message, block: updatedBlock)
+        stateStore.updateMessages([message.replacingBlocks(updatedBlocks)], for: threadID)
+        toolInteractionCoordinator.completeInlineLocationPermission(
+            id: completionID,
+            decision: ToolLocationPermissionDecision(
+                authorized: authorized,
+                statusDescription: Self.locationStatusDescription(status)
+            )
+        )
     }
 
     func submitInlineCaptureCardAttachments(
@@ -2224,6 +2302,59 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
             return next
         }
         return nil
+    }
+
+    private func replacingInlineLocationPermissionCard(
+        in blocks: [ChatMessageBlock],
+        cardID: UUID,
+        mutate: (inout ChatLocationPermissionCard) -> Void
+    ) -> [ChatMessageBlock]? {
+        for (index, block) in blocks.enumerated() {
+            guard block.kind == .locationPermissionCards else { continue }
+            var cards = block.locationPermissionCards
+            guard let cardIndex = cards.firstIndex(where: { $0.id == cardID }) else { continue }
+            mutate(&cards[cardIndex])
+            var next = blocks
+            next[index] = block.replacingPayload(
+                .locationPermissionCards(cards),
+                status: .ready,
+                revision: block.revision + 1,
+                updatedAt: Date()
+            )
+            return next
+        }
+        return nil
+    }
+
+    private static func isLocationAuthorized(_ status: CLAuthorizationStatus) -> Bool {
+        switch status {
+        case .authorizedAlways, .authorizedWhenInUse:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func locationStatusDescription(_ status: CLAuthorizationStatus) -> String {
+        switch status {
+        case .authorizedAlways, .authorizedWhenInUse:
+            return "authorized"
+        case .denied:
+            return "denied"
+        case .restricted:
+            return "restricted"
+        case .notDetermined:
+            return "not_determined"
+        @unknown default:
+            return "unknown"
+        }
+    }
+
+    private func openAppSettings() {
+        #if canImport(UIKit)
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
+        #endif
     }
 
     private func currentMessage(threadID: UUID, clientMessageID: UUID) async -> ChatMessage? {

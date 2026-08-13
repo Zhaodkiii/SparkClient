@@ -93,7 +93,9 @@ enum CompanyIconNameMapper {
             return isDarkMode ? "qweather_dark" : "qweather"
         case "OPENWEATHER":
             return "openweather"
-        case "WEATHERKIT", "APPLEWEATHER":
+        case "APPLEWEATHER":
+            return "applogo"
+        case "WEATHERKIT":
             return "applemap"
         case "MINIMAX":
             return "minimax"
