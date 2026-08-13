@@ -18,13 +18,9 @@ struct MemberSetupBottomBar: View {
     }
 
     var body: some View {
-        Group {
-            if keyboardVisible {
-                EmptyView()
-            } else {
-                bottomButtons
-            }
-        }
+        // Keep the bottom bar inside SwiftUI's bottom safe-area inset so the
+        // system keyboard avoidance can lift it above the keyboard automatically.
+        bottomButtons
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: primaryEnabled)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isLoading)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: keyboardVisible)

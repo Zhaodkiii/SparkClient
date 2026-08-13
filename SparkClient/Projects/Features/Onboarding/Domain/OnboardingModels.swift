@@ -2,19 +2,15 @@ import Foundation
 
 enum OnboardingStep: Int, CaseIterable, Codable, Equatable, Hashable, Sendable {
     case welcome = 0
-    case profile = 1
-    case agent = 2
-    case start = 3
+    case reportGuide = 1
+    case medicationGuide = 2
+    case profile = 3
+    case start = 4
 
-    static let activeSteps: [OnboardingStep] = [.welcome, .profile, /*.agent,*/ .start]
+    static let activeSteps: [OnboardingStep] = [.welcome, .reportGuide, .medicationGuide, .profile, .start]
 
     var isSkippable: Bool {
-        switch self {
-        case .welcome, .profile, .start:
-            return false
-        case .agent:
-            return true
-        }
+        false
     }
 
     func next() -> OnboardingStep {

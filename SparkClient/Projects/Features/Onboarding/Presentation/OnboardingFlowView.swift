@@ -2,7 +2,6 @@ import SwiftUI
 
 struct OnboardingFlowView: View {
     @StateObject private var viewModel: OnboardingFlowViewModel
-    @StateObject private var agentSetupViewModel: OnboardingAgentSetupViewModel
     @ObservedObject private var memberContextStore: MemberContextStore
     @ObservedObject private var aiSettingsViewModel: AISettingsViewModel
     @State private var didBootstrapDefaultMember = false
@@ -17,7 +16,6 @@ struct OnboardingFlowView: View {
         onCompleted: @escaping () -> Void = {}
     ) {
         _viewModel = StateObject(wrappedValue: viewModel)
-        _agentSetupViewModel = StateObject(wrappedValue: OnboardingAgentSetupViewModel(aiSettingsViewModel: aiSettingsViewModel))
         self.memberContextStore = memberContextStore
         self.aiSettingsViewModel = aiSettingsViewModel
         self.homeDependencies = homeDependencies
@@ -45,15 +43,21 @@ struct OnboardingFlowView: View {
                 switch step {
                 case .welcome:
                     EmptyView()
+                case .reportGuide:
+                    OnboardingAIReportGuideStep {
+                        viewModel.goNext()
+                    }
+                case .medicationGuide:
+                    OnboardingMedicationGuideStep {
+                        viewModel.goNext()
+                    }
                 case .profile:
                     OnboardingProfileStep(
                         memberContextStore: memberContextStore,
-                        homeDependencies: homeDependencies
-                    )
-                case .agent:
-                    OnboardingAgentSetupStep(
-                        viewModel: agentSetupViewModel,
-                        aiSettingsViewModel: aiSettingsViewModel
+                        homeDependencies: homeDependencies,
+                        onContinue: {
+                            viewModel.goNext()
+                        }
                     )
                 case .start:
                     OnboardingStartStep {
@@ -64,20 +68,20 @@ struct OnboardingFlowView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            OnboardingFooter(
-                step: step,
-                currentIndex: viewModel.activeSteps.firstIndex(of: step) ?? 0,
-                totalCount: viewModel.activeSteps.count,
-                canContinue: viewModel.canGoNext,
-                onContinue: {
-                    if step == .start {
-                        viewModel.complete()
-                        onCompleted()
-                    } else {
-                        viewModel.goNext()
-                    }
-                }
-            )
+//            OnboardingFooter(
+//                step: step,
+//                currentIndex: viewModel.activeSteps.firstIndex(of: step) ?? 0,
+//                totalCount: viewModel.activeSteps.count,
+//                canContinue: viewModel.canGoNext,
+//                onContinue: {
+//                    if step == .start {
+//                        viewModel.complete()
+//                        onCompleted()
+//                    } else {
+//                        viewModel.goNext()
+//                    }
+//                }
+//            )
         }
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
 //        .navigationBarBackButtonHidden(step == .profile)
@@ -139,177 +143,6 @@ struct OnboardingFlowView: View {
             memberContextStore.select(memberID: member.id)
         } catch {
             didBootstrapDefaultMember = false
-        }
-    }
-}
-
-private struct OnboardingWelcomeStep: View {
-    let onStart: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 28) {
-            Spacer(minLength: 40)
-
-            VStack(alignment: .leading, spacing: 18) {
-                Image(systemName: "sparkles")
-                    .font(.system(size: 42, weight: .semibold))
-                    .foregroundStyle(Color.accentColor)
-
-                Text(L10n.text("onboarding.welcome.title", fallback: "欢迎来到 Spark"))
-                    .font(.largeTitle.bold())
-                    .foregroundStyle(.primary)
-
-                Text(L10n.text("onboarding.welcome.subtitle", fallback: "用几步完成成员档案与 AI 助手准备，之后就可以开始记录、检索和对话。"))
-                    .font(.title3)
-                    .foregroundStyle(.secondary)
-                    .lineSpacing(4)
-            }
-
-            VStack(alignment: .leading, spacing: 14) {
-                OnboardingFeatureRow(icon: "person.crop.circle.badge.plus", title: L10n.text("onboarding.welcome.profile", fallback: "创建你的第一个健康成员"))
-                OnboardingFeatureRow(icon: "brain.head.profile", title: L10n.text("onboarding.welcome.agent", fallback: "了解 AI 助手与模型配置入口"))
-                OnboardingFeatureRow(icon: "lock.shield", title: L10n.text("onboarding.welcome.privacy", fallback: "账号级保存进度，可随时回到主流程"))
-            }
-
-            Spacer()
-
-            Button(action: onStart) {
-                HStack {
-                    Text(L10n.text("onboarding.action.start", fallback: "开始设置"))
-                        .font(.headline.weight(.semibold))
-                    Image(systemName: "arrow.right")
-                        .font(.headline.weight(.semibold))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 15)
-                .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .foregroundStyle(.white)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(24)
-        .frame(maxWidth: 680)
-    }
-}
-
-private struct OnboardingProfileStep: View {
-    @ObservedObject var memberContextStore: MemberContextStore
-    let homeDependencies: HomeFeatureDependencies?
-    @State private var activeMemberSetupRoute: MemberSetupCoverRoute?
-
-    private enum MemberSetupCoverRoute: Identifiable {
-        case create
-        case maintain(Member)
-
-        var id: String {
-            switch self {
-            case .create:
-                return "create"
-            case .maintain(let member):
-                return "maintain-\(member.id)"
-            }
-        }
-    }
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                OnboardingStepHeader(
-                    icon: "person.text.rectangle",
-                    title: L10n.text("onboarding.profile.title", fallback: "创建成员档案"),
-                    subtitle: L10n.text("onboarding.profile.subtitle", fallback: "Spark 的健康记录、上传和聊天上下文都围绕成员展开。先创建一个成员，后续可以继续添加家人。")
-                )
-
-                if memberContextStore.context.members.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text(L10n.text("onboarding.profile.empty.title", fallback: "还没有成员"))
-                            .font(.headline)
-                        Text(L10n.text("onboarding.profile.empty.body", fallback: "添加姓名、关系、性别和生日后，就能把病历、体检、用药记录绑定到这个成员。"))
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineSpacing(3)
-                    }
-                    .padding(16)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                } else {
-                    VStack(spacing: 10) {
-                        ForEach(memberContextStore.context.members) { member in
-                            Button {
-                                activeMemberSetupRoute = .maintain(member)
-                            } label: {
-                                HStack(spacing: 12) {
-                                    Image(systemName: "person.crop.circle.fill")
-                                        .font(.title2)
-                                        .foregroundStyle(Color.accentColor)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text(member.name)
-                                            .font(.headline)
-                                        Text(MemberRelationshipCatalog.displayTitle(for: member.relationship))
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Spacer()
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(Color.green)
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(.tertiary)
-                                }
-                                .padding(14)
-                                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(homeDependencies == nil)
-                        }
-                    }
-                }
-
-                Button {
-                    activeMemberSetupRoute = .create
-                } label: {
-                    Label(L10n.text("onboarding.profile.add", fallback: "添加成员"), systemImage: "plus")
-                        .font(.headline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 13)
-                        .background(Color.accentColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(20)
-            .frame(maxWidth: 720)
-            .frame(maxWidth: .infinity)
-        }
-        .fullScreenCover(item: $activeMemberSetupRoute) { route in
-            CompatibleNavigationContainer(legacyStackStyle: true) {
-                Group {
-                    if let homeDependencies {
-                        switch route {
-                        case .create:
-                            MemberSetupFlowView(store: memberContextStore, homeDependencies: homeDependencies)
-                        case .maintain(let member):
-                            MemberSetupFlowView(
-                                mode: .maintain(member),
-                                store: memberContextStore,
-                                homeDependencies: homeDependencies
-                            )
-                        }
-                    } else {
-                        AddFamilyMemberView(mode: .create, store: memberContextStore)
-                    }
-                }
-                .navigationBarTitleDisplayMode(.inline)
-                // 右上角关闭按钮
-//                .toolbar {
-//                    ToolbarItem(placement: .navigationBarTrailing) {
-//                        Button(action: {
-//                            activeMemberSetupRoute = nil
-//                        }) {
-//                            Image(systemName: "xmark.circle.fill")
-//                        }
-//                    }
-//                }
-            }
         }
     }
 }
@@ -598,39 +431,6 @@ private struct AgentTemplateCard: View {
     }
 }
 
-private struct OnboardingStartStep: View {
-    let onStart: () -> Void
-
-    var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-            Image(systemName: "checkmark.seal.fill")
-                .font(.system(size: 58, weight: .semibold))
-                .foregroundStyle(Color.green)
-            VStack(spacing: 10) {
-                Text(L10n.text("onboarding.start.title", fallback: "准备好了"))
-                    .font(.largeTitle.bold())
-                Text(L10n.text("onboarding.start.subtitle", fallback: "成员档案已经就绪。进入 Spark 后，可以继续上传医疗文档、创建知识库或开始一段 AI 对话。"))
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(3)
-            }
-            Spacer()
-            Button(action: onStart) {
-                Text(L10n.text("onboarding.action.enter", fallback: "进入 Spark"))
-                    .font(.headline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 15)
-                    .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    .foregroundStyle(.white)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(24)
-        .frame(maxWidth: 640)
-    }
-}
 
 private struct OnboardingFooter: View {
     let step: OnboardingStep
@@ -673,7 +473,7 @@ private struct OnboardingFooter: View {
     }
 }
 
-private struct OnboardingStepHeader: View {
+struct OnboardingStepHeader: View {
     let icon: String
     let title: String
     let subtitle: String
@@ -691,24 +491,6 @@ private struct OnboardingStepHeader: View {
                 .lineSpacing(3)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private struct OnboardingFeatureRow: View {
-    let icon: String
-    let title: String
-
-    var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.headline)
-                .frame(width: 26, height: 26)
-                .foregroundStyle(Color.accentColor)
-            Text(title)
-                .font(.body)
-                .foregroundStyle(.primary)
-            Spacer(minLength: 0)
-        }
     }
 }
 

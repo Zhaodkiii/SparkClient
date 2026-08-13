@@ -38,7 +38,7 @@ final class OnboardingFlowViewModel: ObservableObject {
         switch currentStep {
         case .profile:
             return memberContextStore.context.members.isEmpty == false
-        case .welcome, .agent, .start:
+        case .welcome, .reportGuide, .medicationGuide, .start:
             return true
         }
     }
