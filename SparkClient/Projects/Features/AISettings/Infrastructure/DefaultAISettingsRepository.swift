@@ -341,7 +341,12 @@ nonisolated final class DefaultAISettingsRepository: AISettingsRepository, @unch
     }
 
     private func currentOwnerAccountID() async -> Int64? {
-        await snapshotStore.load()?.accountID
+        let accountID = await snapshotStore.load()?.accountID
+        logger.debug(
+            "AI 授权排查 currentOwnerAccountID=\(accountID.map(String.init) ?? "nil")",
+            module: .aiConfig
+        )
+        return accountID
     }
 
     /// 判断当前账号是否尚未完成首次初始化（无 `AISettingsSeedStateEntity` 行）。
@@ -443,6 +448,10 @@ nonisolated final class DefaultAISettingsRepository: AISettingsRepository, @unch
             "AI loadSnapshot 读链路完成 ownerAccountID=\(ownerAccountID) 读到 厂商Key=\(stored.0.count) 搜索厂商=\(searchKeys.count) 模型=\(stored.2.count) 场景绑定=\(stored.3.count) 小任务=\(stored.4.count) 提示词=\(stored.5.count)；偏好：\(prefsSource)",
             module: .aiConfig
         )
+        logger.info(
+            "AI 授权排查 loadSnapshot ownerAccountID=\(ownerAccountID) defaultMode=\(preferences.toolModelEgressConsentPreferences.defaultMode.rawValue) toolModes=\(consentDebugSummary(preferences.toolModelEgressConsentPreferences)) hasStoredPreferencesPayload=\(hasStoredPreferencesPayload)",
+            module: .aiConfig
+        )
         var snapshot = AISettingsSnapshot(
             allModels: stored.2,
             scenarioBindings: stored.3,
@@ -463,19 +472,82 @@ nonisolated final class DefaultAISettingsRepository: AISettingsRepository, @unch
     private func savePreferencesPayload(_ payload: AISettingsSnapshot.PreferencesPayload, ownerAccountID: Int64) {
         if let data = try? encoder.encode(payload) {
             defaults.set(data, forKey: UserDefaultsKey.aiPreferences(ownerAccountID))
+            logger.info(
+                "AI 授权排查 savePreferencesPayload ownerAccountID=\(ownerAccountID) bytes=\(data.count) defaultMode=\(payload.toolModelEgressConsentPreferences.defaultMode.rawValue) toolModes=\(consentDebugSummary(payload.toolModelEgressConsentPreferences))",
+                module: .aiConfig
+            )
+        } else {
+            logger.error(
+                "AI 授权排查 savePreferencesPayload encode_failed ownerAccountID=\(ownerAccountID)",
+                module: .aiConfig
+            )
         }
     }
 
     /// 整包解码 `PreferencesPayload`；缺失或损坏时使用与 `PreferencesPayload.default` 对齐的默认值。
     private func loadDecodedPreferencesPayload(ownerAccountID: Int64) -> AISettingsSnapshot.PreferencesPayload {
-        let decoded: AISettingsSnapshot.PreferencesPayload
-        if let data = defaults.data(forKey: UserDefaultsKey.aiPreferences(ownerAccountID)),
-           let payload = try? decoder.decode(AISettingsSnapshot.PreferencesPayload.self, from: data) {
-            decoded = payload
-        } else {
-            decoded = .default
+        guard let data = defaults.data(forKey: UserDefaultsKey.aiPreferences(ownerAccountID)) else {
+            let decoded = AISettingsSnapshot.PreferencesPayload.default
+            logger.warning(
+                "AI 授权排查 loadDecodedPreferencesPayload fallback_default ownerAccountID=\(ownerAccountID) hasRawData=false defaultMode=\(decoded.toolModelEgressConsentPreferences.defaultMode.rawValue) toolModes=\(consentDebugSummary(decoded.toolModelEgressConsentPreferences))",
+                module: .aiConfig
+            )
+            return decoded
         }
-        return decoded
+
+        do {
+            let payload = try decoder.decode(AISettingsSnapshot.PreferencesPayload.self, from: data)
+            logger.info(
+                "AI 授权排查 loadDecodedPreferencesPayload decoded ownerAccountID=\(ownerAccountID) bytes=\(data.count) defaultMode=\(payload.toolModelEgressConsentPreferences.defaultMode.rawValue) toolModes=\(consentDebugSummary(payload.toolModelEgressConsentPreferences))",
+                module: .aiConfig
+            )
+            return payload
+        } catch {
+            let decoded = AISettingsSnapshot.PreferencesPayload.default
+            logger.error(
+                "AI 授权排查 loadDecodedPreferencesPayload decode_failed ownerAccountID=\(ownerAccountID) bytes=\(data.count) error=\(describeDecodingError(error))",
+                module: .aiConfig
+            )
+            logger.warning(
+                "AI 授权排查 loadDecodedPreferencesPayload fallback_default ownerAccountID=\(ownerAccountID) hasRawData=true defaultMode=\(decoded.toolModelEgressConsentPreferences.defaultMode.rawValue) toolModes=\(consentDebugSummary(decoded.toolModelEgressConsentPreferences))",
+                module: .aiConfig
+            )
+            return decoded
+        }
+    }
+
+    private func consentDebugSummary(_ preferences: ToolModelEgressConsentPreferences) -> String {
+        let entries = preferences.toolPreferences.map { preference in
+            "\(preference.normalizedToolName)=\(preference.mode.rawValue)"
+        }
+        return entries.isEmpty ? "-" : entries.joined(separator: ",")
+    }
+
+    private func describeDecodingError(_ error: Error) -> String {
+        switch error {
+        case let DecodingError.dataCorrupted(context):
+            return "dataCorrupted path=\(codingPathDescription(context.codingPath)) desc=\(context.debugDescription)"
+        case let DecodingError.keyNotFound(key, context):
+            return "keyNotFound key=\(key.stringValue) path=\(codingPathDescription(context.codingPath)) desc=\(context.debugDescription)"
+        case let DecodingError.typeMismatch(type, context):
+            return "typeMismatch type=\(type) path=\(codingPathDescription(context.codingPath)) desc=\(context.debugDescription)"
+        case let DecodingError.valueNotFound(type, context):
+            return "valueNotFound type=\(type) path=\(codingPathDescription(context.codingPath)) desc=\(context.debugDescription)"
+        default:
+            return String(describing: error)
+        }
+    }
+
+    private func codingPathDescription(_ codingPath: [any CodingKey]) -> String {
+        guard codingPath.isEmpty == false else { return "<root>" }
+        return codingPath
+            .map { key in
+                if let intValue = key.intValue {
+                    return "[\(intValue)]"
+                }
+                return key.stringValue
+            }
+            .joined(separator: ".")
     }
 
     private func searchKeysFromStoreOrMigratedPreferences(

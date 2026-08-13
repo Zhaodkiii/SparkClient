@@ -19,6 +19,7 @@ extension ToolHub {
             let model = try await healthTool.fetchSleepDetails(from: range.start, to: range.end)
             // 仅向模型提供可读摘要；完整结构由协调器异步写入 `healthSleepVisualization`，不经工具输出再解码。
             let outputText = model.toReadableText()
+            let containsUserData = healthOutputContainsUserData(outputText)
 
             logger.info(
                 """
@@ -28,7 +29,9 @@ extension ToolHub {
             )
 
             var sideEffects: [ToolSideEffect] = []
-            if context.threadID != nil, context.assistantMessageClientID != nil {
+            if containsUserData,
+               context.threadID != nil,
+               context.assistantMessageClientID != nil {
                 logger.info(
                     """
                     fetch_sleep_details 将发布睡眠可视化卡片：anchorToolCallID=\(anchorToolCallID ?? "<nil>")，days=\(model.days.count)
@@ -37,9 +40,15 @@ extension ToolHub {
                 )
                 sideEffects = [.sleepVisualization(model)]
             } else {
+                let skipReason: String
+                if containsUserData == false {
+                    skipReason = "查询结果没有用户睡眠数据"
+                } else {
+                    skipReason = "缺少会话或助手消息绑定"
+                }
                 logger.warning(
                     """
-                    fetch_sleep_details 跳过睡眠可视化卡片发布：原因=缺少会话或助手消息绑定，threadID=\(context.threadID?.uuidString ?? "<nil>")，assistantMessageClientID=\(context.assistantMessageClientID?.uuidString ?? "<nil>")，anchorToolCallID=\(anchorToolCallID ?? "<nil>")；文本结果仍会返回
+                    fetch_sleep_details 跳过睡眠可视化卡片发布：原因=\(skipReason)，threadID=\(context.threadID?.uuidString ?? "<nil>")，assistantMessageClientID=\(context.assistantMessageClientID?.uuidString ?? "<nil>")，anchorToolCallID=\(anchorToolCallID ?? "<nil>")；文本结果仍会返回
                     """,
                     module: .aiConfig
                 )
@@ -47,7 +56,7 @@ extension ToolHub {
             return ToolExecutionResult(
                 toolName: SparkToolName.fetchSleepDetails,
                 outputText: outputText,
-                sensitive: true,
+                sensitive: containsUserData,
                 shouldBypassModel: true,
                 sideEffects: sideEffects
             )

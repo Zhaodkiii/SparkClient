@@ -146,13 +146,6 @@ final class ChatStateStore: ObservableObject {
             let id = current[index].clientMessageID
             if let replacement = replacements[id]?.mergingLocalInlineToolInteractionBlocks(from: current[index]),
                replacement != current[index] {
-                if current[index].usageSummary == nil || replacement.usageSummary != nil {
-                    SparkLogger.log(
-                        level: .info,
-                        module: .aiConfig,
-                        message: "[CHAT_USAGE_TMP] ui.state.merge assistant=\(id.uuidString) beforeSummary=\(current[index].usageSummary != nil) replacementSummary=\(replacement.usageSummary != nil) state=\(replacement.deliveryState.rawValue) blocks=\(replacement.blocks.count)"
-                    )
-                }
                 current[index] = replacement
                 changed = true
             }

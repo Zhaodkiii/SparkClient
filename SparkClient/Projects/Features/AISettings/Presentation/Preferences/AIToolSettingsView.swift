@@ -444,6 +444,10 @@ struct AIToolDetailView: View {
     let tool: AIToolSettingsItem
     @ObservedObject var viewModel: AISettingsViewModel
 
+    private var consentDescriptor: ToolModelEgressConsentDescriptor? {
+        ToolModelEgressConsentPolicy.descriptor(for: tool.definition.name)
+    }
+
     var body: some View {
         List {
             Section {
@@ -471,6 +475,49 @@ struct AIToolDetailView: View {
                     }
                 } footer: {
                     Text(preferenceTarget.footer)
+                }
+            }
+
+            if let consentDescriptor {
+                Section {
+                    NavigationLink {
+                        AIToolConsentDetailView(viewModel: viewModel, descriptor: consentDescriptor)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 8) {
+                                AIToolConsentModeBadge(
+                                    mode: viewModel.snapshot.toolModelEgressConsentPreferences.mode(for: consentDescriptor.toolName),
+                                    emphasized: true
+                                )
+                                Text(
+                                    viewModel.snapshot.toolModelEgressConsentPreferences.preference(for: consentDescriptor.toolName) == nil
+                                    ? L10n.text("ai_settings.tool_consent.tool_detail.following_default", fallback: "当前跟随通用策略")
+                                    : L10n.text("ai_settings.tool_consent.tool_detail.customized", fallback: "当前为单独配置")
+                                )
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                            }
+
+                            Text(consentDescriptor.summary)
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+
+                            Text(L10n.text(
+                                "ai_settings.tool_consent.tool_detail.link_hint",
+                                fallback: "查看授权数据范围、来源和默认策略"
+                            ))
+                                .font(.caption)
+                                .foregroundStyle(.blue)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                } header: {
+                    Text(L10n.text("ai_settings.tool_consent.title", fallback: "发送给 AI 授权"))
+                } footer: {
+                    Text(L10n.text(
+                        "ai_settings.tool_consent.tool_detail.footer",
+                        fallback: "该工具结果可能包含敏感位置或健康数据；发送给远端模型前，会根据这里的授权策略决定是否继续。"
+                    ))
                 }
             }
 

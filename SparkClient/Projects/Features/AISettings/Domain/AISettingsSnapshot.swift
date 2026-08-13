@@ -21,6 +21,8 @@ nonisolated struct AISettingsSnapshot: Codable, Equatable, Sendable {
     var chatConversationUIPreferences: ChatConversationUIPreferences
     /// Chat 工具交互展示偏好：成员选择、用户问答可分别选择 Sheet 或会话卡片。
     var chatToolInteractionPreferences: ChatToolInteractionPreferences
+    /// 敏感工具结果发送给模型前的授权策略；按账号持久化。
+    var toolModelEgressConsentPreferences: ToolModelEgressConsentPreferences
     /// Chat 会话默认启动偏好。
     var chatComposerStartupPreferences: ChatComposerStartupPreferences
     /// DeepTutorChat 对话外观偏好。禁止与 Chat 共用字段。
@@ -50,6 +52,7 @@ nonisolated struct AISettingsSnapshot: Codable, Equatable, Sendable {
         chatConversationAppearance: ChatConversationAppearancePreferences = .default,
         chatConversationUIPreferences: ChatConversationUIPreferences = .default,
         chatToolInteractionPreferences: ChatToolInteractionPreferences = .default,
+        toolModelEgressConsentPreferences: ToolModelEgressConsentPreferences = .default,
         chatComposerStartupPreferences: ChatComposerStartupPreferences = .default,
         deepTutorConversationAppearance: DeepTutorConversationAppearancePreferences = .default,
         scenarioModelSources: [String: AIModelSelectionSource] = [:],
@@ -73,6 +76,7 @@ nonisolated struct AISettingsSnapshot: Codable, Equatable, Sendable {
         self.chatConversationAppearance = chatConversationAppearance
         self.chatConversationUIPreferences = chatConversationUIPreferences
         self.chatToolInteractionPreferences = chatToolInteractionPreferences
+        self.toolModelEgressConsentPreferences = toolModelEgressConsentPreferences
         self.chatComposerStartupPreferences = chatComposerStartupPreferences
         self.deepTutorConversationAppearance = deepTutorConversationAppearance
         self.scenarioModelSources = scenarioModelSources
@@ -99,6 +103,7 @@ nonisolated struct AISettingsSnapshot: Codable, Equatable, Sendable {
         chatConversationAppearance: .default,
         chatConversationUIPreferences: .default,
         chatToolInteractionPreferences: .default,
+        toolModelEgressConsentPreferences: .default,
         chatComposerStartupPreferences: .default,
         deepTutorConversationAppearance: .default,
         scenarioModelSources: [:],
@@ -239,6 +244,7 @@ nonisolated extension AISettingsSnapshot {
         var chatConversationAppearance: ChatConversationAppearancePreferences
         var chatConversationUIPreferences: ChatConversationUIPreferences
         var chatToolInteractionPreferences: ChatToolInteractionPreferences
+        var toolModelEgressConsentPreferences: ToolModelEgressConsentPreferences
         var chatComposerStartupPreferences: ChatComposerStartupPreferences
         var deepTutorConversationAppearance: DeepTutorConversationAppearancePreferences
         var scenarioModelSources: [String: AIModelSelectionSource]
@@ -258,6 +264,7 @@ nonisolated extension AISettingsSnapshot {
             chatConversationAppearance: .default,
             chatConversationUIPreferences: .default,
             chatToolInteractionPreferences: .default,
+            toolModelEgressConsentPreferences: .default,
             chatComposerStartupPreferences: .default,
             deepTutorConversationAppearance: .default,
             scenarioModelSources: [:],
@@ -278,6 +285,7 @@ nonisolated extension AISettingsSnapshot {
             chatConversationAppearance: ChatConversationAppearancePreferences,
             chatConversationUIPreferences: ChatConversationUIPreferences,
             chatToolInteractionPreferences: ChatToolInteractionPreferences,
+            toolModelEgressConsentPreferences: ToolModelEgressConsentPreferences,
             chatComposerStartupPreferences: ChatComposerStartupPreferences,
             deepTutorConversationAppearance: DeepTutorConversationAppearancePreferences,
             scenarioModelSources: [String: AIModelSelectionSource],
@@ -296,6 +304,7 @@ nonisolated extension AISettingsSnapshot {
             self.chatConversationAppearance = chatConversationAppearance
             self.chatConversationUIPreferences = chatConversationUIPreferences
             self.chatToolInteractionPreferences = chatToolInteractionPreferences
+            self.toolModelEgressConsentPreferences = toolModelEgressConsentPreferences
             self.chatComposerStartupPreferences = chatComposerStartupPreferences
             self.deepTutorConversationAppearance = deepTutorConversationAppearance
             self.scenarioModelSources = scenarioModelSources
@@ -321,6 +330,18 @@ nonisolated extension AISettingsSnapshot {
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: CodableKey.self)
 
+            func decodeSafely<T: Decodable>(
+                _ type: T.Type,
+                forKey key: CodableKey,
+                default defaultValue: @autoclosure () -> T
+            ) -> T {
+                do {
+                    return try container.decodeIfPresent(type, forKey: key) ?? defaultValue()
+                } catch {
+                    return defaultValue()
+                }
+            }
+
             if let direct = try container.decodeIfPresent(AISearchToolPreferences.self, forKey: .key("searchToolPreferences")) {
                 searchToolPreferences = direct
             } else if container.contains(.key("userInfo")),
@@ -337,31 +358,92 @@ nonisolated extension AISettingsSnapshot {
             } else {
                 searchToolPreferences = AISettingsDefaults.searchToolPreferences
             }
-            weatherToolPreferences = try container.decodeIfPresent(AIWeatherToolPreferences.self, forKey: .key("weatherToolPreferences"))
-                ?? AISettingsDefaults.weatherToolPreferences
-            searchConfigRevision = try container.decodeIfPresent(SearchRuntimeConfigRevision.self, forKey: .key("searchConfigRevision"))
-                ?? SearchRuntimeConfigRevision()
-            weatherConfigRevision = try container.decodeIfPresent(WeatherRuntimeConfigRevision.self, forKey: .key("weatherConfigRevision"))
-                ?? WeatherRuntimeConfigRevision()
-            chatConversationAppearance = try container.decodeIfPresent(ChatConversationAppearancePreferences.self, forKey: .key("chatConversationAppearance"))
-                ?? .default
-            chatConversationUIPreferences = try container.decodeIfPresent(ChatConversationUIPreferences.self, forKey: .key("chatConversationUIPreferences"))
-                ?? .default
-            chatToolInteractionPreferences = try container.decodeIfPresent(ChatToolInteractionPreferences.self, forKey: .key("chatToolInteractionPreferences"))
-                ?? .default
-            chatComposerStartupPreferences = try container.decodeIfPresent(ChatComposerStartupPreferences.self, forKey: .key("chatComposerStartupPreferences"))
-                ?? .default
-            deepTutorConversationAppearance = try container.decodeIfPresent(DeepTutorConversationAppearancePreferences.self, forKey: .key("deepTutorConversationAppearance"))
-                ?? .default
+            weatherToolPreferences = decodeSafely(
+                AIWeatherToolPreferences.self,
+                forKey: .key("weatherToolPreferences"),
+                default: AISettingsDefaults.weatherToolPreferences
+            )
+            searchConfigRevision = decodeSafely(
+                SearchRuntimeConfigRevision.self,
+                forKey: .key("searchConfigRevision"),
+                default: SearchRuntimeConfigRevision()
+            )
+            weatherConfigRevision = decodeSafely(
+                WeatherRuntimeConfigRevision.self,
+                forKey: .key("weatherConfigRevision"),
+                default: WeatherRuntimeConfigRevision()
+            )
+            chatConversationAppearance = decodeSafely(
+                ChatConversationAppearancePreferences.self,
+                forKey: .key("chatConversationAppearance"),
+                default: .default
+            )
+            chatConversationUIPreferences = decodeSafely(
+                ChatConversationUIPreferences.self,
+                forKey: .key("chatConversationUIPreferences"),
+                default: .default
+            )
+            chatToolInteractionPreferences = decodeSafely(
+                ChatToolInteractionPreferences.self,
+                forKey: .key("chatToolInteractionPreferences"),
+                default: .default
+            )
+            toolModelEgressConsentPreferences = decodeSafely(
+                ToolModelEgressConsentPreferences.self,
+                forKey: .key("toolModelEgressConsentPreferences"),
+                default: .default
+            )
+            chatComposerStartupPreferences = decodeSafely(
+                ChatComposerStartupPreferences.self,
+                forKey: .key("chatComposerStartupPreferences"),
+                default: .default
+            )
+            deepTutorConversationAppearance = decodeSafely(
+                DeepTutorConversationAppearancePreferences.self,
+                forKey: .key("deepTutorConversationAppearance"),
+                default: .default
+            )
 
-            scenarioModelSources = try container.decodeIfPresent([String: AIModelSelectionSource].self, forKey: .key("scenarioModelSources")) ?? [:]
-            trialChatPickerDisabledModelNames = try container.decodeIfPresent([String].self, forKey: .key("trialChatPickerDisabledModelNames")) ?? []
-            trial = try container.decodeIfPresent(AITrialState.self, forKey: .key("trial")) ?? .inactive
-            trialModelPolicy = try container.decodeIfPresent([AITrialModelPolicyItem].self, forKey: .key("trialModelPolicy")) ?? []
-            searchKeys = try container.decodeIfPresent([SearchKeys].self, forKey: .key("searchKeys")) ?? AISettingsDefaults.searchKeys
-            toolKeys = try container.decodeIfPresent([ToolKeys].self, forKey: .key("toolKeys")) ?? AISettingsDefaults.toolKeys
-            memoryArchive = try container.decodeIfPresent([MemoryArchive].self, forKey: .key("memoryArchive")) ?? AISettingsDefaults.memoryArchive
-            translationDic = try container.decodeIfPresent([TranslationDic].self, forKey: .key("translationDic")) ?? AISettingsDefaults.translationDic
+            scenarioModelSources = decodeSafely(
+                [String: AIModelSelectionSource].self,
+                forKey: .key("scenarioModelSources"),
+                default: [:]
+            )
+            trialChatPickerDisabledModelNames = decodeSafely(
+                [String].self,
+                forKey: .key("trialChatPickerDisabledModelNames"),
+                default: []
+            )
+            trial = decodeSafely(
+                AITrialState.self,
+                forKey: .key("trial"),
+                default: .inactive
+            )
+            trialModelPolicy = decodeSafely(
+                [AITrialModelPolicyItem].self,
+                forKey: .key("trialModelPolicy"),
+                default: []
+            )
+            searchKeys = decodeSafely(
+                [SearchKeys].self,
+                forKey: .key("searchKeys"),
+                default: AISettingsDefaults.searchKeys
+            )
+            toolKeys = decodeSafely(
+                [ToolKeys].self,
+                forKey: .key("toolKeys"),
+                default: AISettingsDefaults.toolKeys
+            )
+            memoryArchive = decodeSafely(
+                [MemoryArchive].self,
+                forKey: .key("memoryArchive"),
+                default: AISettingsDefaults.memoryArchive
+            )
+            translationDic = decodeSafely(
+                [TranslationDic].self,
+                forKey: .key("translationDic"),
+                default: AISettingsDefaults.translationDic
+            )
         }
 
         func encode(to encoder: Encoder) throws {
@@ -373,6 +455,7 @@ nonisolated extension AISettingsSnapshot {
             try container.encode(chatConversationAppearance, forKey: .key("chatConversationAppearance"))
             try container.encode(chatConversationUIPreferences, forKey: .key("chatConversationUIPreferences"))
             try container.encode(chatToolInteractionPreferences, forKey: .key("chatToolInteractionPreferences"))
+            try container.encode(toolModelEgressConsentPreferences, forKey: .key("toolModelEgressConsentPreferences"))
             try container.encode(chatComposerStartupPreferences, forKey: .key("chatComposerStartupPreferences"))
             try container.encode(deepTutorConversationAppearance, forKey: .key("deepTutorConversationAppearance"))
             try container.encode(scenarioModelSources, forKey: .key("scenarioModelSources"))
@@ -396,6 +479,7 @@ nonisolated extension AISettingsSnapshot {
             chatConversationAppearance: chatConversationAppearance,
             chatConversationUIPreferences: chatConversationUIPreferences,
             chatToolInteractionPreferences: chatToolInteractionPreferences,
+            toolModelEgressConsentPreferences: toolModelEgressConsentPreferences,
             chatComposerStartupPreferences: chatComposerStartupPreferences,
             deepTutorConversationAppearance: deepTutorConversationAppearance,
             scenarioModelSources: scenarioModelSources,
@@ -430,6 +514,7 @@ nonisolated extension AISettingsSnapshot {
             chatConversationAppearance: preferences.chatConversationAppearance,
             chatConversationUIPreferences: preferences.chatConversationUIPreferences,
             chatToolInteractionPreferences: preferences.chatToolInteractionPreferences,
+            toolModelEgressConsentPreferences: preferences.toolModelEgressConsentPreferences,
             chatComposerStartupPreferences: preferences.chatComposerStartupPreferences,
             deepTutorConversationAppearance: preferences.deepTutorConversationAppearance,
             scenarioModelSources: preferences.scenarioModelSources,

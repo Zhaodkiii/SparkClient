@@ -45,6 +45,31 @@ extension ToolHub {
         """
     }
 
+    func healthOutputContainsUserData(_ output: String) -> Bool {
+        healthOutputIndicatesNoUserData(output) == false
+    }
+
+    func healthOutputIndicatesNoUserData(_ output: String) -> Bool {
+        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else { return true }
+
+        let noDataPrefixes = [
+            L10n.text("health.tool.error.no_matching_health"),
+            L10n.text("health.tool.error.no_workouts", fallback: "No matching workout records found."),
+            L10n.text("health.tool.error.no_nutrition", fallback: "No nutrition data found."),
+            L10n.text("health.tool.error.no_sleep", fallback: "No sleep data found."),
+            L10n.text("health.tool.error.no_sleep_range", fallback: "No sleep data found in the requested date range.")
+        ]
+
+        if noDataPrefixes.contains(where: { trimmed.hasPrefix($0) }) {
+            return true
+        }
+
+        let sleepEmptyLine = L10n.text("chat.sleep.readable.empty", fallback: "  - No sleep data")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.contains(sleepEmptyLine)
+    }
+
 
     func parseDoubleValue(_ text: String?) -> Double? {
         guard let text else { return nil }

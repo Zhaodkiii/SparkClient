@@ -34,6 +34,14 @@ nonisolated enum L10n {
         )
     }
 
+    /// 读取编号后缀的本地化数组，例如 `prefix.1`、`prefix.2`。
+    nonisolated static func numberedTexts(prefix: String, count: Int) -> [String] {
+        guard count > 0 else { return [] }
+        return (1...count).map { index in
+            text("\(prefix).\(index)")
+        }
+    }
+
     nonisolated static func homeGreeting(_ name: String) -> String {
         format("home.greeting", name)
     }

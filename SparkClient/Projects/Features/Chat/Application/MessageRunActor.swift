@@ -99,25 +99,13 @@ actor MessageRunActor: ChatSideEffectSink {
     ) async {
         guard var state = runStates[assistantClientMessageID],
               let threadID = state.threadID else {
-            logger.info(
-                "[CHAT_USAGE_TMP] actor.llm.request.skip assistant=\(assistantClientMessageID.uuidString) callIndex=\(callIndex) reason=missing_run_state",
-                module: .aiConfig
-            )
             return
         }
         let normalizedIndex = max(callIndex, 1)
         guard state.recordedLLMStartIndexes.insert(normalizedIndex).inserted else {
-            logger.info(
-                "[CHAT_USAGE_TMP] actor.llm.request.duplicate assistant=\(assistantClientMessageID.uuidString) callIndex=\(normalizedIndex)",
-                module: .aiConfig
-            )
             return
         }
         runStates[assistantClientMessageID] = state
-        logger.info(
-            "[CHAT_USAGE_TMP] actor.llm.request.record assistant=\(assistantClientMessageID.uuidString) thread=\(threadID.uuidString) callIndex=\(normalizedIndex) model=\(modelName ?? state.modelName)",
-            module: .aiConfig
-        )
         await repository.appendUsageEvent(
             ChatMessageUsageEvent(
                 messageID: assistantClientMessageID,
@@ -142,18 +130,10 @@ actor MessageRunActor: ChatSideEffectSink {
     ) async {
         guard var state = runStates[assistantClientMessageID],
               let threadID = state.threadID else {
-            logger.info(
-                "[CHAT_USAGE_TMP] actor.llm.usage.skip assistant=\(assistantClientMessageID.uuidString) callIndex=\(callIndex) reason=missing_run_state",
-                module: .aiConfig
-            )
             return
         }
         let normalizedIndex = max(callIndex, 1)
         guard state.recordedLLMUsageIndexes.insert(normalizedIndex).inserted else {
-            logger.info(
-                "[CHAT_USAGE_TMP] actor.llm.usage.duplicate assistant=\(assistantClientMessageID.uuidString) callIndex=\(normalizedIndex)",
-                module: .aiConfig
-            )
             return
         }
         let usage = ChatMessageUsageEvent(
@@ -170,10 +150,6 @@ actor MessageRunActor: ChatSideEffectSink {
             isEstimated: isEstimated
         )
         state.recordLLMUsage(usage)
-        logger.info(
-            "[CHAT_USAGE_TMP] actor.llm.usage.record assistant=\(assistantClientMessageID.uuidString) callIndex=\(normalizedIndex) prompt=\(usage.promptTokens) completion=\(usage.completionTokens) reasoning=\(usage.reasoningTokens) total=\(usage.totalTokens) estimated=\(usage.isEstimated) accumulatedPrompt=\(state.promptTokens) accumulatedCompletion=\(state.completionTokens) accumulatedTotal=\(state.totalTokens) llmCalls=\(state.llmCallCount)",
-            module: .aiConfig
-        )
         runStates[assistantClientMessageID] = state
         await repository.appendUsageEvent(usage)
     }
@@ -186,25 +162,13 @@ actor MessageRunActor: ChatSideEffectSink {
     ) async {
         guard var state = runStates[assistantClientMessageID],
               let threadID = state.threadID else {
-            logger.info(
-                "[CHAT_USAGE_TMP] actor.tool.start.skip assistant=\(assistantClientMessageID.uuidString) callIndex=\(callIndex) toolCallID=\(toolCallID ?? "-") tool=\(toolName ?? "-") reason=missing_run_state",
-                module: .aiConfig
-            )
             return
         }
         let key = Self.toolUsageKey(callIndex: callIndex, toolCallID: toolCallID, toolName: toolName)
         guard state.recordedToolStartKeys.insert(key).inserted else {
-            logger.info(
-                "[CHAT_USAGE_TMP] actor.tool.start.duplicate assistant=\(assistantClientMessageID.uuidString) key=\(key)",
-                module: .aiConfig
-            )
             return
         }
         runStates[assistantClientMessageID] = state
-        logger.info(
-            "[CHAT_USAGE_TMP] actor.tool.start.record assistant=\(assistantClientMessageID.uuidString) callIndex=\(max(callIndex, 0)) key=\(key) toolCallID=\(toolCallID ?? "-") tool=\(toolName ?? "-")",
-            module: .aiConfig
-        )
         await repository.appendUsageEvent(
             ChatMessageUsageEvent(
                 messageID: assistantClientMessageID,
@@ -228,25 +192,13 @@ actor MessageRunActor: ChatSideEffectSink {
     ) async {
         guard var state = runStates[assistantClientMessageID],
               let threadID = state.threadID else {
-            logger.info(
-                "[CHAT_USAGE_TMP] actor.tool.finish.skip assistant=\(assistantClientMessageID.uuidString) callIndex=\(callIndex) toolCallID=\(toolCallID ?? "-") tool=\(toolName ?? "-") reason=missing_run_state",
-                module: .aiConfig
-            )
             return
         }
         let key = Self.toolUsageKey(callIndex: callIndex, toolCallID: toolCallID, toolName: toolName)
         guard state.recordedToolFinishKeys.insert(key).inserted else {
-            logger.info(
-                "[CHAT_USAGE_TMP] actor.tool.finish.duplicate assistant=\(assistantClientMessageID.uuidString) key=\(key)",
-                module: .aiConfig
-            )
             return
         }
         state.toolCallCount += 1
-        logger.info(
-            "[CHAT_USAGE_TMP] actor.tool.finish.record assistant=\(assistantClientMessageID.uuidString) callIndex=\(max(callIndex, 0)) key=\(key) toolCallID=\(toolCallID ?? "-") tool=\(toolName ?? "-") resultChars=\(resultText.count) toolCalls=\(state.toolCallCount)",
-            module: .aiConfig
-        )
         runStates[assistantClientMessageID] = state
         await repository.appendUsageEvent(
             ChatMessageUsageEvent(
@@ -407,10 +359,6 @@ actor MessageRunActor: ChatSideEffectSink {
         eventType: ChatUsageEventType
     ) async {
         guard let threadID = state.threadID else { return }
-        logger.info(
-            "[CHAT_USAGE_TMP] actor.summary.finalize.start assistant=\(assistantClientMessageID.uuidString) event=\(eventType.rawValue) thread=\(threadID.uuidString) llmCalls=\(state.llmCallCount) toolCalls=\(state.toolCallCount) prompt=\(state.promptTokens) completion=\(state.completionTokens) reasoning=\(state.reasoningTokens) total=\(state.totalTokens) estimated=\(state.isUsageEstimated) model=\(state.modelName) priceTier=\(state.priceTier)",
-            module: .aiConfig
-        )
         await repository.appendUsageEvent(
             ChatMessageUsageEvent(
                 messageID: assistantClientMessageID,
@@ -446,10 +394,6 @@ actor MessageRunActor: ChatSideEffectSink {
                 createdAt: state.createdAt,
                 updatedAt: Date()
             )
-        )
-        logger.info(
-            "[CHAT_USAGE_TMP] actor.summary.finalize.done assistant=\(assistantClientMessageID.uuidString) amount=\(amount) currency=\(currency == .cny ? "CNY" : "USD") callsDisplay=\(state.visibleCallCount)",
-            module: .aiConfig
         )
     }
 
@@ -1388,6 +1332,7 @@ private extension ChatMessageBlock {
             structuredHealthCards: structuredHealthCards,
             sleepVisualization: sleepVisualization,
             weatherVisualization: weatherVisualization,
+            weatherConfigCard: weatherConfigCard,
             nutritionCards: nutritionCards,
             workoutVisualization: workoutVisualization,
             captureMessageCard: captureMessageCard,

@@ -480,6 +480,169 @@ nonisolated enum ChatToolInteractionDevicePreferencesStore {
     }
 }
 
+nonisolated enum ToolModelEgressConsentMode: String, Codable, CaseIterable, Sendable {
+    case alwaysDeny
+    case askEveryTime
+    case alwaysAllow
+
+    var displayName: String {
+        switch self {
+        case .alwaysDeny:
+            return L10n.text("ai_settings.tool_consent.mode.always_deny", fallback: "永久拒绝")
+        case .askEveryTime:
+            return L10n.text("ai_settings.tool_consent.mode.ask_every_time", fallback: "下次询问")
+        case .alwaysAllow:
+            return L10n.text("ai_settings.tool_consent.mode.always_allow", fallback: "始终允许")
+        }
+    }
+
+    var shortDisplayName: String {
+        switch self {
+        case .alwaysDeny:
+            return L10n.text("ai_settings.tool_consent.mode.always_deny.short", fallback: "永久拒绝")
+        case .askEveryTime:
+            return L10n.text("ai_settings.tool_consent.mode.ask_every_time.short", fallback: "下次询问")
+        case .alwaysAllow:
+            return L10n.text("ai_settings.tool_consent.mode.always_allow.short", fallback: "始终允许")
+        }
+    }
+}
+
+nonisolated struct ToolModelEgressConsentPreference: Codable, Equatable, Sendable, Identifiable {
+    var id: String { normalizedToolName }
+    var toolName: String
+    var normalizedToolName: String
+    var mode: ToolModelEgressConsentMode
+    var updatedAt: Date
+    var lastUsedAt: Date?
+    var lastProviderCompany: String?
+    var lastModelName: String?
+
+    init(
+        toolName: String,
+        normalizedToolName: String? = nil,
+        mode: ToolModelEgressConsentMode,
+        updatedAt: Date = Date(),
+        lastUsedAt: Date? = nil,
+        lastProviderCompany: String? = nil,
+        lastModelName: String? = nil
+    ) {
+        self.toolName = toolName
+        self.normalizedToolName = normalizedToolName ?? ToolModelEgressConsentPreferences.normalizeToolName(toolName)
+        self.mode = mode
+        self.updatedAt = updatedAt
+        self.lastUsedAt = lastUsedAt
+        self.lastProviderCompany = lastProviderCompany
+        self.lastModelName = lastModelName
+    }
+}
+
+nonisolated struct ToolModelEgressConsentPreferences: Codable, Equatable, Sendable {
+    var defaultMode: ToolModelEgressConsentMode
+    var toolPreferences: [ToolModelEgressConsentPreference]
+
+    init(
+        defaultMode: ToolModelEgressConsentMode = .askEveryTime,
+        toolPreferences: [ToolModelEgressConsentPreference] = []
+    ) {
+        self.defaultMode = defaultMode
+        self.toolPreferences = toolPreferences
+        normalize()
+    }
+
+    static let `default` = ToolModelEgressConsentPreferences(
+        defaultMode: .askEveryTime,
+        toolPreferences: [
+            ToolModelEgressConsentPreference(
+                toolName: SparkToolName.getCurrentLocation.rawValue,
+                mode: .alwaysAllow
+            ),
+            ToolModelEgressConsentPreference(
+                toolName: SparkToolName.queryLocation.rawValue,
+                mode: .alwaysAllow
+            ),
+            ToolModelEgressConsentPreference(
+                toolName: SparkToolName.queryWeather.rawValue,
+                mode: .alwaysAllow
+            )
+        ]
+    )
+
+    func mode(for toolName: String) -> ToolModelEgressConsentMode {
+        let normalized = Self.normalizeToolName(toolName)
+        return toolPreferences.first(where: { $0.normalizedToolName == normalized })?.mode ?? defaultMode
+    }
+
+    func preference(for toolName: String) -> ToolModelEgressConsentPreference? {
+        let normalized = Self.normalizeToolName(toolName)
+        return toolPreferences.first(where: { $0.normalizedToolName == normalized })
+    }
+
+    mutating func setMode(_ mode: ToolModelEgressConsentMode, for toolName: String, recordedToolName: String? = nil) {
+        let normalized = Self.normalizeToolName(toolName)
+        let storedName = (recordedToolName?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? recordedToolName! : toolName)
+        if let index = toolPreferences.firstIndex(where: { $0.normalizedToolName == normalized }) {
+            toolPreferences[index].toolName = storedName
+            toolPreferences[index].mode = mode
+            toolPreferences[index].updatedAt = Date()
+        } else {
+            toolPreferences.append(
+                ToolModelEgressConsentPreference(
+                    toolName: storedName,
+                    normalizedToolName: normalized,
+                    mode: mode
+                )
+            )
+        }
+        normalize()
+    }
+
+    mutating func clearPreference(for toolName: String) {
+        let normalized = Self.normalizeToolName(toolName)
+        toolPreferences.removeAll { $0.normalizedToolName == normalized }
+        normalize()
+    }
+
+    mutating func recordUsage(
+        toolName: String,
+        providerCompany: String?,
+        modelName: String?,
+        recordedToolName: String? = nil
+    ) {
+        let normalized = Self.normalizeToolName(toolName)
+        guard let index = toolPreferences.firstIndex(where: { $0.normalizedToolName == normalized }) else { return }
+        if let recordedToolName,
+           recordedToolName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+            toolPreferences[index].toolName = recordedToolName
+        }
+        toolPreferences[index].lastUsedAt = Date()
+        toolPreferences[index].lastProviderCompany = providerCompany?.trimmingCharacters(in: .whitespacesAndNewlines)
+        toolPreferences[index].lastModelName = modelName?.trimmingCharacters(in: .whitespacesAndNewlines)
+        toolPreferences[index].updatedAt = Date()
+        normalize()
+    }
+
+    mutating func normalize() {
+        var deduped: [String: ToolModelEgressConsentPreference] = [:]
+        for preference in toolPreferences {
+            var copy = preference
+            copy.normalizedToolName = Self.normalizeToolName(preference.toolName)
+            if let existing = deduped[copy.normalizedToolName] {
+                deduped[copy.normalizedToolName] = existing.updatedAt >= copy.updatedAt ? existing : copy
+            } else {
+                deduped[copy.normalizedToolName] = copy
+            }
+        }
+        toolPreferences = deduped.values.sorted {
+            $0.normalizedToolName.localizedCaseInsensitiveCompare($1.normalizedToolName) == .orderedAscending
+        }
+    }
+
+    nonisolated static func normalizeToolName(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+}
+
 nonisolated enum DeepTutorConversationCardStyle: String, Codable, CaseIterable, Sendable {
     case standard
     case bodyFocused

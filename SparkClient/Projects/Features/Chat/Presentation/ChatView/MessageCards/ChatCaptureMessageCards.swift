@@ -15,8 +15,6 @@ struct ChatCaptureTypeMessageCard: View {
     @State private var previewInputs: [FilePreviewInput] = []
     @State private var previewStartIndex = 0
 
-    private let diagnosticsPrefix = "[CHAT-000017][CaptureCard]"
-
     var body: some View {
         let spec = CaptureCardSpec(payload.cardType)
         VStack(spacing: 16) {
@@ -51,16 +49,13 @@ struct ChatCaptureTypeMessageCard: View {
             if payload.status == .pending || payload.status == .failed || payload.status == .selected {
                 HStack(spacing: 10) {
                     actionButton(icon: "camera.fill", title: L10n.text("chat.capture_card.action.camera"), color: spec.tint) {
-                        log("tap camera card=\(payload.id.uuidString) completion=\(payload.completionID?.uuidString ?? "-") type=\(payload.cardType.rawValue) status=\(payload.status.rawValue)")
                         showCamera = true
                     }
                     actionButton(icon: "photo.on.rectangle", title: L10n.text("chat.capture_card.action.photo_library"), color: spec.tint) {
-                        log("tap photo_library card=\(payload.id.uuidString) completion=\(payload.completionID?.uuidString ?? "-") type=\(payload.cardType.rawValue) status=\(payload.status.rawValue)")
                         showPhotoLibrary = true
                     }
                     if spec.supportsFiles {
                         actionButton(icon: "doc.fill", title: L10n.text("chat.capture_card.action.files"), color: spec.tint) {
-                            log("tap files card=\(payload.id.uuidString) completion=\(payload.completionID?.uuidString ?? "-") type=\(payload.cardType.rawValue) status=\(payload.status.rawValue)")
                             showFiles = true
                         }
                     }
@@ -106,7 +101,6 @@ struct ChatCaptureTypeMessageCard: View {
         .sheet(isPresented: $showPhotoLibrary) {
             ChatCapturePhotoLibraryPicker(
                 onCancel: {
-                    log("photo_library cancel card=\(payload.id.uuidString)")
                     showPhotoLibrary = false
                 },
                 onPhotosPicked: { photos in
@@ -117,7 +111,6 @@ struct ChatCaptureTypeMessageCard: View {
                             displayName: $0.suggestedFileName
                         )
                     }
-                    log("photo_library picked card=\(payload.id.uuidString) count=\(attachments.count) names=\(attachmentNames(attachments)) bytes=\(attachmentBytes(attachments))")
                     showPhotoLibrary = false
                     onAttachmentsPicked(attachments)
                 }
@@ -126,13 +119,11 @@ struct ChatCaptureTypeMessageCard: View {
         .fullScreenCover(isPresented: $showCamera) {
             ChatCaptureCameraPicker(
                 onCancel: {
-                    log("camera cancel card=\(payload.id.uuidString)")
                     showCamera = false
                 },
                 onImagePicked: { image in
                     defer { showCamera = false }
                     guard let data = image.jpegData(compressionQuality: 0.88) ?? image.pngData() else {
-                        log("camera picked image but encode failed card=\(payload.id.uuidString)")
                         return
                     }
                     let attachments = [
@@ -142,7 +133,6 @@ struct ChatCaptureTypeMessageCard: View {
                             displayName: L10n.text("chat.attachments.camera.result")
                         )
                     ]
-                    log("camera picked card=\(payload.id.uuidString) count=\(attachments.count) names=\(attachmentNames(attachments)) bytes=\(attachmentBytes(attachments))")
                     onAttachmentsPicked(attachments)
                 }
             )
@@ -155,30 +145,16 @@ struct ChatCaptureTypeMessageCard: View {
         ) { result in
             switch result {
             case .success(let urls):
-                log("file_importer success card=\(payload.id.uuidString) urlCount=\(urls.count) urls=\(urls.map { $0.lastPathComponent }.joined(separator: ","))")
                 Task {
                     let attachments = await ChatComposerAttachmentImporter.importFiles(urls: urls)
                     await MainActor.run {
-                        log("file_importer imported card=\(payload.id.uuidString) count=\(attachments.count) names=\(attachmentNames(attachments)) bytes=\(attachmentBytes(attachments))")
                         onAttachmentsPicked(attachments)
                     }
                 }
-            case .failure(let error):
-                log("file_importer failed card=\(payload.id.uuidString) error=\(error.localizedDescription)", level: .error)
+            case .failure:
+                break
             }
         }
-    }
-
-    private func log(_ message: String, level: LogLevel = .info) {
-        SparkLogger.log(level: level, module: .general, message: "\(diagnosticsPrefix) \(message)")
-    }
-
-    private func attachmentNames(_ attachments: [ChatComposerAttachmentPreview]) -> String {
-        attachments.map(\.displayName).joined(separator: ",")
-    }
-
-    private func attachmentBytes(_ attachments: [ChatComposerAttachmentPreview]) -> String {
-        attachments.map { "\($0.data.count)" }.joined(separator: ",")
     }
 
     private func exampleItem(title: String, icon: String, tint: Color) -> some View {
@@ -238,13 +214,13 @@ struct ChatCaptureTypeMessageCard: View {
     private func statusBadge(spec: CaptureCardSpec) -> some View {
         let text: String? = switch payload.status {
         case .pending: nil
-        case .selected: "已选择"
-        case .uploading: "上传中"
-        case .uploaded: "已上传"
-        case .processing: "处理中"
-        case .completed: "已完成"
-        case .failed: "失败"
-        case .cancelled: "已取消"
+        case .selected: L10n.text("chat.capture_card.status.selected", fallback: "已选择")
+        case .uploading: L10n.text("chat.capture_card.status.uploading", fallback: "上传中")
+        case .uploaded: L10n.text("chat.capture_card.status.uploaded", fallback: "已上传")
+        case .processing: L10n.text("chat.capture_card.status.processing", fallback: "处理中")
+        case .completed: L10n.text("chat.capture_card.status.completed", fallback: "已完成")
+        case .failed: L10n.text("chat.capture_card.status.failed", fallback: "失败")
+        case .cancelled: L10n.text("chat.capture_card.status.cancelled", fallback: "已取消")
         }
         if let text {
             Text(text)
@@ -261,19 +237,19 @@ struct ChatCaptureTypeMessageCard: View {
         case .pending:
             return spec.subtitle
         case .selected:
-            return "已选择材料，准备上传。"
+            return L10n.text("chat.capture_card.status_text.selected", fallback: "已选择材料，准备上传。")
         case .uploading:
-            return "正在上传到安全文件存储，请稍候。"
+            return L10n.text("chat.capture_card.status_text.uploading", fallback: "正在上传到安全文件存储，请稍候。")
         case .uploaded:
-            return "文件已上传，正在准备给 AI 使用的材料。"
+            return L10n.text("chat.capture_card.status_text.uploaded", fallback: "文件已上传，正在准备给 AI 使用的材料。")
         case .processing:
-            return "正在压缩图片并提取文字，对话稍后会自动继续。"
+            return L10n.text("chat.capture_card.status_text.processing", fallback: "正在压缩图片并提取文字，对话稍后会自动继续。")
         case .completed:
-            return payload.resultSummary ?? "材料已处理完成，对话将继续。"
+            return payload.resultSummary ?? L10n.text("chat.capture_card.status_text.completed", fallback: "材料已处理完成，对话将继续。")
         case .failed:
-            return "上传或处理失败，可以重新选择材料。"
+            return L10n.text("chat.capture_card.status_text.failed", fallback: "上传或处理失败，可以重新选择材料。")
         case .cancelled:
-            return payload.resultSummary ?? "已取消上传。"
+            return payload.resultSummary ?? L10n.text("chat.capture_card.status_text.cancelled", fallback: "已取消上传。")
         }
     }
 

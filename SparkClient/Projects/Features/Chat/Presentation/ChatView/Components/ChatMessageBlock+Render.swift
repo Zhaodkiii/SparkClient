@@ -128,7 +128,8 @@ extension ChatMessageBlock {
                     card: card,
                     onAllow: context.onToolConsentCardAllow,
                     onDeny: context.onToolConsentCardDeny,
-                    onShowDetails: context.onToolConsentCardShowDetails
+                    onShowDetails: context.onToolConsentCardShowDetails,
+                    onOpenSettings: context.onToolConsentCardOpenSettings
                 )
             }
 

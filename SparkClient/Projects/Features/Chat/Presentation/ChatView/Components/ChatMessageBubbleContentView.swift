@@ -52,6 +52,7 @@ struct ChatMessageBubbleContentView: View {
     let onToolConsentCardAllow: (ChatToolConsentCard) -> Void
     let onToolConsentCardDeny: (ChatToolConsentCard) -> Void
     let onToolConsentCardShowDetails: (ChatToolConsentCard) -> Void
+    let onToolConsentCardOpenSettings: (ChatToolConsentCard) -> Void
     let onLocationPermissionCardAction: (ChatLocationPermissionCard) -> Void
     let onWeatherConfigCardOpen: (ChatWeatherConfigCardPayload) -> Void
     let savingStructuredHealthCardIDs: Set<UUID>
@@ -133,6 +134,7 @@ struct ChatMessageBubbleContentView: View {
             onToolConsentCardAllow: onToolConsentCardAllow,
             onToolConsentCardDeny: onToolConsentCardDeny,
             onToolConsentCardShowDetails: onToolConsentCardShowDetails,
+            onToolConsentCardOpenSettings: onToolConsentCardOpenSettings,
             onLocationPermissionCardAction: onLocationPermissionCardAction,
             onWeatherConfigCardOpen: onWeatherConfigCardOpen,
             onStructuredHealthCardAction: onStructuredHealthCardAction,

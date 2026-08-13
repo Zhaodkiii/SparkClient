@@ -1,111 +1,258 @@
 import Foundation
 
-/// 工具授权权限持久化存储类
-/// 负责持久化保存每个工具的模型数据外传授权决策，保证线程安全
-final class ToolConsentPermissionStore: @unchecked Sendable {
-    /// 全局单例，提供统一的授权存储访问入口
-    static let shared = ToolConsentPermissionStore()
+nonisolated enum ToolModelEgressConsentCategory: String, Codable, Sendable, CaseIterable {
+    case location
+    case weather
+    case health
 
-    /// 用户偏好存储，用于本地持久化授权数据
-    private let defaults: UserDefaults
-    /// 存储授权工具列表的Key（带版本号，便于后续迭代兼容）
-    private let key = "spark.tool_consent.allowed_tools.v1"
-    /// 线程锁，保证多线程环境下读写数据的线程安全
-    private let lock = NSLock()
-
-    /// 初始化方法
-    /// - Parameter defaults: 自定义存储对象，默认使用系统标准UserDefaults
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
+    var localizationKey: String {
+        switch self {
+        case .location:
+            return "ai_settings.tool_consent.category.location"
+        case .weather:
+            return "ai_settings.tool_consent.category.weather"
+        case .health:
+            return "ai_settings.tool_consent.category.health"
+        }
     }
 
-    /// 判断指定工具是否已获得用户授权
-    /// - Parameter toolName: 工具名称
-    /// - Returns: 已授权返回true，未授权返回false
-    func isAllowed(toolName: String) -> Bool {
-        // 加锁，防止多线程同时读写导致数据异常
-        lock.lock()
-        // 代码执行完毕自动解锁，无论正常退出还是异常抛出
-        defer { lock.unlock() }
-        // 标准化工具名称后，检查是否在授权集合中
-        return allowedTools().contains(Self.normalize(toolName))
-    }
-
-    /// 记录并持久化用户授权指定工具
-    /// - Parameter toolName: 被授权的工具名称
-    func rememberAllowed(toolName: String) {
-        lock.lock()
-        defer { lock.unlock() }
-        // 获取当前已授权的工具集合
-        var tools = allowedTools()
-        // 插入标准化后的工具名（集合自动去重）
-        tools.insert(Self.normalize(toolName))
-        // 转换为有序数组并排序，保存到本地
-        defaults.set(Array(tools).sorted(), forKey: key)
-    }
-
-    /// 从本地读取并返回所有已授权的工具名称集合
-    /// - Returns: 无重复的工具名称集合
-    private func allowedTools() -> Set<String> {
-        Set(defaults.stringArray(forKey: key) ?? [])
-    }
-
-    /// 工具名称标准化处理：去除首尾空格换行 + 转为小写
-    /// 避免因大小写、空格导致授权匹配失败
-    private nonisolated static func normalize(_ value: String) -> String {
-        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    var displayTitle: String {
+        switch self {
+        case .location:
+            return L10n.text(localizationKey, fallback: "位置")
+        case .weather:
+            return L10n.text(localizationKey, fallback: "天气")
+        case .health:
+            return L10n.text(localizationKey, fallback: "健康")
+        }
     }
 }
 
-/// 苹果健康工具授权策略
-/// 统一管控苹果健康工具结果离开设备用于模型上下文的授权策略
-struct AppleHealthToolConsentPolicy: Sendable {
-    /// 授权存储对象，默认使用全局单例
-    private let permissionStore: ToolConsentPermissionStore
+nonisolated struct ToolModelEgressConsentDescriptor: Equatable, Sendable {
+    let toolName: String
+    let category: ToolModelEgressConsentCategory
+    let localizationKeyPrefix: String
+    let relatedToolNames: [String]
+    let dataLineCount: Int
+    let dataSourceLineCount: Int
 
-    /// 初始化方法
-    /// - Parameter permissionStore: 自定义权限存储，默认使用全局共享实例
-    init(permissionStore: ToolConsentPermissionStore = .shared) {
-        self.permissionStore = permissionStore
+    var displayName: String {
+        SparkToolName.displayName(for: toolName)
     }
 
-    /// 判断是否需要向用户请求健康工具授权
-    /// - Parameters:
-    ///   - result: 工具执行结果
-    ///   - providerCompany: 服务提供方公司名称
-    /// - Returns: 需要授权返回true，无需授权返回false
-    func requiresConsent(result: ToolExecutionResult, providerCompany: String?) -> Bool {
-        // 条件1：工具数据不敏感 → 无需授权
-        guard result.sensitive else { return false }
-        // 条件2：不是苹果健康读取工具 → 无需授权
-        guard Self.modelConsentToolNames.contains(Self.normalize(result.toolName)) else { return false }
-        // 条件3：本地服务（LOCAL）→ 无需授权
-        guard (providerCompany ?? "").uppercased() != "LOCAL" else { return false }
-        // 条件4：未获得用户授权 → 需要请求授权
-        return permissionStore.isAllowed(toolName: result.toolName) == false
+    var normalizedToolName: String {
+        ToolModelEgressConsentPreferences.normalizeToolName(toolName)
     }
 
-    /// 记录用户授权的苹果健康工具
-    /// - Parameter toolName: 工具名称
-    func rememberAllowed(toolName: String) {
-        permissionStore.rememberAllowed(toolName: toolName)
+    var categoryTitle: String {
+        category.displayTitle
     }
 
-    /// 苹果健康与位置/天气等敏感工具授权策略
-    /// 统一管控敏感工具结果离开设备用于模型上下文的授权策略
-    private static let modelConsentToolNames: Set<String> = Set([
-        SparkToolName.fetchStepDetails.rawValue,
-        SparkToolName.fetchEnergyDetails.rawValue,
-        SparkToolName.fetchNutritionDetails.rawValue,
-        SparkToolName.fetchSleepDetails.rawValue,
-        SparkToolName.fetchWorkoutDetails.rawValue,
-        SparkToolName.queryWeather.rawValue,
-        SparkToolName.queryLocation.rawValue,
-        SparkToolName.getCurrentLocation.rawValue,
-    ].map { normalize($0) })
+    var summary: String {
+        L10n.text(
+            "\(localizationKeyPrefix).summary",
+            fallback: "Tool result may be sent to the model for personalized responses."
+        )
+    }
 
-    /// 工具名称标准化（与权限存储类保持一致）
-    private nonisolated static func normalize(_ value: String) -> String {
-        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    var dataLines: [String] {
+        L10n.numberedTexts(prefix: "\(localizationKeyPrefix).data", count: dataLineCount)
+    }
+
+    var whyItNeedsAI: String {
+        L10n.text(
+            "\(localizationKeyPrefix).why",
+            fallback: "The model needs this tool result to continue generating a relevant response."
+        )
+    }
+
+    var denyImpact: String {
+        L10n.text(
+            "\(localizationKeyPrefix).deny_impact",
+            fallback: "If denied, the model will not receive the original tool result."
+        )
+    }
+
+    var dataSourceLines: [String] {
+        L10n.numberedTexts(prefix: "\(localizationKeyPrefix).source", count: dataSourceLineCount)
+    }
+}
+
+nonisolated enum ToolModelEgressConsentResolution: Equatable, Sendable {
+    case allowWithoutPrompt
+    case askEveryTime
+    case deny(reason: String)
+}
+
+struct ToolModelEgressConsentPolicy: Sendable {
+    private var defaultDenyReason: String {
+        L10n.text(
+            "ai_settings.tool_consent.runtime.always_deny_reason",
+            fallback: "用户已将该工具配置为永久拒绝发送到 AI。"
+        )
+    }
+
+    func evaluate(
+        result: ToolExecutionResult,
+        providerCompany: String?,
+        snapshot: AISettingsSnapshot
+    ) -> ToolModelEgressConsentResolution {
+        guard result.sensitive else { return .allowWithoutPrompt }
+        guard Self.managedToolNames.contains(Self.normalize(result.toolName)) else { return .allowWithoutPrompt }
+        guard (providerCompany ?? "").uppercased() != "LOCAL" else { return .allowWithoutPrompt }
+        guard Self.resultContainsShareableUserData(result) else { return .allowWithoutPrompt }
+
+        switch snapshot.toolModelEgressConsentPreferences.mode(for: result.toolName) {
+        case .alwaysAllow:
+            return .allowWithoutPrompt
+        case .askEveryTime:
+            return .askEveryTime
+        case .alwaysDeny:
+            return .deny(reason: defaultDenyReason)
+        }
+    }
+
+    func descriptor(for toolName: String) -> ToolModelEgressConsentDescriptor? {
+        Self.descriptor(for: toolName)
+    }
+
+    func controls(toolName: String) -> Bool {
+        Self.managedToolNames.contains(Self.normalize(toolName))
+    }
+
+    static func descriptor(for toolName: String) -> ToolModelEgressConsentDescriptor? {
+        descriptors[normalize(toolName)]
+    }
+
+    static func managedDescriptors() -> [ToolModelEgressConsentDescriptor] {
+        descriptors.values.sorted {
+            $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+        }
+    }
+
+    static func modeSummary(
+        snapshot: AISettingsSnapshot,
+        descriptor: ToolModelEgressConsentDescriptor
+    ) -> ToolModelEgressConsentMode {
+        snapshot.toolModelEgressConsentPreferences.mode(for: descriptor.toolName)
+    }
+
+    static let managedToolNames: Set<String> = Set(descriptors.keys)
+
+    private static func resultContainsShareableUserData(_ result: ToolExecutionResult) -> Bool {
+        guard let descriptor = descriptor(for: result.toolName) else { return true }
+        switch descriptor.category {
+        case .health:
+            return healthOutputIndicatesNoUserData(result.outputText) == false
+        case .location, .weather:
+            return true
+        }
+    }
+
+    private static func healthOutputIndicatesNoUserData(_ output: String) -> Bool {
+        let trimmed = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else { return true }
+
+        let noDataPrefixes = [
+            L10n.text("health.tool.error.no_matching_health"),
+            L10n.text("health.tool.error.no_workouts", fallback: "No matching workout records found."),
+            L10n.text("health.tool.error.no_nutrition", fallback: "No nutrition data found."),
+            L10n.text("health.tool.error.no_sleep", fallback: "No sleep data found."),
+            L10n.text("health.tool.error.no_sleep_range", fallback: "No sleep data found in the requested date range.")
+        ]
+
+        if noDataPrefixes.contains(where: { trimmed.hasPrefix($0) }) {
+            return true
+        }
+
+        let sleepEmptyLine = L10n.text("chat.sleep.readable.empty", fallback: "  - No sleep data")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.contains(sleepEmptyLine)
+    }
+
+    private static let descriptors: [String: ToolModelEgressConsentDescriptor] = {
+        let values: [ToolModelEgressConsentDescriptor] = [
+            ToolModelEgressConsentDescriptor(
+                toolName: SparkToolName.getCurrentLocation.rawValue,
+                category: .location,
+                localizationKeyPrefix: "ai_settings.tool_consent.descriptor.get_current_location",
+                relatedToolNames: [
+                    SparkToolName.getCurrentLocation.rawValue,
+                    SparkToolName.queryLocation.rawValue,
+                    SparkToolName.queryWeather.rawValue
+                ],
+                dataLineCount: 3,
+                dataSourceLineCount: 2
+            ),
+            ToolModelEgressConsentDescriptor(
+                toolName: SparkToolName.queryLocation.rawValue,
+                category: .location,
+                localizationKeyPrefix: "ai_settings.tool_consent.descriptor.query_location",
+                relatedToolNames: [
+                    SparkToolName.queryLocation.rawValue,
+                    SparkToolName.getCurrentLocation.rawValue,
+                    SparkToolName.queryWeather.rawValue
+                ],
+                dataLineCount: 3,
+                dataSourceLineCount: 1
+            ),
+            ToolModelEgressConsentDescriptor(
+                toolName: SparkToolName.queryWeather.rawValue,
+                category: .weather,
+                localizationKeyPrefix: "ai_settings.tool_consent.descriptor.query_weather",
+                relatedToolNames: [
+                    SparkToolName.queryWeather.rawValue,
+                    SparkToolName.queryLocation.rawValue,
+                    SparkToolName.getCurrentLocation.rawValue
+                ],
+                dataLineCount: 3,
+                dataSourceLineCount: 2
+            ),
+            ToolModelEgressConsentDescriptor(
+                toolName: SparkToolName.fetchStepDetails.rawValue,
+                category: .health,
+                localizationKeyPrefix: "ai_settings.tool_consent.descriptor.fetch_step_details",
+                relatedToolNames: [SparkToolName.fetchStepDetails.rawValue],
+                dataLineCount: 3,
+                dataSourceLineCount: 1
+            ),
+            ToolModelEgressConsentDescriptor(
+                toolName: SparkToolName.fetchEnergyDetails.rawValue,
+                category: .health,
+                localizationKeyPrefix: "ai_settings.tool_consent.descriptor.fetch_energy_details",
+                relatedToolNames: [SparkToolName.fetchEnergyDetails.rawValue],
+                dataLineCount: 3,
+                dataSourceLineCount: 1
+            ),
+            ToolModelEgressConsentDescriptor(
+                toolName: SparkToolName.fetchNutritionDetails.rawValue,
+                category: .health,
+                localizationKeyPrefix: "ai_settings.tool_consent.descriptor.fetch_nutrition_details",
+                relatedToolNames: [SparkToolName.fetchNutritionDetails.rawValue],
+                dataLineCount: 3,
+                dataSourceLineCount: 1
+            ),
+            ToolModelEgressConsentDescriptor(
+                toolName: SparkToolName.fetchSleepDetails.rawValue,
+                category: .health,
+                localizationKeyPrefix: "ai_settings.tool_consent.descriptor.fetch_sleep_details",
+                relatedToolNames: [SparkToolName.fetchSleepDetails.rawValue],
+                dataLineCount: 3,
+                dataSourceLineCount: 1
+            ),
+            ToolModelEgressConsentDescriptor(
+                toolName: SparkToolName.fetchWorkoutDetails.rawValue,
+                category: .health,
+                localizationKeyPrefix: "ai_settings.tool_consent.descriptor.fetch_workout_details",
+                relatedToolNames: [SparkToolName.fetchWorkoutDetails.rawValue],
+                dataLineCount: 3,
+                dataSourceLineCount: 1
+            ),
+        ]
+        return Dictionary(uniqueKeysWithValues: values.map { ($0.normalizedToolName, $0) })
+    }()
+
+    private static func normalize(_ value: String) -> String {
+        ToolModelEgressConsentPreferences.normalizeToolName(value)
     }
 }

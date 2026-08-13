@@ -1033,6 +1033,7 @@ extension ChatMessageBlock {
             || kind == .healthResourceCandidateCards
             || kind == .toolConsentCards
             || kind == .locationPermissionCards
+            || kind == .weatherConfigCard
     }
 }
 

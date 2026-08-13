@@ -64,4 +64,7 @@ nonisolated struct ExternalToolDataSharePrompt: Identifiable, Equatable, Codable
     let payloadBlocks: [ExternalToolDataSharePayloadBlock]
     let privacyPolicyURL: URL?
 
+    var primaryToolName: String? {
+        payloadBlocks.first?.toolAPIName
+    }
 }

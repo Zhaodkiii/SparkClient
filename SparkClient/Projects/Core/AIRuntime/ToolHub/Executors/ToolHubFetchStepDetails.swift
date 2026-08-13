@@ -3,11 +3,14 @@ import Foundation
 extension ToolHub {
     func runFetchSteps(invocation: ToolInvocation) async -> ToolExecutionResult {
         let range = resolveHealthRange(arguments: invocation.arguments)
-        let output = await healthTool.fetchStepDetails(from: range.start, to: range.end)
+        let output = healthNoDataDiagnosticIfNeeded(
+            await healthTool.fetchStepDetails(from: range.start, to: range.end),
+            range: range
+        )
         return ToolExecutionResult(
             toolName: SparkToolName.fetchStepDetails,
-            outputText: healthNoDataDiagnosticIfNeeded(output, range: range),
-            sensitive: true,
+            outputText: output,
+            sensitive: healthOutputContainsUserData(output),
             shouldBypassModel: true
         )
     }

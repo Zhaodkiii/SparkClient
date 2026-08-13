@@ -3,10 +3,11 @@ import Foundation
 extension ToolHub {
     func runFetchNutrition(invocation: ToolInvocation) async -> ToolExecutionResult {
         let range = resolveHealthRange(arguments: invocation.arguments)
+        let output = await healthTool.fetchNutritionDetails(from: range.start, to: range.end)
         return ToolExecutionResult(
             toolName: SparkToolName.fetchNutritionDetails,
-            outputText: await healthTool.fetchNutritionDetails(from: range.start, to: range.end),
-            sensitive: true,
+            outputText: output,
+            sensitive: healthOutputContainsUserData(output),
             shouldBypassModel: true
         )
     }

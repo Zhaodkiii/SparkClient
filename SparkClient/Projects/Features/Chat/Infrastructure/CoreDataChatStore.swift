@@ -643,10 +643,6 @@ actor CoreDataChatStore {
             row.setValue(event.createdAt, forKey: "createdAt")
             return event.threadID
         }
-        logger.info(
-            "[CHAT_USAGE_TMP] db.event.append type=\(event.eventType.rawValue) assistant=\(event.messageID.uuidString) thread=\(event.threadID.uuidString) callIndex=\(event.callIndex) prompt=\(event.promptTokens) completion=\(event.completionTokens) total=\(event.totalTokens) estimated=\(event.isEstimated) toolCallID=\(event.toolCallID ?? "-") tool=\(event.toolName ?? "-") persisted=\(threadID != nil)",
-            module: .aiConfig
-        )
         if let threadID {
             await kernel.postChangeNotification(
                 ChatConversationChangeEvent(
@@ -687,10 +683,6 @@ actor CoreDataChatStore {
             row.setValue(summary.updatedAt, forKey: "updatedAt")
             return summary.threadID
         }
-        logger.info(
-            "[CHAT_USAGE_TMP] db.summary.upsert assistant=\(summary.messageID.uuidString) thread=\(summary.threadID.uuidString) prompt=\(summary.promptTokens) completion=\(summary.completionTokens) total=\(summary.totalTokens) llmCalls=\(summary.llmCallCount) toolCalls=\(summary.toolCallCount) amount=\(summary.estimatedAmount) currency=\(summary.currencyCode) source=\(summary.source.rawValue) estimated=\(summary.isEstimated) persisted=\(threadID != nil)",
-            module: .aiConfig
-        )
         if let threadID {
             await kernel.postChangeNotification(
                 ChatConversationChangeEvent(

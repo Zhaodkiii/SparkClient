@@ -119,10 +119,6 @@ struct ChatOrchestrator: Sendable {
             )
 
             if let messageRunActor, let assistantID = assistantMessageClientID {
-                logger.info(
-                    "[CHAT_USAGE_TMP] direct_tool.start assistant=\(assistantID.uuidString) tool=\(result.toolName) outputChars=\(result.outputText.count) sideEffects=\(result.sideEffects.count)",
-                    module: .aiConfig
-                )
                 await messageRunActor.recordToolCallStarted(
                     assistantClientMessageID: assistantID,
                     callIndex: 0,
@@ -135,10 +131,6 @@ struct ChatOrchestrator: Sendable {
                     toolCallID: nil,
                     toolName: result.toolName,
                     resultText: result.outputText
-                )
-                logger.info(
-                    "[CHAT_USAGE_TMP] direct_tool.finish assistant=\(assistantID.uuidString) tool=\(result.toolName)",
-                    module: .aiConfig
                 )
                 for effect in result.sideEffects {
                     await messageRunActor.apply(
@@ -230,10 +222,6 @@ struct ChatOrchestrator: Sendable {
             
             let collected: CollectedRuntimeResponse
             if let messageRunActor, let assistantID = assistantMessageClientID {
-                logger.info(
-                    "[CHAT_USAGE_TMP] llm.request.start assistant=\(assistantID.uuidString) round=\(round) model=\(preferredModelName ?? "-") loopMessages=\(loopMessages.count)",
-                    module: .aiConfig
-                )
                 await messageRunActor.recordLLMRequestStarted(
                     assistantClientMessageID: assistantID,
                     callIndex: round,
@@ -273,10 +261,6 @@ struct ChatOrchestrator: Sendable {
             if let messageRunActor, let assistantID = assistantMessageClientID {
                 let hasProviderUsage = response.promptTokens != nil && response.completionTokens != nil
                 let completionTokenEstimate = Self.estimateTokens(for: response)
-                logger.info(
-                    "[CHAT_USAGE_TMP] llm.usage.collect assistant=\(assistantID.uuidString) round=\(round) model=\(response.model) providerPrompt=\(response.promptTokens.map(String.init) ?? "nil") providerCompletion=\(response.completionTokens.map(String.init) ?? "nil") fallbackPrompt=\(promptTokenEstimate) fallbackPromptMessages=\(promptMessageTokenEstimate) fallbackPromptTools=\(promptToolTokenEstimate) fallbackCompletion=\(completionTokenEstimate) isEstimated=\(hasProviderUsage == false) toolCalls=\(response.toolCalls.count) finish=\(response.finishReason ?? "-")",
-                    module: .aiConfig
-                )
                 await messageRunActor.recordLLMUsage(
                     assistantClientMessageID: assistantID,
                     callIndex: round,
@@ -416,10 +400,6 @@ struct ChatOrchestrator: Sendable {
                 // 前端UI：显示工具调用中（带上模型传入参数，避免覆盖流式阶段已展示的 arguments）
                 let parsedCallArguments = toolHub.parseArguments(call.arguments)
                 if let messageRunActor, let assistantID = assistantMessageClientID {
-                    logger.info(
-                        "[CHAT_USAGE_TMP] tool.start assistant=\(assistantID.uuidString) round=\(round) toolCallID=\(call.id) tool=\(call.name) argsChars=\(call.arguments.count)",
-                        module: .aiConfig
-                    )
                     await messageRunActor.recordToolCallStarted(
                         assistantClientMessageID: assistantID,
                         callIndex: round,
@@ -453,10 +433,6 @@ struct ChatOrchestrator: Sendable {
                     privacyPolicyURL: nil
                 )
                 if let messageRunActor, let assistantID = assistantMessageClientID {
-                    logger.info(
-                        "[CHAT_USAGE_TMP] tool.finish assistant=\(assistantID.uuidString) round=\(round) toolCallID=\(call.id) tool=\(call.name) outputChars=\(toolResult.outputText.count) awaitingUser=\(toolResult.isAwaitingUserInput)",
-                        module: .aiConfig
-                    )
                     await messageRunActor.recordToolCallFinished(
                         assistantClientMessageID: assistantID,
                         callIndex: round,

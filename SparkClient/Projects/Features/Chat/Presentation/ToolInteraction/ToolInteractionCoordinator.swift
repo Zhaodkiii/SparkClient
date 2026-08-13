@@ -380,11 +380,6 @@ final class ToolInteractionCoordinator: ObservableObject {
         prompt: ToolAttachmentCapturePrompt,
         toolCallID: String? = nil
     ) async -> InteractionResult<ToolAttachmentCaptureResult> {
-        SparkLogger.log(
-            level: .info,
-            module: .general,
-            message: "[CHAT-000017][ToolInteraction] requestAttachmentCapture thread=\(threadID?.uuidString ?? "-") prompt=\(prompt.id.uuidString) type=\(prompt.cardType.rawValue) toolCall=\(toolCallID ?? "-") hasInlineSink=\(inlineCardSink != nil)"
-        )
         if let inlineCardSink {
             return await requestInlineAttachmentCapture(
                 threadID: threadID,
@@ -393,11 +388,6 @@ final class ToolInteractionCoordinator: ObservableObject {
                 sink: inlineCardSink
             )
         }
-        SparkLogger.log(
-            level: .warning,
-            module: .general,
-            message: "[CHAT-000017][ToolInteraction] requestAttachmentCapture cancelled: missing inline sink prompt=\(prompt.id.uuidString)"
-        )
         return .cancelled
     }
 
@@ -521,35 +511,15 @@ final class ToolInteractionCoordinator: ObservableObject {
 
     func completeInlineAttachmentCapture(id: UUID, result: ToolAttachmentCaptureResult) {
         guard let continuation = inlineAttachmentCaptureContinuations.removeValue(forKey: id) else {
-            SparkLogger.log(
-                level: .warning,
-                module: .general,
-                message: "[CHAT-000017][ToolInteraction] completeInlineAttachmentCapture ignored: no continuation completion=\(id.uuidString) count=\(result.attachments.count)"
-            )
             return
         }
-        SparkLogger.log(
-            level: .info,
-            module: .general,
-            message: "[CHAT-000017][ToolInteraction] completeInlineAttachmentCapture resume completion=\(id.uuidString) type=\(result.cardType.rawValue) count=\(result.attachments.count) contextChars=\(result.modelContextText.count)"
-        )
         continuation.resume(returning: .success(result))
     }
 
     func cancelInlineAttachmentCapture(id: UUID) {
         guard let continuation = inlineAttachmentCaptureContinuations.removeValue(forKey: id) else {
-            SparkLogger.log(
-                level: .warning,
-                module: .general,
-                message: "[CHAT-000017][ToolInteraction] cancelInlineAttachmentCapture ignored: no continuation completion=\(id.uuidString)"
-            )
             return
         }
-        SparkLogger.log(
-            level: .info,
-            module: .general,
-            message: "[CHAT-000017][ToolInteraction] cancelInlineAttachmentCapture resume completion=\(id.uuidString)"
-        )
         continuation.resume(returning: .cancelled)
     }
 
@@ -670,11 +640,6 @@ final class ToolInteractionCoordinator: ObservableObject {
         sink: any ChatInlineToolInteractionCardSink
     ) async -> InteractionResult<ToolAttachmentCaptureResult> {
         let completionID = UUID()
-        SparkLogger.log(
-            level: .info,
-            module: .general,
-            message: "[CHAT-000017][ToolInteraction] requestInlineAttachmentCapture create continuation completion=\(completionID.uuidString) prompt=\(prompt.id.uuidString) type=\(prompt.cardType.rawValue)"
-        )
         return await withCheckedContinuation { continuation in
             inlineAttachmentCaptureContinuations[completionID] = continuation
             Task {
@@ -683,11 +648,6 @@ final class ToolInteractionCoordinator: ObservableObject {
                     prompt: prompt,
                     completionID: completionID,
                     toolCallID: toolCallID
-                )
-                SparkLogger.log(
-                    level: didPresent ? .info : .warning,
-                    module: .general,
-                    message: "[CHAT-000017][ToolInteraction] requestInlineAttachmentCapture present result completion=\(completionID.uuidString) didPresent=\(didPresent)"
                 )
                 if didPresent == false {
                     await MainActor.run {

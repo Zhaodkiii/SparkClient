@@ -42,6 +42,7 @@ struct ChatRenderContext {
     let onToolConsentCardAllow: (ChatToolConsentCard) -> Void
     let onToolConsentCardDeny: (ChatToolConsentCard) -> Void
     let onToolConsentCardShowDetails: (ChatToolConsentCard) -> Void
+    let onToolConsentCardOpenSettings: (ChatToolConsentCard) -> Void
     let onLocationPermissionCardAction: (ChatLocationPermissionCard) -> Void
     let onWeatherConfigCardOpen: (ChatWeatherConfigCardPayload) -> Void
     let onStructuredHealthCardAction: (ChatStructuredHealthCardAction) -> Void  // 健康卡片操作
@@ -101,6 +102,7 @@ extension ChatRenderContext {
             onToolConsentCardAllow: onToolConsentCardAllow,
             onToolConsentCardDeny: onToolConsentCardDeny,
             onToolConsentCardShowDetails: onToolConsentCardShowDetails,
+            onToolConsentCardOpenSettings: onToolConsentCardOpenSettings,
             onLocationPermissionCardAction: onLocationPermissionCardAction,
             onWeatherConfigCardOpen: onWeatherConfigCardOpen,
             onStructuredHealthCardAction: onStructuredHealthCardAction,

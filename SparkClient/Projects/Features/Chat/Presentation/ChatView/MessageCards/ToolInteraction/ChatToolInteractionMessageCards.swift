@@ -71,10 +71,10 @@ struct ChatToolQuestionMessageCardView: View {
                 .background(Color.primary.opacity(0.08), in: Circle())
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("请作答以继续")
+                Text(L10n.text("chat.tool_interaction.question.title", fallback: "请作答以继续"))
                     .font(.system(size: ChatToolInteractionCardStyle.headerFontSize, weight: .medium))
                     .foregroundStyle(.primary)
-                Text("该工具需要你的补充选择。")
+                Text(L10n.text("chat.tool_interaction.question.subtitle", fallback: "该工具需要你的补充选择。"))
                     .font(.system(size: ChatToolInteractionCardStyle.subtitleFontSize))
                     .foregroundStyle(ChatToolInteractionCardStyle.mutedText)
             }
@@ -101,7 +101,7 @@ struct ChatToolQuestionMessageCardView: View {
 
                 if question.allowsOther {
                     TextField(
-                        "输入自定义回复",
+                        L10n.text("chat.tool_interaction.question.other_placeholder", fallback: "输入自定义回复"),
                         text: Binding(
                             get: { otherTextByQuestion[question.id, default: ""] },
                             set: { otherTextByQuestion[question.id] = $0 }
@@ -148,13 +148,13 @@ struct ChatToolQuestionMessageCardView: View {
 
     private var footer: some View {
         HStack(alignment: .center, spacing: 8) {
-            Text("提交后工具会继续执行。")
+            Text(L10n.text("chat.tool_interaction.question.footer", fallback: "提交后工具会继续执行。"))
                 .font(.system(size: ChatToolInteractionCardStyle.footerFontSize))
                 .foregroundStyle(ChatToolInteractionCardStyle.mutedText)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            Button("提交") {
+            Button(L10n.text("chat.tool_interaction.common.submit", fallback: "提交")) {
                 onSubmit(card, responses())
             }
             .font(.system(size: 12, weight: .medium))
@@ -189,13 +189,13 @@ struct ChatToolQuestionMessageCardView: View {
     private var resolvedTitle: String {
         switch card.status {
         case .submitted:
-            return "已提交回答"
+            return L10n.text("chat.tool_interaction.question.submitted", fallback: "已提交回答")
         case .cancelled:
-            return "已取消回答"
+            return L10n.text("chat.tool_interaction.question.cancelled", fallback: "已取消回答")
         case .expired:
-            return "本次等待已失效"
+            return L10n.text("chat.tool_interaction.common.expired", fallback: "本次等待已失效")
         case .pending:
-            return "等待回答"
+            return L10n.text("chat.tool_interaction.question.pending", fallback: "等待回答")
         }
     }
 
@@ -212,7 +212,7 @@ struct ChatToolQuestionMessageCardView: View {
             answerText(for: response)
         }.filter { $0.isEmpty == false }
         if values.isEmpty == false { return values }
-        return [card.resultText ?? "工具等待已经结束。"]
+        return [card.resultText ?? L10n.text("chat.tool_interaction.question.finished_fallback", fallback: "工具等待已经结束。")]
     }
 
     private func hydrateFromAnswers() {
@@ -258,7 +258,15 @@ struct ChatToolQuestionMessageCardView: View {
         if let other = nonEmpty(response.otherText) {
             parts.append(other)
         }
-        return parts.isEmpty ? "已跳过：\(question.question)" : "\(question.question)：\(parts.joined(separator: "，"))"
+        let listSeparator = L10n.text("chat.tool_interaction.common.list_separator", fallback: "，")
+        return parts.isEmpty
+            ? L10n.format("chat.tool_interaction.question.skipped_format", fallback: "已跳过：%@", question.question)
+            : L10n.format(
+                "chat.tool_interaction.question.answer_format",
+                fallback: "%@：%@",
+                question.question,
+                parts.joined(separator: listSeparator)
+            )
     }
 
     private func nonEmpty(_ text: String?) -> String? {
@@ -345,7 +353,7 @@ struct ChatToolMemberSelectionMessageCardView: View {
             }
             .padding(.top, 12)
 
-            Text("未选择成员将无法继续使用该工具。")
+            Text(L10n.text("chat.tool_interaction.member_selection.footer", fallback: "未选择成员将无法继续使用该工具。"))
                 .font(.system(size: ChatToolInteractionCardStyle.footerFontSize))
                 .foregroundStyle(ChatToolInteractionCardStyle.mutedText)
                 .padding(.top, 12)
@@ -360,10 +368,10 @@ struct ChatToolMemberSelectionMessageCardView: View {
                 .frame(width: ChatToolInteractionCardStyle.badgeSize, height: ChatToolInteractionCardStyle.badgeSize)
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("请选择成员")
+                Text(L10n.text("chat.tool_interaction.member_selection.title", fallback: "请选择成员"))
                     .font(.system(size: ChatToolInteractionCardStyle.headerFontSize, weight: .medium))
                     .foregroundStyle(.primary)
-                Text("该工具需要确认要查询哪位家庭成员。")
+                Text(L10n.text("chat.tool_interaction.member_selection.subtitle", fallback: "该工具需要确认要查询哪位家庭成员。"))
                     .font(.system(size: ChatToolInteractionCardStyle.subtitleFontSize))
                     .foregroundStyle(ChatToolInteractionCardStyle.mutedText)
             }
@@ -418,11 +426,11 @@ struct ChatToolMemberSelectionMessageCardView: View {
                 .font(.system(size: ChatToolInteractionCardStyle.headerFontSize, weight: .semibold))
                 .foregroundStyle(resolvedColor)
             if let name = card.selectedMemberName ?? members.first(where: { $0.id == effectiveSelectedMemberID })?.name {
-                Text("已选择：\(name)")
+                Text(L10n.format("chat.tool_interaction.member_selection.selected_format", fallback: "已选择：%@", name))
                     .font(.system(size: ChatToolInteractionCardStyle.bodyFontSize, weight: .medium))
                     .foregroundStyle(.primary)
             }
-            Text(card.resultText ?? "工具会继续使用该成员完成本次查询。")
+            Text(card.resultText ?? L10n.text("chat.tool_interaction.member_selection.continue_with_member", fallback: "工具会继续使用该成员完成本次查询。"))
                 .font(.system(size: ChatToolInteractionCardStyle.footerFontSize))
                 .foregroundStyle(ChatToolInteractionCardStyle.mutedText)
         }
@@ -431,13 +439,15 @@ struct ChatToolMemberSelectionMessageCardView: View {
     private var resolvedTitle: String {
         switch card.status {
         case .submitted:
-            return "已选择成员"
+            return L10n.text("chat.tool_interaction.member_selection.submitted", fallback: "已选择成员")
         case .cancelled:
-            return "已取消选择"
+            return L10n.text("chat.tool_interaction.member_selection.cancelled", fallback: "已取消选择")
         case .expired:
-            return "本次等待已失效"
+            return L10n.text("chat.tool_interaction.common.expired", fallback: "本次等待已失效")
         case .pending:
-            return optimisticSelectedMemberID == nil ? "等待选择成员" : "已选择成员，正在继续"
+            return optimisticSelectedMemberID == nil
+                ? L10n.text("chat.tool_interaction.member_selection.pending", fallback: "等待选择成员")
+                : L10n.text("chat.tool_interaction.member_selection.continuing", fallback: "已选择成员，正在继续")
         }
     }
 
@@ -452,11 +462,11 @@ struct ChatToolMemberSelectionMessageCardView: View {
     private var emptyState: some View {
         VStack(alignment: .leading, spacing: 8) {
             cardHeader
-            Text("暂无可选择的成员档案")
+            Text(L10n.text("chat.tool_interaction.member_selection.empty_title", fallback: "暂无可选择的成员档案"))
                 .font(.system(size: ChatToolInteractionCardStyle.bodyFontSize, weight: .medium))
                 .foregroundStyle(.primary)
                 .padding(.top, 12)
-            Text("请先创建家庭成员后，再继续使用健康数据工具。")
+            Text(L10n.text("chat.tool_interaction.member_selection.empty_message", fallback: "请先创建家庭成员后，再继续使用健康数据工具。"))
                 .font(.system(size: ChatToolInteractionCardStyle.footerFontSize))
                 .foregroundStyle(ChatToolInteractionCardStyle.mutedText)
         }
@@ -478,13 +488,13 @@ struct ChatToolMemberSelectionMessageCardView: View {
         if let birthDate = member.birthDate {
             let years = Calendar.current.dateComponents([.year], from: birthDate, to: Date()).year ?? 0
             if years > 0 {
-                parts.append("\(years)岁")
+                parts.append(L10n.format("chat.tool_interaction.member_selection.age_years_format", fallback: "%d岁", years))
             }
         }
         if member.gender != "unknown" {
             parts.append(member.gender)
         }
-        return parts.joined(separator: " · ")
+        return parts.joined(separator: L10n.text("chat.tool_interaction.common.separator", fallback: " · "))
     }
 
     private var cardShape: RoundedRectangle {
@@ -537,10 +547,10 @@ struct ChatHealthResourceCandidateMessageCardView: View {
                 .background(Color.accentColor.opacity(0.12), in: Circle())
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(isResolved ? resolvedTitle : "选择健康资料以继续")
+                Text(isResolved ? resolvedTitle : L10n.text("chat.tool_interaction.health_resource.title", fallback: "选择健康资料以继续"))
                     .font(.system(size: ChatToolInteractionCardStyle.headerFontSize, weight: .medium))
                     .foregroundStyle(.primary)
-                Text(isResolved ? resolvedSubtitle : "AI 找到多份可能相关的资料，你可以选择本次解读范围。")
+                Text(isResolved ? resolvedSubtitle : L10n.text("chat.tool_interaction.health_resource.subtitle", fallback: "AI 找到多份可能相关的资料，你可以选择本次解读范围。"))
                     .font(.system(size: ChatToolInteractionCardStyle.subtitleFontSize))
                     .foregroundStyle(ChatToolInteractionCardStyle.mutedText)
                     .fixedSize(horizontal: false, vertical: true)
@@ -554,7 +564,13 @@ struct ChatHealthResourceCandidateMessageCardView: View {
                 candidateRow(candidate)
             }
             if card.prompt.candidates.count > 3 {
-                Text("还有 \(card.prompt.candidates.count - 3) 份资料可选")
+                Text(
+                    L10n.format(
+                        "chat.tool_interaction.health_resource.remaining_format",
+                        fallback: "还有 %d 份资料可选",
+                        card.prompt.candidates.count - 3
+                    )
+                )
                     .font(.system(size: ChatToolInteractionCardStyle.footerFontSize))
                     .foregroundStyle(ChatToolInteractionCardStyle.mutedText)
             }
@@ -593,13 +609,13 @@ struct ChatHealthResourceCandidateMessageCardView: View {
 
     private var footerActions: some View {
         HStack(alignment: .center, spacing: 8) {
-            Text("选择或跳过后，AI 会继续回答。")
+            Text(L10n.text("chat.tool_interaction.health_resource.footer", fallback: "选择或跳过后，AI 会继续回答。"))
                 .font(.system(size: ChatToolInteractionCardStyle.footerFontSize))
                 .foregroundStyle(ChatToolInteractionCardStyle.mutedText)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            Button("跳过") {
+            Button(L10n.text("chat.tool_interaction.common.skip", fallback: "跳过")) {
                 onSkip(card)
             }
             .font(.system(size: 12, weight: .medium))
@@ -609,7 +625,7 @@ struct ChatHealthResourceCandidateMessageCardView: View {
             .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
             .buttonStyle(.plain)
 
-            Button("选择资料") {
+            Button(L10n.text("chat.tool_interaction.health_resource.choose_action", fallback: "选择资料")) {
                 onChoose(card)
             }
             .font(.system(size: 12, weight: .medium))
@@ -634,7 +650,7 @@ struct ChatHealthResourceCandidateMessageCardView: View {
                 .foregroundStyle(card.status == .submitted ? .green : .secondary)
 
             if card.selectedCandidates.isEmpty {
-                Text(card.resultText ?? "已跳过资料选择。")
+                Text(card.resultText ?? L10n.text("chat.tool_interaction.health_resource.skipped_fallback", fallback: "已跳过资料选择。"))
                     .font(.system(size: ChatToolInteractionCardStyle.bodyFontSize))
                     .foregroundStyle(.primary)
             } else {
@@ -651,21 +667,21 @@ struct ChatHealthResourceCandidateMessageCardView: View {
     private var resolvedTitle: String {
         switch card.status {
         case .submitted:
-            return "已选择健康资料"
+            return L10n.text("chat.tool_interaction.health_resource.submitted", fallback: "已选择健康资料")
         case .cancelled:
-            return "已跳过资料选择"
+            return L10n.text("chat.tool_interaction.health_resource.cancelled", fallback: "已跳过资料选择")
         case .expired:
-            return "本次等待已失效"
+            return L10n.text("chat.tool_interaction.common.expired", fallback: "本次等待已失效")
         case .pending:
-            return "等待选择健康资料"
+            return L10n.text("chat.tool_interaction.health_resource.pending", fallback: "等待选择健康资料")
         }
     }
 
     private var resolvedSubtitle: String {
         if card.selectedCandidates.isEmpty {
-            return "AI 将在未限定资料范围的情况下继续。"
+            return L10n.text("chat.tool_interaction.health_resource.continue_without_scope", fallback: "AI 将在未限定资料范围的情况下继续。")
         }
-        return "AI 将基于已选资料继续。"
+        return L10n.text("chat.tool_interaction.health_resource.continue_with_selection", fallback: "AI 将基于已选资料继续。")
     }
 
     private var cardShape: RoundedRectangle {
@@ -682,6 +698,7 @@ struct ChatToolConsentMessageCardView: View {
     let onAllow: (ChatToolConsentCard) -> Void
     let onDeny: (ChatToolConsentCard) -> Void
     let onShowDetails: (ChatToolConsentCard) -> Void
+    let onOpenSettings: (ChatToolConsentCard) -> Void
 
     private var isResolved: Bool {
         card.status != .pending
@@ -720,23 +737,35 @@ struct ChatToolConsentMessageCardView: View {
     }
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "checkmark.shield")
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(Color.accentColor)
-                .frame(width: ChatToolInteractionCardStyle.badgeSize, height: ChatToolInteractionCardStyle.badgeSize)
-                .background(Color.accentColor.opacity(0.12), in: Circle())
+        Button {
+            onOpenSettings(card)
+        } label: {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "checkmark.shield")
+                    .font(.system(size: 17, weight: .medium))
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: ChatToolInteractionCardStyle.badgeSize, height: ChatToolInteractionCardStyle.badgeSize)
+                    .background(Color.accentColor.opacity(0.12), in: Circle())
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(isResolved ? resolvedTitle : "将工具结果发送至 AI")
-                    .font(.system(size: ChatToolInteractionCardStyle.headerFontSize, weight: .medium))
-                    .foregroundStyle(.primary)
-                Text("工具已在本地完成，继续前需要确认是否发送结果给模型。")
-                    .font(.system(size: ChatToolInteractionCardStyle.subtitleFontSize))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(isResolved ? resolvedTitle : L10n.text("chat.tool_interaction.consent.title", fallback: "将工具结果发送至 AI"))
+                        .font(.system(size: ChatToolInteractionCardStyle.headerFontSize, weight: .medium))
+                        .foregroundStyle(.primary)
+                    Text(L10n.text("chat.tool_interaction.consent.subtitle", fallback: "工具已在本地完成，继续前需要确认是否发送结果给模型。"))
+                        .font(.system(size: ChatToolInteractionCardStyle.subtitleFontSize))
+                        .foregroundStyle(ChatToolInteractionCardStyle.mutedText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(ChatToolInteractionCardStyle.mutedText)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.top, 2)
             }
         }
+        .buttonStyle(.plain)
     }
 
     private var providerLine: some View {
@@ -750,7 +779,7 @@ struct ChatToolConsentMessageCardView: View {
 
     private var actions: some View {
         HStack(alignment: .center, spacing: 8) {
-            Button("拒绝") {
+            Button(L10n.text("chat.tool_interaction.common.deny", fallback: "拒绝")) {
                 onDeny(card)
             }
             .font(.system(size: 12, weight: .medium))
@@ -760,7 +789,7 @@ struct ChatToolConsentMessageCardView: View {
             .background(Color(.tertiarySystemFill), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
             .buttonStyle(.plain)
 
-            Button("查看详情") {
+            Button(L10n.text("chat.tool_interaction.common.view_details", fallback: "查看详情")) {
                 onShowDetails(card)
             }
             .font(.system(size: 12, weight: .medium))
@@ -770,7 +799,7 @@ struct ChatToolConsentMessageCardView: View {
             .background(Color(.secondarySystemFill), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
             .buttonStyle(.plain)
 
-            Button("授权") {
+            Button(L10n.text("chat.tool_interaction.consent.allow_always", fallback: "始终允许")) {
                 onAllow(card)
             }
             .font(.system(size: 12, weight: .medium))
@@ -796,8 +825,12 @@ struct ChatToolConsentMessageCardView: View {
     }
 
     private var resolvedTitle: String {
-        if card.decision?.allowed == true { return "已授权发送" }
-        return "已拒绝发送"
+        if card.decision?.allowed == true {
+            return card.decision?.rememberTool == true
+                ? L10n.text("chat.tool_interaction.consent.remembered", fallback: "已始终允许")
+                : L10n.text("chat.tool_interaction.consent.allowed", fallback: "已允许发送")
+        }
+        return L10n.text("chat.tool_interaction.consent.denied", fallback: "已拒绝发送")
     }
 
     private var cardShape: RoundedRectangle {
@@ -885,36 +918,38 @@ struct ChatLocationPermissionMessageCardView: View {
     private var title: String {
         switch card.mode {
         case .requestPermission:
-            return isResolved ? resolvedTitle : "需要位置权限"
+            return isResolved
+                ? resolvedTitle
+                : L10n.text("chat.tool_interaction.location_permission.request_title", fallback: "需要位置权限")
         case .openSettings:
-            return "无法获取当前位置"
+            return L10n.text("chat.tool_interaction.location_permission.open_settings_title", fallback: "无法获取当前位置")
         }
     }
 
     private var subtitle: String {
         switch card.mode {
         case .requestPermission:
-            return "授权后将重新获取当前位置并继续回复。"
+            return L10n.text("chat.tool_interaction.location_permission.request_subtitle", fallback: "授权后将重新获取当前位置并继续回复。")
         case .openSettings:
-            return "你可以前往系统设置开启位置权限。"
+            return L10n.text("chat.tool_interaction.location_permission.open_settings_subtitle", fallback: "你可以前往系统设置开启位置权限。")
         }
     }
 
     private var bodyText: String {
         switch card.mode {
         case .requestPermission:
-            return "AI 需要你的当前位置来完成本次查询。点击授权后，系统会弹出位置权限确认。"
+            return L10n.text("chat.tool_interaction.location_permission.request_body", fallback: "AI 需要你的当前位置来完成本次查询。点击授权后，系统会弹出位置权限确认。")
         case .openSettings:
-            return "当前应用没有位置权限，因此本次无法读取当前位置。AI 会基于无权限状态继续回答。"
+            return L10n.text("chat.tool_interaction.location_permission.open_settings_body", fallback: "当前应用没有位置权限，因此本次无法读取当前位置。AI 会基于无权限状态继续回答。")
         }
     }
 
     private var actionTitle: String {
         switch card.mode {
         case .requestPermission:
-            return "允许位置"
+            return L10n.text("chat.tool_interaction.location_permission.allow_action", fallback: "允许位置")
         case .openSettings:
-            return "打开设置"
+            return L10n.text("chat.tool_interaction.common.open_settings", fallback: "打开设置")
         }
     }
 
@@ -923,11 +958,15 @@ struct ChatLocationPermissionMessageCardView: View {
     }
 
     private var resolvedTitle: String {
-        card.result == .authorized ? "已允许位置权限" : "未允许位置权限"
+        card.result == .authorized
+            ? L10n.text("chat.tool_interaction.location_permission.authorized_title", fallback: "已允许位置权限")
+            : L10n.text("chat.tool_interaction.location_permission.denied_title", fallback: "未允许位置权限")
     }
 
     private var resolvedText: String {
-        card.result == .authorized ? "用户已允许位置权限。" : "用户未允许位置权限。"
+        card.result == .authorized
+            ? L10n.text("chat.tool_interaction.location_permission.authorized_result", fallback: "用户已允许位置权限。")
+            : L10n.text("chat.tool_interaction.location_permission.denied_result", fallback: "用户未允许位置权限。")
     }
 
     private var resolvedIcon: String {

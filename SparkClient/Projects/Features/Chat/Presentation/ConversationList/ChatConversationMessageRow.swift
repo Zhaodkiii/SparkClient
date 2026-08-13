@@ -3,6 +3,11 @@ import UIKit
 
 /// 单条会话消息行（从 ``ChatView`` 抽出），供 `UICollectionView` + `UIHostingController` 复用。
 struct ChatConversationMessageRow: View {
+    private struct ToolConsentDetailNavigationTarget: Identifiable, Hashable {
+        let toolName: String
+        var id: String { toolName }
+    }
+
     @State private var rowWidth: CGFloat = 0
     @State private var bubbleMenuConfig: ChatBubbleMenuConfig?
     @State private var textSelectionPayload: ChatSelectableTextPayload?
@@ -10,6 +15,7 @@ struct ChatConversationMessageRow: View {
     @State private var activeTaskDetailMode: TaskDetailMode?
     @State private var activeStructuredHealthPreview: ChatStructuredHealthCardPreviewContext?
     @State private var activeWeatherConfigCard: ChatWeatherConfigCardPayload?
+    @State private var activeToolConsentDetailTarget: ToolConsentDetailNavigationTarget?
 
     let threadID: UUID
     let message: ChatMessage
@@ -158,6 +164,26 @@ struct ChatConversationMessageRow: View {
             AIWeatherToolSettingsView(viewModel: aiSettingsViewModel)
                 .hidesMainTabBarWhenPushed()
         }
+        .navigationDestination(item: $activeToolConsentDetailTarget) { target in
+            if let descriptor = ToolModelEgressConsentPolicy.descriptor(for: target.toolName) {
+                AIToolConsentDetailView(viewModel: aiSettingsViewModel, descriptor: descriptor)
+            } else {
+                List {
+                    Section {
+                        Text(SparkToolName.displayName(for: target.toolName))
+                            .font(.body.weight(.semibold))
+                        Text(target.toolName)
+                            .font(.footnote.monospaced())
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                        Text("当前工具没有可配置的授权详情。")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .navigationTitle("授权详情")
+            }
+        }
     }
 
     /// 带长按手势的气泡，替代系统 contextMenu
@@ -270,6 +296,7 @@ struct ChatConversationMessageRow: View {
             onToolConsentCardAllow: { _ in },
             onToolConsentCardDeny: { _ in },
             onToolConsentCardShowDetails: { _ in },
+            onToolConsentCardOpenSettings: { _ in },
             onLocationPermissionCardAction: { _ in },
             onWeatherConfigCardOpen: { _ in },
             savingStructuredHealthCardIDs: [],
@@ -428,7 +455,7 @@ struct ChatConversationMessageRow: View {
                         threadID: threadID,
                         message: message,
                         card: card,
-                        decision: ToolConsentDecision(allowed: true, rememberTool: false)
+                        decision: ToolConsentDecision(allowed: true, rememberTool: true)
                     )
                 }
             },
@@ -451,6 +478,11 @@ struct ChatConversationMessageRow: View {
                     )
                 }
             },
+            onToolConsentCardOpenSettings: { card in
+                if let toolName = card.prompt.primaryToolName {
+                    activeToolConsentDetailTarget = ToolConsentDetailNavigationTarget(toolName: toolName)
+                }
+            },
             onLocationPermissionCardAction: { card in
                 Task {
                     await detailViewModel.handleLocationPermissionCardAction(
@@ -469,10 +501,6 @@ struct ChatConversationMessageRow: View {
             onStructuredHealthCardOpenPreview: openStructuredHealthCardPreview,
             onNutritionCardAction: handleNutritionCardAction,
             onCaptureAttachmentsPicked: { card, attachments in
-                logger.info(
-                    "[CHAT-000017][MessageRow] onCaptureAttachmentsPicked thread=\(threadID.uuidString) message=\(message.clientMessageID.uuidString) card=\(card.id.uuidString) completion=\(card.completionID?.uuidString ?? "-") status=\(card.status.rawValue) count=\(attachments.count) names=\(attachments.map(\.displayName).joined(separator: ","))",
-                    module: .general
-                )
                 Task {
                     await detailViewModel.submitInlineCaptureCardAttachments(
                         threadID: threadID,
@@ -483,10 +511,6 @@ struct ChatConversationMessageRow: View {
                 }
             },
             onCaptureCancel: { card in
-                logger.info(
-                    "[CHAT-000017][MessageRow] onCaptureCancel thread=\(threadID.uuidString) message=\(message.clientMessageID.uuidString) card=\(card.id.uuidString) completion=\(card.completionID?.uuidString ?? "-") status=\(card.status.rawValue)",
-                    module: .general
-                )
                 Task {
                     await detailViewModel.cancelInlineCaptureCard(
                         threadID: threadID,
@@ -567,20 +591,9 @@ struct ChatConversationMessageRow: View {
     private func billingEstimate(for message: ChatMessage) -> ChatBillingEstimate? {
         guard message.role == .assistant else { return nil }
         guard let summary = message.usageSummary else {
-            SparkLogger.log(
-                level: .info,
-                module: .aiConfig,
-                message: "[CHAT_USAGE_TMP] ui.footer.hidden assistant=\(message.clientMessageID.uuidString) reason=missing_usage_summary state=\(message.deliveryState.rawValue) blocks=\(message.blocks.count)"
-            )
             return nil
         }
-        let estimate = ChatBillingEstimate.make(summary: summary)
-        SparkLogger.log(
-            level: .info,
-            module: .aiConfig,
-            message: "[CHAT_USAGE_TMP] ui.footer.show assistant=\(message.clientMessageID.uuidString) display=\"\(estimate.displayText)\" total=\(summary.totalTokens) llmCalls=\(summary.llmCallCount) toolCalls=\(summary.toolCallCount) source=\(summary.source.rawValue) estimated=\(summary.isEstimated)"
-        )
-        return estimate
+        return ChatBillingEstimate.make(summary: summary)
     }
 
     private func toolMeta() -> (name: String, content: String)? {

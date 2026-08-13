@@ -73,6 +73,17 @@ struct AISettingsView: View {
                 }
 
                 MainNavigationLink {
+                    AIToolConsentSettingsView(viewModel: viewModel)
+                        .hidesMainTabBarWhenPushed()
+                } label: {
+                    SettingNavRow(
+                        title: L10n.text("ai_settings.row.tool_consent", fallback: "授权管理"),
+                        subtitle: L10n.text("ai_settings.row.tool_consent.subtitle", fallback: "管理工具结果发送给 AI 前的确认策略"),
+                        icon: "lock.shield"
+                    )
+                }
+
+                MainNavigationLink {
                     AIWeatherToolSettingsView(viewModel: viewModel)
                 } label: {
                     SettingNavRow(

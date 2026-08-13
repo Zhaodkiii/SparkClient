@@ -31,12 +31,14 @@ extension ToolHub {
                 sideEffects = [.workoutVisualization(model)]
             }
 
+            let outputText = healthNoDataDiagnosticIfNeeded(model.toReadableText(), range: range)
+
             // MARK: 4. 返回【可读文本】给AI
             // 把结构化运动数据 → 自然语言文字，让AI直接朗读/展示
             return ToolExecutionResult(
                 toolName: SparkToolName.fetchWorkoutDetails,
-                outputText: healthNoDataDiagnosticIfNeeded(model.toReadableText(), range: range),
-                sensitive: true,                     // 健康数据 = 敏感数据
+                outputText: outputText,
+                sensitive: healthOutputContainsUserData(outputText),
                 shouldBypassModel: true,             // 不再回传给大模型，直接展示
                 sideEffects: sideEffects
             )

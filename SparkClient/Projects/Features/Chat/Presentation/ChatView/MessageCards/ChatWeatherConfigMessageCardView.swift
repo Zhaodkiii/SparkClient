@@ -17,7 +17,7 @@ struct ChatWeatherConfigMessageCardView: View {
                     Text(payload.title)
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(.primary)
-                    Text("天气工具配置")
+                    Text(L10n.text("chat.weather_config_card.subtitle", fallback: "天气工具配置"))
                         .font(.system(size: 12))
                         .foregroundStyle(WeatherConfigCardPalette.mutedText)
                 }

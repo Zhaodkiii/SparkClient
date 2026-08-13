@@ -23,7 +23,7 @@ final class ToolHub: @unchecked Sendable {
     let healthTool: SparkHealthTool
     let toolInteractionCoordinator: ToolInteractionCoordinator?
     let healthResourceToolService: any HealthResourceToolService
-    let appleHealthToolConsentPolicy: AppleHealthToolConsentPolicy
+    let toolModelEgressConsentPolicy: ToolModelEgressConsentPolicy
     let webSearchGateway: WebSearchGateway
     let weatherGateway: WeatherGateway
     let logger: Logger
@@ -50,7 +50,7 @@ final class ToolHub: @unchecked Sendable {
         healthTool: SparkHealthTool = .shared,
         toolInteractionCoordinator: ToolInteractionCoordinator? = nil,
         healthResourceToolService: (any HealthResourceToolService)? = nil,
-        appleHealthToolConsentPolicy: AppleHealthToolConsentPolicy = AppleHealthToolConsentPolicy(),
+        toolModelEgressConsentPolicy: ToolModelEgressConsentPolicy = ToolModelEgressConsentPolicy(),
         webSearchGateway: WebSearchGateway = WebSearchGateway(),
         weatherGateway: WeatherGateway = WeatherGateway(),
         logger: Logger = ConsoleLogger()
@@ -74,7 +74,7 @@ final class ToolHub: @unchecked Sendable {
         self.toolInteractionCoordinator = toolInteractionCoordinator
         self.healthResourceToolService = healthResourceToolService
             ?? DefaultHealthResourceToolService(medicalQueryAPI: medicalQueryAPI)
-        self.appleHealthToolConsentPolicy = appleHealthToolConsentPolicy
+        self.toolModelEgressConsentPolicy = toolModelEgressConsentPolicy
         self.webSearchGateway = webSearchGateway
         self.weatherGateway = weatherGateway
         self.logger = logger

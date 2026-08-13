@@ -228,6 +228,40 @@ final class AIConfigCenter {
         }
     }
 
+    func updateToolModelEgressConsentDefaultMode(
+        _ mode: ToolModelEgressConsentMode,
+        ownerAccountID: Int64? = nil
+    ) async {
+        await persistToolModelEgressConsentMutation(ownerAccountID: ownerAccountID) { snapshot in
+            snapshot.toolModelEgressConsentPreferences.defaultMode = mode
+        }
+    }
+
+    func updateToolModelEgressConsentMode(
+        _ mode: ToolModelEgressConsentMode,
+        for toolName: String,
+        ownerAccountID: Int64? = nil
+    ) async {
+        await persistToolModelEgressConsentMutation(ownerAccountID: ownerAccountID) { snapshot in
+            snapshot.toolModelEgressConsentPreferences.setMode(mode, for: toolName)
+        }
+    }
+
+    func recordToolModelEgressUsage(
+        toolName: String,
+        providerCompany: String?,
+        modelName: String?,
+        ownerAccountID: Int64? = nil
+    ) async {
+        await persistToolModelEgressConsentMutation(ownerAccountID: ownerAccountID) { snapshot in
+            snapshot.toolModelEgressConsentPreferences.recordUsage(
+                toolName: toolName,
+                providerCompany: providerCompany,
+                modelName: modelName
+            )
+        }
+    }
+
     // MARK: - 远程配置
     /// 刷新远程 AI 配置
     func refreshRemoteConfig() async {
@@ -281,6 +315,25 @@ final class AIConfigCenter {
             try await repository.save(snapshot: snapshot, ownerAccountID: ownerAccountID)
         } catch {
             logger.error("AI 场景偏好持久化失败：\(error.localizedDescription)", module: .aiConfig)
+        }
+    }
+
+    private func persistToolModelEgressConsentMutation(
+        ownerAccountID explicitOwnerAccountID: Int64? = nil,
+        _ mutate: @Sendable (inout AISettingsSnapshot) -> Void
+    ) async {
+        let ownerAccountID = await resolvedOwnerAccountID(explicit: explicitOwnerAccountID)
+        guard let ownerAccountID else { return }
+        var snapshot = await currentSnapshot(ownerAccountID: ownerAccountID)
+        let previous = snapshot.toolModelEgressConsentPreferences
+        mutate(&snapshot)
+        snapshot.toolModelEgressConsentPreferences.normalize()
+        guard snapshot.toolModelEgressConsentPreferences != previous else { return }
+        await runtimeConfigStore.applySnapshot(snapshot, ownerAccountID: ownerAccountID)
+        do {
+            try await repository.save(snapshot: snapshot, ownerAccountID: ownerAccountID)
+        } catch {
+            logger.error("AI 工具授权偏好持久化失败：\(error.localizedDescription)", module: .aiConfig)
         }
     }
 }
