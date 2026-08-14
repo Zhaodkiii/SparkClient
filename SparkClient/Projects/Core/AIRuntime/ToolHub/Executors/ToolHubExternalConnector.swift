@@ -2,6 +2,41 @@ import CoreLocation
 import Foundation
 
 extension ToolHub {
+    private func makeSearchSummaryPayload(from response: WebSearchResponse) -> ChatSearchSummaryCardPayload {
+        let references = response.items.map { item in
+            ChatSearchSummaryReference(
+                title: item.title.isEmpty ? item.url : item.title,
+                url: item.url,
+                snippet: item.snippet,
+                sourceName: item.sourceName,
+                publishedAt: item.publishedAt
+            )
+        }
+        return ChatSearchSummaryCardPayload(
+            providerName: response.providerName,
+            query: response.query,
+            keywords: searchSummaryKeywords(from: response.query),
+            references: references,
+            totalEstimatedMatches: response.totalEstimatedMatches
+        )
+    }
+
+    private func searchSummaryKeywords(from query: String) -> [String] {
+        let separators = CharacterSet(charactersIn: " /,，、\t\n")
+        var seen = Set<String>()
+        var keywords: [String] = []
+        for rawPart in query.components(separatedBy: separators) {
+            let keyword = rawPart.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard keyword.isEmpty == false else { continue }
+            let key = keyword.lowercased()
+            guard seen.contains(key) == false else { continue }
+            seen.insert(key)
+            keywords.append(keyword)
+            if keywords.count >= 12 { break }
+        }
+        return keywords
+    }
+
     private func weatherConfigCard(for error: WeatherRuntimeError) -> ChatWeatherConfigCardPayload? {
         let actionTitle = L10n.text("ai_settings.weather.preview.open_settings", fallback: "去设置开启")
         switch error {
@@ -347,12 +382,14 @@ extension ToolHub {
             let primary = try await webSearchGateway.search(query: query, config: config)
             let combined = try await mergedBilingualSearchIfNeeded(primary: primary, query: query, config: config)
             let combinedMarkdown = combined.markdown
+            let toolCallID = normalizedToolCallID(from: context)
             let rich = [
                 ChatMessageBlock(
-                    anchor: normalizedToolCallID(from: context).map(ChatBlockAnchor.toolCall),
-                    kind: .html,
-                    text: combinedMarkdown,
-                    toolCallID: normalizedToolCallID(from: context)
+                    anchor: toolCallID.map(ChatBlockAnchor.toolCall),
+                    kind: .searchSummary,
+                    toolCallID: toolCallID,
+                    parentToolCallID: toolCallID,
+                    searchSummary: makeSearchSummaryPayload(from: combined)
                 )
             ]
             return returnWithRichBlockSideEffects(

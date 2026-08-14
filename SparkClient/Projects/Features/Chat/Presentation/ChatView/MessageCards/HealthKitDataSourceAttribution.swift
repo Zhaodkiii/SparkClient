@@ -22,3 +22,24 @@ struct HealthKitDataSourceAttribution: View {
         .accessibilityElement(children: .combine)
     }
 }
+
+/// Brief disclosure that the user-confirmed data can be written to the Health app via HealthKit.
+struct HealthKitWriteAttribution: View {
+    var body: some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: "heart.text.square.fill")
+                .font(.caption2)
+                .foregroundStyle(.pink)
+                .accessibilityHidden(true)
+            Text(L10n.text(
+                "chat.healthkit.write.attribution",
+                fallback: "After you confirm, this data can be written to the Health app on your iPhone via Apple HealthKit."
+            ))
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+}

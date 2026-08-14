@@ -608,8 +608,12 @@ private enum ChatMessageTimelineProjector {
                 .locationPermissionCards,
                 .structuredHealthCards,
                 .sleepVisualization,
+                .stepVisualization,
+                .energyVisualization,
+                .nutritionReadVisualization,
                 .weatherVisualization,
                 .weatherConfigCard,
+                .searchSummary,
                 .nutritionCards,
                 .medicalRiskNotice,
                 .workoutVisualization,
@@ -659,6 +663,12 @@ private struct ChatToolTimelineNodeView: View {
            node.presentations.contains(where: { $0.kind == .weatherVisualization || $0.kind == .weatherConfigCard }) {
             return false
         }
+        if (toolBlock.toolName == SparkToolName.searchOnline.rawValue
+            || toolBlock.toolName == SparkToolName.searchArxivPapers.rawValue
+            || toolBlock.toolName == SparkToolName.insertHealthCitationSources.rawValue),
+           node.presentations.contains(where: { $0.kind == .searchSummary }) {
+            return false
+        }
         return true
     }
 
@@ -668,10 +678,18 @@ private struct ChatToolTimelineNodeView: View {
             return "正在结构化健康数据..."
         case .sleepVisualization:
             return "正在生成睡眠可视化..."
+        case .stepVisualization:
+            return "正在生成步数卡片..."
+        case .energyVisualization:
+            return "正在生成能量卡片..."
+        case .nutritionReadVisualization:
+            return "正在生成营养卡片..."
         case .weatherVisualization:
             return "正在生成天气卡片..."
         case .weatherConfigCard:
             return "正在准备天气配置卡片..."
+        case .searchSummary:
+            return "正在整理联网搜索参考..."
         case .nutritionCards:
             return "正在生成营养卡片..."
         case .medicalRiskNotice:

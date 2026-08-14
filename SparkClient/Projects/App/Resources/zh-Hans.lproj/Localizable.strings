@@ -1937,6 +1937,7 @@
 "ai_settings.tools.get_health_resource_reference" = "获取健康资料引用";
 "ai_settings.tools.get_health_resource_context" = "获取健康资料解读上下文";
 "ai_settings.tools.search_online" = "联网搜索";
+"ai_settings.tools.insert_health_citation_sources" = "插入健康引用来源";
 "ai_settings.tools.read_web_page" = "读取网页";
 "ai_settings.tools.search_arxiv_papers" = "搜索 arXiv 论文";
 "ai_settings.tools.extract_remote_file_content" = "提取远程文件内容";

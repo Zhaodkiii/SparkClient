@@ -52,6 +52,46 @@ final class SparkHealthTool: @unchecked Sendable {
         )
     }
 
+    func fetchStepVisualization(from startDate: Date, to endDate: Date) async throws -> ChatHealthStepModel {
+        let result = try await fetchHourlyQuantityPairValues(
+            startDate: startDate,
+            endDate: endDate,
+            left: QuantityMetric(
+                identifier: .stepCount,
+                unit: .count(),
+                labelKey: "health.tool.metric.steps",
+                formatter: { value in
+                    SparkHealthTool.formatIntegerUnit(value, key: "health.tool.unit.steps")
+                }
+            ),
+            right: QuantityMetric(
+                identifier: .distanceWalkingRunning,
+                unit: .meter(),
+                labelKey: "health.tool.metric.distance",
+                formatter: { value in
+                    SparkHealthTool.formatDistanceMeters(value)
+                }
+            )
+        )
+
+        let days = result.days.map { day in
+            ChatHealthStepModel.Day(
+                date: day.date,
+                title: day.title,
+                totalSteps: day.totalLeft,
+                totalDistanceMeters: day.totalRight,
+                hourly: day.hourly.map {
+                    ChatHealthStepModel.HourlyValue(
+                        hourText: $0.hourText,
+                        steps: $0.left,
+                        distanceMeters: $0.right
+                    )
+                }
+            )
+        }
+        return ChatHealthStepModel(dateRangeText: Self.dateRangeText(startDate, endDate), days: days)
+    }
+
     func fetchEnergyDetails(from startDate: Date, to endDate: Date) async -> String {
         await fetchHourlyQuantityPair(
             startDate: startDate,
@@ -75,6 +115,46 @@ final class SparkHealthTool: @unchecked Sendable {
             titleKey: "health.tool.report.energy.title",
             totalKey: "health.tool.report.energy.total"
         )
+    }
+
+    func fetchEnergyVisualization(from startDate: Date, to endDate: Date) async throws -> ChatHealthEnergyModel {
+        let result = try await fetchHourlyQuantityPairValues(
+            startDate: startDate,
+            endDate: endDate,
+            left: QuantityMetric(
+                identifier: .basalEnergyBurned,
+                unit: .kilocalorie(),
+                labelKey: "health.tool.metric.basal_energy",
+                formatter: { value in
+                    SparkHealthTool.formatDoubleUnit(value, key: "health.tool.unit.kcal.precision")
+                }
+            ),
+            right: QuantityMetric(
+                identifier: .activeEnergyBurned,
+                unit: .kilocalorie(),
+                labelKey: "health.tool.metric.active_energy",
+                formatter: { value in
+                    SparkHealthTool.formatDoubleUnit(value, key: "health.tool.unit.kcal.precision")
+                }
+            )
+        )
+
+        let days = result.days.map { day in
+            ChatHealthEnergyModel.Day(
+                date: day.date,
+                title: day.title,
+                basalEnergyKcal: day.totalLeft,
+                activeEnergyKcal: day.totalRight,
+                hourly: day.hourly.map {
+                    ChatHealthEnergyModel.HourlyValue(
+                        hourText: $0.hourText,
+                        basalEnergyKcal: $0.left,
+                        activeEnergyKcal: $0.right
+                    )
+                }
+            )
+        }
+        return ChatHealthEnergyModel(dateRangeText: Self.dateRangeText(startDate, endDate), days: days)
     }
 
     func fetchNutritionDetails(from startDate: Date, to endDate: Date) async -> String {
@@ -140,6 +220,70 @@ final class SparkHealthTool: @unchecked Sendable {
             logger.error("HealthKit nutrition query failed: \(error.localizedDescription)", module: .aiConfig)
             return Self.format("health.tool.error.nutrition_query_failed", error.localizedDescription)
         }
+    }
+
+    func fetchNutritionReadVisualization(from startDate: Date, to endDate: Date) async throws -> ChatHealthNutritionReadModel {
+        let calendar = Calendar.current
+
+        guard validateDateRange(startDate: startDate, endDate: endDate) else {
+            throw SparkHealthToolError(message: Self.text("health.tool.error.invalid_date_range.detailed"))
+        }
+
+        guard HKHealthStore.isHealthDataAvailable() else {
+            throw SparkHealthToolError(message: Self.text("health.tool.error.healthkit_unavailable"))
+        }
+
+        guard
+            let proteinType = HKQuantityType.quantityType(forIdentifier: .dietaryProtein),
+            let carbType = HKQuantityType.quantityType(forIdentifier: .dietaryCarbohydrates),
+            let fatType = HKQuantityType.quantityType(forIdentifier: .dietaryFatTotal),
+            let energyType = HKQuantityType.quantityType(forIdentifier: .dietaryEnergyConsumed)
+        else {
+            throw SparkHealthToolError(message: Self.text("health.tool.error.nutrition_types_unavailable"))
+        }
+
+        try await requestAuthorization()
+        let predicateEnd = inclusivePredicateEnd(for: endDate)
+
+        async let protein = quantitySamples(type: proteinType, unit: .gram(), start: startDate, end: predicateEnd)
+        async let carbs = quantitySamples(type: carbType, unit: .gram(), start: startDate, end: predicateEnd)
+        async let fat = quantitySamples(type: fatType, unit: .gram(), start: startDate, end: predicateEnd)
+        async let energy = quantitySamples(type: energyType, unit: .kilocalorie(), start: startDate, end: predicateEnd)
+
+        let (proteinValues, carbValues, fatValues, energyValues) = try await (protein, carbs, fat, energy)
+        let segments = Self.mealSegments().compactMap { segment -> ChatHealthNutritionReadModel.Segment? in
+            let proteinTotal = proteinValues
+                .filter { segment.contains(calendar.component(.hour, from: $0.date)) }
+                .map(\.value)
+                .reduce(0, +)
+            let carbsTotal = carbValues
+                .filter { segment.contains(calendar.component(.hour, from: $0.date)) }
+                .map(\.value)
+                .reduce(0, +)
+            let fatTotal = fatValues
+                .filter { segment.contains(calendar.component(.hour, from: $0.date)) }
+                .map(\.value)
+                .reduce(0, +)
+            let energyTotal = energyValues
+                .filter { segment.contains(calendar.component(.hour, from: $0.date)) }
+                .map(\.value)
+                .reduce(0, +)
+            guard proteinTotal > 0 || carbsTotal > 0 || fatTotal > 0 || energyTotal > 0 else {
+                return nil
+            }
+            return ChatHealthNutritionReadModel.Segment(
+                label: segment.label,
+                proteinGrams: proteinTotal,
+                carbohydratesGrams: carbsTotal,
+                fatGrams: fatTotal,
+                energyKilocalories: energyTotal
+            )
+        }
+
+        guard segments.isEmpty == false else {
+            throw SparkHealthToolError(message: Self.text("health.tool.error.no_nutrition"))
+        }
+        return ChatHealthNutritionReadModel(dateRangeText: Self.dateRangeText(startDate, endDate), segments: segments)
     }
 
     ///
@@ -536,6 +680,84 @@ final class SparkHealthTool: @unchecked Sendable {
             logger.error("HealthKit quantity query failed: \(error.localizedDescription)", module: .aiConfig)
             return Self.format("health.tool.error.quantity_query_failed", error.localizedDescription)
         }
+    }
+
+    private func fetchHourlyQuantityPairValues(
+        startDate: Date,
+        endDate: Date,
+        left: QuantityMetric,
+        right: QuantityMetric
+    ) async throws -> HourlyQuantityPairResult {
+        let calendar = Calendar.current
+
+        guard validateDateRange(startDate: startDate, endDate: endDate) else {
+            throw SparkHealthToolError(message: Self.text("health.tool.error.invalid_date_range.detailed"))
+        }
+        guard HKHealthStore.isHealthDataAvailable() else {
+            throw SparkHealthToolError(message: Self.text("health.tool.error.healthkit_unavailable"))
+        }
+        guard
+            let leftType = HKQuantityType.quantityType(forIdentifier: left.identifier),
+            let rightType = HKQuantityType.quantityType(forIdentifier: right.identifier)
+        else {
+            throw SparkHealthToolError(message: Self.text("health.tool.error.quantity_types_unavailable"))
+        }
+
+        try await requestAuthorization()
+        let predicateEnd = inclusivePredicateEnd(for: endDate)
+        let anchorDate = calendar.startOfDay(for: startDate)
+        var interval = DateComponents()
+        interval.hour = 1
+
+        let leftCollection = try await statisticsCollection(type: leftType, start: startDate, end: predicateEnd, anchorDate: anchorDate, interval: interval)
+        let rightCollection = try await statisticsCollection(type: rightType, start: startDate, end: predicateEnd, anchorDate: anchorDate, interval: interval)
+
+        let dayFormatter = Self.displayDayFormatter(calendar: calendar)
+        let compactDayFormatter = Self.dayFormatter(calendar: calendar)
+        let timeFormatter = Self.displayTimeFormatter(calendar: calendar)
+        let strideEnd = calendar.date(byAdding: .hour, value: 23, to: calendar.startOfDay(for: endDate)) ?? endDate
+        var days: [HourlyQuantityPairDay] = []
+
+        for day in Self.days(from: startDate, to: endDate, calendar: calendar) {
+            var rows: [HourlyQuantityPairRow] = []
+            var dayLeft = 0.0
+            var dayRight = 0.0
+            let dayEnd = min(strideEnd, calendar.date(byAdding: .hour, value: 23, to: day) ?? day)
+            var hour = day
+            while hour <= dayEnd {
+                let leftValue = leftCollection.statistics(for: hour)?.sumQuantity()?.doubleValue(for: left.unit) ?? 0
+                let rightValue = rightCollection.statistics(for: hour)?.sumQuantity()?.doubleValue(for: right.unit) ?? 0
+                if leftValue > 0 || rightValue > 0 {
+                    dayLeft += leftValue
+                    dayRight += rightValue
+                    rows.append(
+                        HourlyQuantityPairRow(
+                            hourText: timeFormatter.string(from: hour),
+                            left: leftValue,
+                            right: rightValue
+                        )
+                    )
+                }
+                guard let nextHour = calendar.date(byAdding: .hour, value: 1, to: hour), nextHour > hour else { break }
+                hour = nextHour
+            }
+            if rows.isEmpty == false {
+                days.append(
+                    HourlyQuantityPairDay(
+                        date: compactDayFormatter.string(from: day),
+                        title: dayFormatter.string(from: day),
+                        totalLeft: dayLeft,
+                        totalRight: dayRight,
+                        hourly: rows
+                    )
+                )
+            }
+        }
+
+        guard days.isEmpty == false else {
+            throw SparkHealthToolError(message: Self.text("health.tool.error.no_matching_health"))
+        }
+        return HourlyQuantityPairResult(days: days)
     }
 
     private func requestAuthorization() async throws {
@@ -1161,4 +1383,22 @@ private struct MealSegment {
     func contains(_ hour: Int) -> Bool {
         range.contains(hour)
     }
+}
+
+private struct HourlyQuantityPairResult {
+    let days: [HourlyQuantityPairDay]
+}
+
+private struct HourlyQuantityPairDay {
+    let date: String
+    let title: String
+    let totalLeft: Double
+    let totalRight: Double
+    let hourly: [HourlyQuantityPairRow]
+}
+
+private struct HourlyQuantityPairRow {
+    let hourText: String
+    let left: Double
+    let right: Double
 }

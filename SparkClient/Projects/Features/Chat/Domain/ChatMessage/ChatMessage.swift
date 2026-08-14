@@ -112,10 +112,18 @@ nonisolated enum ChatMessageBlockKind: String, Codable, Sendable {
     case structuredHealthCards
     /// 睡眠可视化展示块
     case sleepVisualization
+    /// 步数可视化展示块
+    case stepVisualization
+    /// 能量消耗可视化展示块
+    case energyVisualization
+    /// HealthKit 读取营养展示块（只读，不提供写入）
+    case nutritionReadVisualization
     /// 天气结果展示块
     case weatherVisualization
     /// 天气配置卡片
     case weatherConfigCard
+    /// 联网搜索摘要折叠卡片
+    case searchSummary
     /// 营养卡片块（写入 Apple 健康）
     case nutritionCards
     /// 运动/健身可视化展示块
@@ -232,8 +240,12 @@ nonisolated enum ChatMessageBlockPayload: Codable, Equatable, Sendable {
     case locationPermissionCards([ChatLocationPermissionCard])
     case structuredHealthCards(StructuredHealthCardsBlob)
     case sleepVisualization(ChatHealthSleepModel)
+    case stepVisualization(ChatHealthStepModel)
+    case energyVisualization(ChatHealthEnergyModel)
+    case nutritionReadVisualization(ChatHealthNutritionReadModel)
     case weatherVisualization(WeatherResult)
     case weatherConfigCard(ChatWeatherConfigCardPayload)
+    case searchSummary(ChatSearchSummaryCardPayload)
     case nutritionCards(ChatNutritionCardsPayload)
     case workoutVisualization(ChatHealthWorkoutModel)
     case captureCard(ChatCaptureMessageCardPayload)
@@ -266,8 +278,12 @@ nonisolated enum ChatMessageBlockPayload: Codable, Equatable, Sendable {
         case .locationPermissionCards: return .locationPermissionCards
         case .structuredHealthCards: return .structuredHealthCards
         case .sleepVisualization: return .sleepVisualization
+        case .stepVisualization: return .stepVisualization
+        case .energyVisualization: return .energyVisualization
+        case .nutritionReadVisualization: return .nutritionReadVisualization
         case .weatherVisualization: return .weatherVisualization
         case .weatherConfigCard: return .weatherConfigCard
+        case .searchSummary: return .searchSummary
         case .nutritionCards: return .nutritionCards
         case .workoutVisualization: return .workoutVisualization
         case .captureCard: return .captureCard
@@ -441,6 +457,24 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         return model
     }
 
+    /// 步数可视化模型
+    nonisolated var stepVisualization: ChatHealthStepModel? {
+        guard case .stepVisualization(let model) = payload else { return nil }
+        return model
+    }
+
+    /// 能量消耗可视化模型
+    nonisolated var energyVisualization: ChatHealthEnergyModel? {
+        guard case .energyVisualization(let model) = payload else { return nil }
+        return model
+    }
+
+    /// HealthKit 读取营养模型（只读）
+    nonisolated var nutritionReadVisualization: ChatHealthNutritionReadModel? {
+        guard case .nutritionReadVisualization(let model) = payload else { return nil }
+        return model
+    }
+
     /// 天气结果模型
     nonisolated var weatherVisualization: WeatherResult? {
         guard case .weatherVisualization(let result) = payload else { return nil }
@@ -449,6 +483,11 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
 
     nonisolated var weatherConfigCard: ChatWeatherConfigCardPayload? {
         guard case .weatherConfigCard(let payload) = payload else { return nil }
+        return payload
+    }
+
+    nonisolated var searchSummary: ChatSearchSummaryCardPayload? {
+        guard case .searchSummary(let payload) = payload else { return nil }
         return payload
     }
 
@@ -522,8 +561,12 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         healthCards: [ChatHealthCardPayload] = [],
         structuredHealthCards: StructuredHealthCardsBlob? = nil,
         sleepVisualization: ChatHealthSleepModel? = nil,
+        stepVisualization: ChatHealthStepModel? = nil,
+        energyVisualization: ChatHealthEnergyModel? = nil,
+        nutritionReadVisualization: ChatHealthNutritionReadModel? = nil,
         weatherVisualization: WeatherResult? = nil,
         weatherConfigCard: ChatWeatherConfigCardPayload? = nil,
+        searchSummary: ChatSearchSummaryCardPayload? = nil,
         nutritionCards: ChatNutritionCardsPayload? = nil,
         workoutVisualization: ChatHealthWorkoutModel? = nil,
         captureMessageCard: ChatCaptureMessageCardPayload? = nil,
@@ -566,8 +609,12 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
             healthCards: healthCards,
             structuredHealthCards: structuredHealthCards,
             sleepVisualization: sleepVisualization,
+            stepVisualization: stepVisualization,
+            energyVisualization: energyVisualization,
+            nutritionReadVisualization: nutritionReadVisualization,
             weatherVisualization: weatherVisualization,
             weatherConfigCard: weatherConfigCard,
+            searchSummary: searchSummary,
             nutritionCards: nutritionCards,
             workoutVisualization: workoutVisualization,
             captureMessageCard: captureMessageCard,
@@ -607,8 +654,12 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         healthCards: [ChatHealthCardPayload],
         structuredHealthCards: StructuredHealthCardsBlob?,
         sleepVisualization: ChatHealthSleepModel?,
+        stepVisualization: ChatHealthStepModel?,
+        energyVisualization: ChatHealthEnergyModel?,
+        nutritionReadVisualization: ChatHealthNutritionReadModel?,
         weatherVisualization: WeatherResult?,
         weatherConfigCard: ChatWeatherConfigCardPayload?,
+        searchSummary: ChatSearchSummaryCardPayload?,
         nutritionCards: ChatNutritionCardsPayload?,
         workoutVisualization: ChatHealthWorkoutModel?,
         captureMessageCard: ChatCaptureMessageCardPayload?,
@@ -672,6 +723,21 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
                 preconditionFailure("Missing sleep visualization payload for sleepVisualization block")
             }
             return .sleepVisualization(sleepVisualization)
+        case .stepVisualization:
+            guard let stepVisualization else {
+                preconditionFailure("Missing step visualization payload for stepVisualization block")
+            }
+            return .stepVisualization(stepVisualization)
+        case .energyVisualization:
+            guard let energyVisualization else {
+                preconditionFailure("Missing energy visualization payload for energyVisualization block")
+            }
+            return .energyVisualization(energyVisualization)
+        case .nutritionReadVisualization:
+            guard let nutritionReadVisualization else {
+                preconditionFailure("Missing nutrition read visualization payload for nutritionReadVisualization block")
+            }
+            return .nutritionReadVisualization(nutritionReadVisualization)
         case .weatherVisualization:
             guard let weatherVisualization else {
                 preconditionFailure("Missing weather visualization payload for weatherVisualization block")
@@ -682,6 +748,11 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
                 preconditionFailure("Missing weather config payload for weatherConfigCard block")
             }
             return .weatherConfigCard(weatherConfigCard)
+        case .searchSummary:
+            guard let searchSummary else {
+                preconditionFailure("Missing search summary payload for searchSummary block")
+            }
+            return .searchSummary(searchSummary)
         case .nutritionCards:
             guard let nutritionCards else {
                 preconditionFailure("Missing nutrition cards payload for nutritionCards block")
@@ -1034,6 +1105,7 @@ extension ChatMessageBlock {
             || kind == .toolConsentCards
             || kind == .locationPermissionCards
             || kind == .weatherConfigCard
+            || kind == .searchSummary
     }
 }
 

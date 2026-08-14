@@ -1,15 +1,32 @@
 import Foundation
 
 extension ToolHub {
-    func runFetchNutrition(invocation: ToolInvocation) async -> ToolExecutionResult {
+    func runFetchNutrition(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
         let range = resolveHealthRange(arguments: invocation.arguments)
-        let output = await healthTool.fetchNutritionDetails(from: range.start, to: range.end)
-        return ToolExecutionResult(
-            toolName: SparkToolName.fetchNutritionDetails,
-            outputText: output,
-            sensitive: healthOutputContainsUserData(output),
-            shouldBypassModel: true
-        )
+        do {
+            let model = try await healthTool.fetchNutritionReadVisualization(from: range.start, to: range.end)
+            let output = model.toReadableText()
+            var sideEffects: [ToolSideEffect] = []
+            if healthOutputContainsUserData(output),
+               context.threadID != nil,
+               context.assistantMessageClientID != nil {
+                sideEffects = [.nutritionReadVisualization(model)]
+            }
+            return ToolExecutionResult(
+                toolName: SparkToolName.fetchNutritionDetails,
+                outputText: output,
+                sensitive: healthOutputContainsUserData(output),
+                shouldBypassModel: true,
+                sideEffects: sideEffects
+            )
+        } catch {
+            return ToolExecutionResult(
+                toolName: SparkToolName.fetchNutritionDetails,
+                outputText: error.localizedDescription,
+                sensitive: false,
+                shouldBypassModel: true
+            )
+        }
     }
 
     ///

@@ -44,10 +44,14 @@ enum ToolSideEffect: Sendable {
     case knowledgeCards([ChatKnowledgeCard])
     case taskCards([TaskCard])
     case captureCard(ChatCaptureMessageCardPayload)
+    case stepVisualization(ChatHealthStepModel)
+    case energyVisualization(ChatHealthEnergyModel)
     case workoutVisualization(ChatHealthWorkoutModel)
     case sleepVisualization(ChatHealthSleepModel)
     case weatherVisualization(WeatherResult)
     case weatherConfigCard(ChatWeatherConfigCardPayload)
+    case searchSummary(ChatSearchSummaryCardPayload)
+    case nutritionReadVisualization(ChatHealthNutritionReadModel)
     case nutritionCards([ChatNutritionCardPayload])
     case medicalRiskNotice(ChatMedicalRiskNoticePayload)
     case locationPermissionCards([ChatLocationPermissionCard])
@@ -306,6 +310,7 @@ nonisolated enum SparkToolName: String, CaseIterable {
     
     // MARK: 网络类
     case searchOnline                = "search_online"                   // 在线搜索
+    case insertHealthCitationSources = "insert_health_citation_sources"  // 插入健康引用来源
     case readWebPage                 = "read_web_page"                   // 读取网页
     case searchArxivPapers           = "search_arxiv_papers"             // 搜索论文
     case extractRemoteFileContent    = "extract_remote_file_content"    // 提取远程文件内容
@@ -339,7 +344,7 @@ extension SparkToolName {
             return .knowledge
         case .searchCalendarAndReminders, .writeSystemEvent:
             return .calendar
-        case .searchOnline, .readWebPage, .searchArxivPapers, .extractRemoteFileContent:
+        case .searchOnline, .insertHealthCitationSources, .readWebPage, .searchArxivPapers, .extractRemoteFileContent:
             return .publicWeb
         case .showCustomMessageCard, .askUserQuestion, .showMedicalRiskNotice:
             return .ui

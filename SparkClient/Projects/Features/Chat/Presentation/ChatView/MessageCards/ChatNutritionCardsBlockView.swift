@@ -41,6 +41,7 @@ struct ChatNutritionCardsBlockView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             writeButton(for: card, isSaving: isSaving)
+            HealthKitWriteAttribution()
         }
         .padding(12)
         .background(

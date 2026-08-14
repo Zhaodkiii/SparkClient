@@ -246,6 +246,16 @@ extension ToolHub {
             ]
         case .searchOnline, .searchArxivPapers:
             return ["query": AIRuntimeToolProperty(type: "string", description: td("tool.param.search_query"))]
+        case .insertHealthCitationSources:
+            return [
+                "query": AIRuntimeToolProperty(type: "string", description: td("tool.param.health_citation_query")),
+                "keywords": AIRuntimeToolProperty(
+                    type: "array",
+                    description: td("tool.param.health_citation_keywords"),
+                    arrayItems: AIRuntimeToolProperty(type: "string", description: td("tool.param.query_keyword"))
+                ),
+                "limit": AIRuntimeToolProperty(type: "integer", description: td("tool.param.health_citation_limit"))
+            ]
         case .readWebPage, .extractRemoteFileContent:
             return ["url": AIRuntimeToolProperty(type: "string", description: td("tool.param.url_full"))]
         case .createCanvas:
@@ -337,6 +347,8 @@ extension ToolHub {
         case .queryMemberProfile:
             return ["query_type"]
         case .searchOnline, .searchArxivPapers:
+            return ["query"]
+        case .insertHealthCitationSources:
             return ["query"]
         case .readWebPage, .extractRemoteFileContent:
             return ["url"]

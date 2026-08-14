@@ -1937,6 +1937,7 @@
 "ai_settings.tools.get_health_resource_reference" = "Get Health Record Reference";
 "ai_settings.tools.get_health_resource_context" = "Get Health Record Context";
 "ai_settings.tools.search_online" = "Search Online";
+"ai_settings.tools.insert_health_citation_sources" = "Insert Health Citation Sources";
 "ai_settings.tools.read_web_page" = "Read Web Page";
 "ai_settings.tools.search_arxiv_papers" = "Search arXiv Papers";
 "ai_settings.tools.extract_remote_file_content" = "Extract Remote File Content";

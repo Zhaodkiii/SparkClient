@@ -834,7 +834,7 @@ actor MessageRunActor: ChatSideEffectSink {
                 return false
             }
             return await submitRichBlocks(blocks, assistantClientMessageID: assistantClientMessageID)
-        case .knowledgeCards, .taskCards, .captureCard, .workoutVisualization, .sleepVisualization, .weatherVisualization, .weatherConfigCard, .nutritionCards, .locationPermissionCards, .externalConnectorRichBlocks:
+        case .knowledgeCards, .taskCards, .captureCard, .stepVisualization, .energyVisualization, .nutritionReadVisualization, .workoutVisualization, .sleepVisualization, .weatherVisualization, .weatherConfigCard, .searchSummary, .nutritionCards, .locationPermissionCards, .externalConnectorRichBlocks:
             guard let blocks = ToolSideEffectBlockMapper.blocks(
                 for: effect,
                 assistantClientMessageID: assistantClientMessageID,
@@ -1109,7 +1109,7 @@ actor MessageRunActor: ChatSideEffectSink {
         case .structuredHealthCards:
             // 须与父 tool 的 orderKey 绑定；无 tool 上下文时仅作兜底。
             return 2_100
-        case .sleepVisualization, .weatherVisualization, .weatherConfigCard, .workoutVisualization, .nutritionCards, .healthResourceReference,
+        case .sleepVisualization, .stepVisualization, .energyVisualization, .nutritionReadVisualization, .weatherVisualization, .weatherConfigCard, .searchSummary, .workoutVisualization, .nutritionCards, .healthResourceReference,
                 .captureCard, .knowledgeCards, .html, .taskCards,
                 .pendingMemberToolCards, .toolQuestionCards, .toolMemberSelectionCards,
                 .healthResourceCandidateCards, .toolConsentCards, .locationPermissionCards:
@@ -1331,8 +1331,12 @@ private extension ChatMessageBlock {
             healthCards: healthCards,
             structuredHealthCards: structuredHealthCards,
             sleepVisualization: sleepVisualization,
+            stepVisualization: stepVisualization,
+            energyVisualization: energyVisualization,
+            nutritionReadVisualization: nutritionReadVisualization,
             weatherVisualization: weatherVisualization,
             weatherConfigCard: weatherConfigCard,
+            searchSummary: searchSummary,
             nutritionCards: nutritionCards,
             workoutVisualization: workoutVisualization,
             captureMessageCard: captureMessageCard,

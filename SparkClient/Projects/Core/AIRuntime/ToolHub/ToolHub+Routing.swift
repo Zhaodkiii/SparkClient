@@ -191,13 +191,13 @@ extension ToolHub {
 
         switch tool {
         case .fetchStepDetails:
-            return await runFetchSteps(invocation: invocation)
+            return await runFetchSteps(invocation: invocation, context: context)
         case .fetchSleepDetails:
             return await runFetchSleep(invocation: invocation, context: context)
         case .fetchEnergyDetails:
-            return await runFetchEnergy(invocation: invocation)
+            return await runFetchEnergy(invocation: invocation, context: context)
         case .fetchNutritionDetails:
-            return await runFetchNutrition(invocation: invocation)
+            return await runFetchNutrition(invocation: invocation, context: context)
         case .fetchWorkoutDetails:
             return await runFetchWorkout(invocation: invocation, context: context)
         case .makeNutritionData:
@@ -244,6 +244,8 @@ extension ToolHub {
             return runShowMedicalRiskNotice(invocation: invocation, context: context)
         case .askUserQuestion:
             return await runAskUserQuestion(invocation: invocation, context: context)
+        case .insertHealthCitationSources:
+            return runInsertHealthCitationSources(invocation: invocation, context: context)
         case .searchOnline,
              .readWebPage,
              .searchArxivPapers,

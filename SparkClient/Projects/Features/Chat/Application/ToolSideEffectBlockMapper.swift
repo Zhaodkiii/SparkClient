@@ -73,6 +73,39 @@ nonisolated enum ToolSideEffectBlockMapper {
                     captureMessageCard: payload
                 )
             ]
+        case .stepVisualization(let model):
+            guard isEncodable(model) else { return nil }
+            return [
+                ChatMessageBlock(
+                    anchor: normalizedAnchor.map(ChatBlockAnchor.toolCall),
+                    kind: .stepVisualization,
+                    toolCallID: normalizedAnchor,
+                    parentToolCallID: normalizedAnchor,
+                    stepVisualization: model
+                )
+            ]
+        case .energyVisualization(let model):
+            guard isEncodable(model) else { return nil }
+            return [
+                ChatMessageBlock(
+                    anchor: normalizedAnchor.map(ChatBlockAnchor.toolCall),
+                    kind: .energyVisualization,
+                    toolCallID: normalizedAnchor,
+                    parentToolCallID: normalizedAnchor,
+                    energyVisualization: model
+                )
+            ]
+        case .nutritionReadVisualization(let model):
+            guard isEncodable(model) else { return nil }
+            return [
+                ChatMessageBlock(
+                    anchor: normalizedAnchor.map(ChatBlockAnchor.toolCall),
+                    kind: .nutritionReadVisualization,
+                    toolCallID: normalizedAnchor,
+                    parentToolCallID: normalizedAnchor,
+                    nutritionReadVisualization: model
+                )
+            ]
         case .workoutVisualization(let model):
             guard isEncodable(model) else { return nil }
             return [
@@ -139,6 +172,17 @@ nonisolated enum ToolSideEffectBlockMapper {
                     toolCallID: normalizedAnchor,
                     parentToolCallID: normalizedAnchor,
                     weatherConfigCard: payload
+                )
+            ]
+        case .searchSummary(let payload):
+            guard isEncodable(payload) else { return nil }
+            return [
+                ChatMessageBlock(
+                    anchor: normalizedAnchor.map(ChatBlockAnchor.toolCall),
+                    kind: .searchSummary,
+                    toolCallID: normalizedAnchor,
+                    parentToolCallID: normalizedAnchor,
+                    searchSummary: payload
                 )
             ]
         case .externalConnectorRichBlocks(let blocks):

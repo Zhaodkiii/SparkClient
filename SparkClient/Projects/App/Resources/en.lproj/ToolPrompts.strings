@@ -33,6 +33,7 @@
 "tool.summary.find_member" = "Purpose: Find member by relationship and/or name (at least one required). Never pass numeric member_id as name (e.g. name=\"19\"). Do NOT call when list JSON already has member_id.";
 "tool.summary.query_member_profile" = "Purpose: Query member health profile by query_type. Optional member_id (UUID string in Spark); optional days, limit. Spark returns aggregate counts.";
 "tool.summary.search_online" = "Purpose: web search and summarise. query concise; no sensitive PII. Pair with: read_web_page, search_knowledge_bag.";
+"tool.summary.insert_health_citation_sources" = "Purpose: insert a health/medical citation sources card without web search. It matches query/keywords against built-in authoritative sources such as NHC, NMPA, WHO, NIH, MedlinePlus, FDA, AHA, ADA. Rule: when you answer health, medical, medication, disease, lab, nutrition, or exercise-risk content and this turn has not used search_online/search_arxiv_papers/read_web_page for citations, call this tool before the final answer.";
 "tool.summary.read_web_page" = "Purpose: fetch page content/summary. url full HTTP(S). Parse each link once.";
 "tool.summary.search_arxiv_papers" = "Purpose: arXiv search and summaries. query: English topic keywords.";
 "tool.summary.extract_remote_file_content" = "Purpose: extract text from remote files. url: full HTTP(S) file link.";
@@ -43,6 +44,9 @@
 "tool.coord.wgs84_description" = "Latitude/longitude (WGS‑84 decimal).";
 "tool.coord.latitude_sentence" = "Latitude.";
 "tool.coord.longitude_sentence" = "Longitude.";
+"tool.param.health_citation_query" = "Health/medical topic or user question needing citation sources. Use concise medical keywords and no sensitive PII.";
+"tool.param.health_citation_keywords" = "Optional citation keywords, e.g. headache, hypertension, diabetes, medication safety, blood pressure.";
+"tool.param.health_citation_limit" = "Optional maximum source count, default 8, range 3-12.";
 "tool.date.start_yyyy_mm_dd" = "Start date yyyy-MM-dd";
 "tool.date.end_yyyy_mm_dd" = "End date yyyy-MM-dd";
 "tool.param.protein_g" = "Protein g";

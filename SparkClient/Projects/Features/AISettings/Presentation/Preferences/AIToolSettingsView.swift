@@ -1159,6 +1159,8 @@ enum AIToolCatalog {
         switch tool {
         case .searchOnline, .readWebPage, .searchArxivPapers, .extractRemoteFileContent:
             return .requiresSearchSettings
+        case .insertHealthCitationSources:
+            return .available
         case .queryWeather:
             return .requiresWeatherSettings
         case .fetchStepDetails, .fetchEnergyDetails, .fetchNutritionDetails, .fetchSleepDetails, .fetchWorkoutDetails:
@@ -1192,7 +1194,7 @@ enum AIToolCatalog {
         case .saveMemory, .retrieveMemory, .updateMemory, .generateChatTitle:
             return chatGroupTitle("memory_conversation", fallback: "Memory & Conversation")
         case .searchKnowledgeBag, .createKnowledgeDocument,
-             .searchOnline, .readWebPage, .searchArxivPapers, .extractRemoteFileContent:
+             .searchOnline, .insertHealthCitationSources, .readWebPage, .searchArxivPapers, .extractRemoteFileContent:
             return chatGroupTitle("knowledge_network", fallback: "Knowledge & Network")
         case .searchCalendarAndReminders, .writeSystemEvent,
              .createCanvas, .editCanvas, .queryTasksByMember, .generateTask,
@@ -1217,6 +1219,8 @@ enum AIToolCatalog {
         switch tool {
         case .searchOnline, .readWebPage, .searchArxivPapers, .extractRemoteFileContent:
             return .search
+        case .insertHealthCitationSources:
+            return nil
         case .queryWeather:
             return .weather
         default:
@@ -1450,6 +1454,12 @@ private enum ChatToolSchemaCatalog {
             ]
         case .searchOnline, .searchArxivPapers:
             return ["query": prop("string", "tool.param.search_query")]
+        case .insertHealthCitationSources:
+            return [
+                "query": prop("string", "tool.param.health_citation_query"),
+                "keywords": prop("array", "tool.param.health_citation_keywords", items: prop("string", "tool.param.query_keyword")),
+                "limit": prop("integer", "tool.param.health_citation_limit")
+            ]
         case .readWebPage, .extractRemoteFileContent:
             return ["url": prop("string", "tool.param.url_full")]
         case .createCanvas:
@@ -1526,6 +1536,8 @@ private enum ChatToolSchemaCatalog {
         case .queryMemberProfile:
             return ["query_type"]
         case .searchOnline, .searchArxivPapers:
+            return ["query"]
+        case .insertHealthCitationSources:
             return ["query"]
         case .readWebPage, .extractRemoteFileContent:
             return ["url"]

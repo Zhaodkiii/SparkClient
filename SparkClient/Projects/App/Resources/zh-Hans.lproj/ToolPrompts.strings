@@ -43,6 +43,7 @@
 "tool.param.health_topic_focus" = "可选解读聚焦主题，用于上下文裁剪，如 blood_pressure、thyroid";
 "tool.param.health_references_json" = "批量解读：JSON 数组，每项含 resource_type、resource_id、member_id（可省略，默认会话成员）。与 list/用户确认后的 candidates 对齐，最多 5 条。传入后勿再逐条调用本工具；单条时仍可用 resource_type+resource_id。";
 "tool.summary.search_online" = "用途：在线检索并汇总多来源信息。query 简洁；勿含个人敏感信息。可与 read_web_page、search_knowledge_bag 联用。";
+"tool.summary.insert_health_citation_sources" = "用途：插入健康/医疗信息引用来源卡片，不联网，只从内置权威来源目录按 query/keywords 匹配 NHC、NMPA、WHO、NIH、MedlinePlus、FDA、AHA、ADA 等来源。触发规则：当你要回答健康、医疗、用药、疾病、检查、营养、运动风险等内容，且本轮尚未调用 search_online/search_arxiv_papers/read_web_page 提供引用时，必须先调用本工具插入引用来源卡片，再给最终回答。";
 "tool.summary.read_web_page" = "用途：抓取网页正文并生成摘要。url 须为完整 HTTP(S)。同一链接解析一次。";
 "tool.summary.search_arxiv_papers" = "用途：检索 arXiv 学术文献并生成摘要。query 为主题相关英文关键词。";
 "tool.summary.extract_remote_file_content" = "用途：从在线 PDF/Office/文本等文件提取纯文本。url 为完整 HTTP(S) 文件链接。";
@@ -53,6 +54,9 @@
 "tool.coord.wgs84_description" = "经纬度（WGS‑84 十进制度）。";
 "tool.coord.latitude_sentence" = "纬度。";
 "tool.coord.longitude_sentence" = "经度。";
+"tool.param.health_citation_query" = "需要补充引用来源的健康/医疗主题或用户问题，提取核心医学关键词即可，不要包含个人敏感信息。";
+"tool.param.health_citation_keywords" = "可选，健康引用关键词数组，如 headache、hypertension、糖尿病、用药安全、血压、头痛。";
+"tool.param.health_citation_limit" = "可选，引用来源数量上限，默认 8，范围 3-12。";
 "tool.date.start_yyyy_mm_dd" = "开始日期 yyyy-MM-dd";
 "tool.date.end_yyyy_mm_dd" = "结束日期 yyyy-MM-dd";
 "tool.param.protein_g" = "蛋白质 g";

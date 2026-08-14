@@ -1468,7 +1468,7 @@ actor CoreDataChatStore {
     private static func isToolPresentationRichBlock(_ block: ChatMessageBlock) -> Bool {
         guard block.nodeRole == .toolPresentation else { return false }
         switch block.kind {
-        case .structuredHealthCards, .sleepVisualization, .weatherVisualization, .weatherConfigCard, .workoutVisualization, .nutritionCards, .medicalRiskNotice,
+        case .structuredHealthCards, .sleepVisualization, .stepVisualization, .energyVisualization, .nutritionReadVisualization, .weatherVisualization, .weatherConfigCard, .searchSummary, .workoutVisualization, .nutritionCards, .medicalRiskNotice,
              .healthResourceReference, .knowledgeCards, .taskCards, .captureCard, .html,
              .pendingMemberToolCards, .toolQuestionCards, .toolMemberSelectionCards,
              .healthResourceCandidateCards, .toolConsentCards, .locationPermissionCards:
@@ -1627,7 +1627,7 @@ actor CoreDataChatStore {
         }
         guard block.nodeRole == .toolPresentation else { return false }
         switch block.kind {
-        case .structuredHealthCards, .sleepVisualization, .weatherVisualization, .weatherConfigCard, .workoutVisualization, .nutritionCards, .medicalRiskNotice,
+        case .structuredHealthCards, .sleepVisualization, .stepVisualization, .energyVisualization, .nutritionReadVisualization, .weatherVisualization, .weatherConfigCard, .searchSummary, .workoutVisualization, .nutritionCards, .medicalRiskNotice,
              .healthResourceReference, .knowledgeCards, .taskCards, .captureCard, .html,
              .pendingMemberToolCards, .toolQuestionCards, .toolMemberSelectionCards,
              .healthResourceCandidateCards, .toolConsentCards, .locationPermissionCards:

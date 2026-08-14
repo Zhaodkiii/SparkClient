@@ -42,6 +42,7 @@
 "tool.param.health_topic_focus" = "可選解讀聚焦主題，用於上下文裁剪，如 blood_pressure、thyroid";
 "tool.param.health_references_json" = "批量解讀：JSON 陣列，每項含 resource_type、resource_id、member_id（可省略）。與 list/確認後 candidates 對齊，最多 5 條。傳入後勿逐條重複呼叫；單條仍可用 resource_type+resource_id。";
 "tool.summary.search_online" = "用途：線上檢索並彙總多來源資訊。query 簡潔；勿含個人敏感資訊。可與 read_web_page、search_knowledge_bag 聯用。";
+"tool.summary.insert_health_citation_sources" = "用途：插入健康/醫療資訊引用來源卡片，不連網，只從內建權威來源目錄按 query/keywords 匹配 NHC、NMPA、WHO、NIH、MedlinePlus、FDA、AHA、ADA 等來源。觸發規則：當你要回答健康、醫療、用藥、疾病、檢查、營養、運動風險等內容，且本輪尚未呼叫 search_online/search_arxiv_papers/read_web_page 提供引用時，必須先呼叫本工具插入引用來源卡片，再給最終回答。";
 "tool.summary.read_web_page" = "用途：抓取網頁正文並生成摘要。url 須為完整 HTTP(S)。同一連結解析一次。";
 "tool.summary.search_arxiv_papers" = "用途：檢索 arXiv 學術文獻並生成摘要。query 為主題相關英文關鍵詞。";
 "tool.summary.extract_remote_file_content" = "用途：從線上 PDF/Office/文字等檔案提取純文字。url 為完整 HTTP(S) 檔案連結。";
@@ -52,6 +53,9 @@
 "tool.coord.wgs84_description" = "經緯度（WGS‑84 十進位制度）。";
 "tool.coord.latitude_sentence" = "緯度。";
 "tool.coord.longitude_sentence" = "經度。";
+"tool.param.health_citation_query" = "需要補充引用來源的健康/醫療主題或使用者問題，提取核心醫學關鍵詞即可，不要包含個人敏感資訊。";
+"tool.param.health_citation_keywords" = "可選，健康引用關鍵詞陣列，如 headache、hypertension、糖尿病、用藥安全、血壓、頭痛。";
+"tool.param.health_citation_limit" = "可選，引用來源數量上限，預設 8，範圍 3-12。";
 "tool.date.start_yyyy_mm_dd" = "開始日期 yyyy-MM-dd";
 "tool.date.end_yyyy_mm_dd" = "結束日期 yyyy-MM-dd";
 "tool.param.protein_g" = "蛋白質 g";
