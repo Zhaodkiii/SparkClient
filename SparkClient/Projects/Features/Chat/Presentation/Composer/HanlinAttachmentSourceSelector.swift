@@ -58,7 +58,6 @@ struct HanlinAttachmentSourceSelector: View {
         .frame(maxWidth: .infinity, alignment: .center)
         .padding(.horizontal, 12)
         .padding(.top, 6)
-        .padding(.bottom, 12)
         .transition(.opacity.combined(with: .move(edge: .top)))
         .animation(.spring(response: 0.5, dampingFraction: 0.7), value: isVisible)
     }

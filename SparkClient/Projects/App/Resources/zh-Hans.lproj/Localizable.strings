@@ -4023,3 +4023,11 @@
 "chat.billing.free" = "免费";
 "chat.billing.tokens" = "tokens";
 "chat.billing.calls" = "次调用";
+"task.notification.setting.title" = "任务通知";
+"task.notification.open_settings" = "前往系统设置";
+"task.notification.status.off" = "已关闭";
+"task.notification.status.on" = "已开启";
+"task.notification.status.waiting" = "等待系统通知名额";
+"task.notification.status.denied" = "已开启，但系统通知权限关闭";
+"task.notification.status.missing_time" = "缺少提醒时间";
+"task.notification.status.past" = "提醒时间已过，本次不会补发";

@@ -60,6 +60,32 @@ struct MedicationReminderLaunchIntent: Equatable, Sendable, Identifiable {
     let notificationRequestID: String?
 }
 
+struct TaskReminderLaunchPayload: Equatable, Sendable {
+    let accountID: Int64
+    let memberID: Int
+    let taskID: Int
+    let notificationID: String
+    let scheduledAt: Date?
+
+    static func parse(userInfo: [AnyHashable: Any]) -> TaskReminderLaunchPayload? {
+        guard (userInfo["type"] as? String) == "task_reminder" else { return nil }
+        func int(_ key: String) -> Int? { (userInfo[key] as? Int) ?? (userInfo[key] as? String).flatMap(Int.init) }
+        func int64(_ key: String) -> Int64? { (userInfo[key] as? Int64) ?? (userInfo[key] as? Int).map(Int64.init) ?? (userInfo[key] as? String).flatMap(Int64.init) }
+        guard let accountID = int64("account_id"), let memberID = int("member_id"), let taskID = int("task_id") else { return nil }
+        let notificationID = userInfo["notification_id"] as? String ?? "task_\(accountID)_\(taskID)"
+        let scheduledAt = (userInfo["scheduled_at"] as? String).flatMap { ISO8601DateFormatter().date(from: $0) }
+        return TaskReminderLaunchPayload(accountID: accountID, memberID: memberID, taskID: taskID, notificationID: notificationID, scheduledAt: scheduledAt)
+    }
+}
+
+struct TaskReminderLaunchIntent: Equatable, Sendable, Identifiable {
+    let id: UUID
+    let payload: TaskReminderLaunchPayload
+    let receivedAt: Date
+    let source: LaunchIntentSource
+    let notificationRequestID: String?
+}
+
 /// 健康资源变更 APNs 唤起意图（如用药计划被他人维护）。
 struct HealthResourceChangedLaunchIntent: Equatable, Sendable, Identifiable {
     let id: UUID
@@ -94,6 +120,7 @@ enum LaunchIntent: Equatable, Sendable, Identifiable {
     case memberInviteFromPush(MemberInvitePushLaunchIntent)
     /// 用药提醒本地通知跳转意图
     case medicationReminder(MedicationReminderLaunchIntent)
+    case taskReminder(TaskReminderLaunchIntent)
     /// 健康资源变更 APNs 跳转意图
     case healthResourceChanged(HealthResourceChangedLaunchIntent)
     /// 通用路由跳转意图
@@ -107,6 +134,8 @@ enum LaunchIntent: Equatable, Sendable, Identifiable {
         case .memberInviteFromPush(let intent):
             return intent.id
         case .medicationReminder(let intent):
+            return intent.id
+        case .taskReminder(let intent):
             return intent.id
         case .healthResourceChanged(let intent):
             return intent.id
@@ -123,7 +152,7 @@ enum LaunchIntent: Equatable, Sendable, Identifiable {
             return 0
         case .medicalDocumentUpload:
             return 1
-        case .medicationReminder:
+        case .medicationReminder, .taskReminder:
             return 2
         case .healthResourceChanged:
             return 2
@@ -151,6 +180,11 @@ enum LaunchIntent: Equatable, Sendable, Identifiable {
 
     var medicationReminderNotificationID: String? {
         guard case .medicationReminder(let intent) = self else { return nil }
+        return intent.payload.notificationID
+    }
+
+    var taskReminderNotificationID: String? {
+        guard case .taskReminder(let intent) = self else { return nil }
         return intent.payload.notificationID
     }
 }

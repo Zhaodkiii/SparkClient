@@ -258,6 +258,7 @@ nonisolated struct TaskCreatePayload: Encodable, Sendable {
     let priority: HealthTask.Priority
     let businessType: String
     let businessID: String
+    let notificationEnabled: Bool
     let extra: [String: String]
 
     let taskMedical: TaskMedicalPayload?
@@ -275,6 +276,7 @@ nonisolated struct TaskUpdatePayload: Encodable, Sendable {
     let repeatType: HealthTask.RepeatType?
     let priority: HealthTask.Priority?
     let extra: [String: String]?
+    let notificationEnabled: Bool?
 
     let taskMedical: TaskMedicalPayload?
     let taskExercise: TaskExercisePayload?

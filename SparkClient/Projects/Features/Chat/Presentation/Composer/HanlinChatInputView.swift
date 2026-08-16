@@ -23,7 +23,7 @@ struct HanlinChatInputView: View {
     let onRemoveHealthResourceRef: (HealthResourceRef) -> Void
     let onClearHealthResourceRefs: () -> Void
 
-    @State private var inputHeight: CGFloat = 24
+    @State private var inputHeight: CGFloat = 52
     @State private var voiceInputSheet = false
     @State private var attachmentPreviewRoute: ChatAttachmentPreviewRoute?
     @State private var healthResourcePreviewRef: HealthResourceRef?
@@ -178,7 +178,7 @@ struct HanlinChatInputView: View {
                         HanlinChatTextView(
                             text: draftBinding,
                             measuredHeight: $inputHeight,
-                            minimumHeight: 44,
+                            minimumHeight: 52,
                             maximumHeight: 160,
                             isSending: stateStore.isSending
                         )
@@ -187,14 +187,17 @@ struct HanlinChatInputView: View {
                     .padding(.leading, 12)
 
                     // 语音目前先隐藏 后期介入电话
-//                    Button {
-//                        voiceInputSheet = true
-//                    } label: {
-//                        Image(systemName: "microphone.circle")
-//                            .foregroundStyle(Color(.systemGray))
-//                            .padding(.trailing, 3)
-//                    }
-//                    .disabled(stateStore.isSending)
+#if DEBUG
+                    Button {
+                        voiceInputSheet = true
+                    } label: {
+                        Image(systemName: "microphone.circle")
+                            .foregroundStyle(Color(.systemGray))
+                            .padding(.trailing, 3)
+                    }
+                    .disabled(stateStore.isSending)
+#endif
+
                 }
 
                 HStack(spacing: 6) {
@@ -609,8 +612,12 @@ private struct HanlinChatTextUIKitView: UIViewRepresentable {
         textView.isScrollEnabled = false
         textView.showsVerticalScrollIndicator = true
         textView.font = UIFont.preferredFont(forTextStyle: .body)
-        textView.textContainerInset = .zero
+        textView.textContainerInset = UIEdgeInsets(top: 8, left: 0, bottom: 8, right: 0)
         textView.textContainer.lineFragmentPadding = 0
+        textView.textContainer.lineBreakMode = .byCharWrapping
+        textView.textContainer.widthTracksTextView = true
+        textView.textContainer.maximumNumberOfLines = 0
+        textView.setContentHuggingPriority(.defaultLow, for: .horizontal)
         textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         return textView
     }

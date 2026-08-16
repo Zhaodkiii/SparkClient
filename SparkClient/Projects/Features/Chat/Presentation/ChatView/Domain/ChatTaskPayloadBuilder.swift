@@ -26,6 +26,7 @@ enum ChatTaskPayloadBuilder {
             priority: HealthTask.Priority(rawValue: priorityRaw) ?? .medium,
             businessType: stringValue(base["business_type"]) ?? card.businessType,
             businessID: stringValue(base["business_id"]) ?? card.businessID,
+            notificationEnabled: true,
             extra: [:],
             taskMedical: buildMedicalPayload(from: subMedical, fallback: card),
             taskExercise: buildExercisePayload(from: subExercise, fallback: card),

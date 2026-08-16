@@ -785,6 +785,7 @@ final class AppContainer {
         launchIntentCoordinator.discardAll(reason: "account_changed")
         launchIntentCoordinator.updateReadiness { $0 = LaunchIntentReadiness() }
         Task {
+            await taskManager.clearAccount()
             if case .signedIn(let session) = sessionStore.state {
                 await medicationReminderSyncCoordinator.clearAllForAccount(session.accountID)
             }
@@ -798,6 +799,7 @@ final class AppContainer {
     /// 这里是防止网络抖动、前后台切换、SwiftUI body 重算导致首页/聊天/设置缓存重建的关键边界。
     /// 只有 `AccountSessionRuntime` 在明确登出或切换账号时才会清掉这组缓存。
     func makeMainTabDependencies(ownerAccountID: Int64) -> MainTabDependencies {
+        taskManager.configureAccount(ownerAccountID)
         if mainTabDependenciesCache.matches(ownerAccountID),
            let cached = mainTabDependenciesCache.value {
             logger.debug("主 Tab 依赖命中账号级缓存 accountID=\(ownerAccountID)", module: .general)
@@ -826,6 +828,7 @@ final class AppContainer {
             uploadViewModel: medicalDocumentUploadViewModel,
             homeViewModel: homeViewModel,
             sessionStore: sessionStore,
+            taskManager: taskManager,
             logger: logger
         )
         let medicationReminderOwnershipCoordinator = MedicationReminderOwnershipCoordinator(

@@ -19,12 +19,13 @@ enum AppRoute: Hashable, Sendable {
     case homeMedicalList(HomeMedicalListRoute, MedicationExecutionInitialFocus?)
     /// 首页家庭药箱入口。
     case homeFamilyMedicineCabinet(memberID: Int)
+    case taskDetail(memberID: Int, taskID: Int)
 
     var rootTab: AppRouteStore.RootTab {
         switch self {
         case .home:
             return .home
-        case .homeMedicalList, .homeFamilyMedicineCabinet:
+        case .homeMedicalList, .homeFamilyMedicineCabinet, .taskDetail:
             return .health
         case .knowledge:
             return .knowledge
@@ -43,7 +44,7 @@ enum AppRoute: Hashable, Sendable {
         switch self {
         case .home, .knowledge, .chatList, .popularScience, .settings, .deepTutorList:
             return true
-        case .chatThread, .popularScienceArticle, .aiSettings, .accountManagement, .homeMedicalList, .homeFamilyMedicineCabinet, .deepTutorThread:
+        case .chatThread, .popularScienceArticle, .aiSettings, .accountManagement, .homeMedicalList, .homeFamilyMedicineCabinet, .taskDetail, .deepTutorThread:
             return false
         }
     }
@@ -117,7 +118,7 @@ final class AppRouteStore: ObservableObject {
         switch route {
         case .home:
             return Self.supportsIOS26Home ? .home : .health
-        case .homeMedicalList, .homeFamilyMedicineCabinet:
+        case .homeMedicalList, .homeFamilyMedicineCabinet, .taskDetail:
             return currentHomeHostTab(default: Self.supportsIOS26Home ? .home : .health)
         case .settings, .aiSettings, .accountManagement:
             return currentHomeHostTab(default: Self.supportsIOS26Home ? .home : .settings)

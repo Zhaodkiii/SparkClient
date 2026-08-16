@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import UIKit
 
 @MainActor
 final class TaskManager: ObservableObject {
@@ -19,6 +20,8 @@ final class TaskManager: ObservableObject {
     private let notificationManager: TaskNotificationManager
     private var logger: Logger
     private var executionsByTaskID: [Int: [TaskExecutionRecord]] = [:]
+    private var accountID: Int64?
+    private var cancellables: Set<AnyCancellable> = []
 
     init(
         taskService: TaskService? = nil,
@@ -28,12 +31,37 @@ final class TaskManager: ObservableObject {
         self.taskService = taskService
         self.notificationManager = notificationManager
         self.logger = logger
+        Publishers.Merge(
+            NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification),
+            NotificationCenter.default.publisher(for: NSNotification.Name.NSSystemTimeZoneDidChange)
+        )
+        .sink { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                await self.notificationManager.reconcile(tasks: self.tasks)
+            }
+        }
+        .store(in: &cancellables)
     }
 
     func configure(taskService: TaskService, logger: Logger = ConsoleLogger()) {
         self.taskService = taskService
         self.logger = logger
         self.lastSyncTime = taskService.lastSyncTime
+    }
+
+    func configureAccount(_ accountID: Int64) {
+        guard self.accountID != accountID else { return }
+        self.accountID = accountID
+        notificationManager.configure(accountID: accountID)
+    }
+
+    func clearAccount() async {
+        await notificationManager.clearCurrentAccount()
+        accountID = nil
+        tasks = []
+        lastSyncTime = nil
+        lastSyncError = nil
     }
 
     func task(for id: Int) -> HealthTask? {
@@ -63,9 +91,7 @@ final class TaskManager: ObservableObject {
             let tasks = try await taskService.fetchTasks(memberID: memberID, since: nil)
             self.tasks = tasks.sorted { TaskSorters.compare($0, $1, now: Date()) }
 
-            for task in tasks where task.status == .pending {
-                await notificationManager.registerTaskNotification(for: task)
-            }
+            await notificationManager.reconcile(tasks: tasks)
             refreshStatisticsStore(memberID: memberID)
             logger.info("任务初始加载完成 tasks=\(tasks.count)", module: .general)
         } catch {
@@ -85,14 +111,7 @@ final class TaskManager: ObservableObject {
             lastSyncTime = payload.serverTime
             lastSyncError = nil
 
-            for task in payload.tasks {
-                switch task.status {
-                case .pending:
-                    await notificationManager.updateTaskNotification(for: task)
-                case .completed, .canceled:
-                    await notificationManager.removeNotification(for: task)
-                }
-            }
+            await notificationManager.reconcile(tasks: tasks)
             refreshStatisticsStore(memberID: memberID)
         } catch {
             lastSyncError = error.localizedDescription
@@ -118,9 +137,7 @@ final class TaskManager: ObservableObject {
         }
         let task = try await taskService.createTask(payload: payload)
         merge(tasks: [task])
-        if task.status == .pending {
-            await notificationManager.registerTaskNotification(for: task)
-        }
+        await notificationManager.reconcile(tasks: tasks, requestPermissionIfNeeded: true)
         refreshStatisticsStore(memberID: task.member)
         return task
     }
@@ -142,6 +159,7 @@ final class TaskManager: ObservableObject {
                 repeatType: tasks.first(where: { $0.id == taskID })?.repeatType,
                 priority: payload.priority,
                 extra: payload.extra,
+                notificationEnabled: payload.notificationEnabled,
                 taskMedical: payload.taskMedical,
                 taskExercise: payload.taskExercise,
                 taskDiet: payload.taskDiet
@@ -150,12 +168,40 @@ final class TaskManager: ObservableObject {
         let task = try await taskService.updateTask(taskID: taskID, payload: finalPayload)
         merge(tasks: [task])
 
-        if task.status == .pending {
-            await notificationManager.updateTaskNotification(for: task)
-        } else {
-            await notificationManager.removeNotification(for: task)
-        }
+        await notificationManager.reconcile(tasks: tasks)
         refreshStatisticsStore(memberID: task.member)
+    }
+
+    @discardableResult
+    func setNotificationEnabled(taskID: Int, enabled: Bool) async throws -> TaskNotificationSchedulingState {
+        guard let taskService, let current = task(for: taskID) else {
+            throw TaskManagerError.taskServiceNotConfigured
+        }
+
+        if enabled == false {
+            await notificationManager.removeNotification(for: current)
+        }
+
+        do {
+            let payload = TaskUpdatePayload(
+                title: nil, description: nil, status: nil, startTime: nil, dueTime: nil,
+                repeatType: nil, priority: nil, extra: nil, notificationEnabled: enabled,
+                taskMedical: nil, taskExercise: nil, taskDiet: nil
+            )
+            let updated = try await taskService.updateTask(taskID: taskID, payload: payload)
+            merge(tasks: [updated])
+            await notificationManager.reconcile(tasks: tasks, requestPermissionIfNeeded: enabled)
+            return await notificationManager.schedulingState(for: updated)
+        } catch {
+            if current.notificationEnabled {
+                await notificationManager.reconcile(tasks: tasks)
+            }
+            throw error
+        }
+    }
+
+    func notificationSchedulingState(for task: HealthTask) async -> TaskNotificationSchedulingState {
+        await notificationManager.schedulingState(for: task)
     }
 
     func completeTask(taskID: Int, payload: TaskExecutionPayload? = nil) async throws {
@@ -165,6 +211,7 @@ final class TaskManager: ObservableObject {
             tasks[index].status = .completed
             tasks[index].updatedAt = Date()
             await notificationManager.removeNotification(for: tasks[index])
+            await notificationManager.reconcile(tasks: tasks)
             refreshStatisticsStore(memberID: tasks[index].member)
         }
         await loadExecutions(taskID: taskID)
@@ -182,6 +229,7 @@ final class TaskManager: ObservableObject {
             tasks[index].status = .completed
             tasks[index].updatedAt = Date()
             await notificationManager.removeNotification(for: tasks[index])
+            await notificationManager.reconcile(tasks: tasks)
         }
         refreshStatisticsStore(memberID: tasks.first(where: { $0.id == taskID })?.member)
     }
@@ -193,6 +241,7 @@ final class TaskManager: ObservableObject {
             tasks[index].status = .canceled
             tasks[index].updatedAt = Date()
             await notificationManager.removeNotification(for: tasks[index])
+            await notificationManager.reconcile(tasks: tasks)
             refreshStatisticsStore(memberID: tasks[index].member)
         }
     }

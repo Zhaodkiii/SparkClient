@@ -185,7 +185,7 @@ private final class SparkSpeechRecognizer: NSObject, ObservableObject {
     private let recognizer = SFSpeechRecognizer(locale: Locale.current)
 
     func requestAuthorization() {
-        SFSpeechRecognizer.requestAuthorization { [weak self] status in
+        Self.requestSpeechAuthorization { [weak self] status in
             Task { @MainActor in
                 guard let self else { return }
                 if status != .authorized {
@@ -217,10 +217,8 @@ private final class SparkSpeechRecognizer: NSObject, ObservableObject {
             let inputNode = audioEngine.inputNode
             let format = inputNode.outputFormat(forBus: 0)
             inputNode.removeTap(onBus: 0)
-            inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
-                request.append(buffer)
-                let level = Self.averagePowerLevel(buffer: buffer)
-                Task { @MainActor in
+            Self.installAudioTap(on: inputNode, format: format, request: request) { [weak self] level in
+                Task { @MainActor [weak self] in
                     self?.audioLevel = level
                 }
             }
@@ -228,7 +226,7 @@ private final class SparkSpeechRecognizer: NSObject, ObservableObject {
             audioEngine.prepare()
             try audioEngine.start()
             isRecording = true
-            recognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
+            recognitionTask = Self.startRecognition(recognizer: recognizer, request: request) { [weak self] result, error in
                 Task { @MainActor in
                     guard let self else { return }
                     if let result {
@@ -260,7 +258,7 @@ private final class SparkSpeechRecognizer: NSObject, ObservableObject {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
-    private static func averagePowerLevel(buffer: AVAudioPCMBuffer) -> Float {
+    private nonisolated static func averagePowerLevel(buffer: AVAudioPCMBuffer) -> Float {
         guard let channelData = buffer.floatChannelData?[0] else { return 0.1 }
         let frameLength = Int(buffer.frameLength)
         guard frameLength > 0 else { return 0.1 }
@@ -269,6 +267,39 @@ private final class SparkSpeechRecognizer: NSObject, ObservableObject {
             sum += abs(channelData[index])
         }
         return min(1, max(0.08, sum / Float(frameLength) * 18))
+    }
+
+    /// Speech and audio callbacks may be invoked from private framework queues.
+    /// Keep registration outside MainActor so Swift 6 does not attach a main
+    /// executor precondition to closures that system frameworks call directly.
+    private nonisolated static func requestSpeechAuthorization(
+        completion: @escaping (SFSpeechRecognizerAuthorizationStatus) -> Void
+    ) {
+        SFSpeechRecognizer.requestAuthorization { status in
+            completion(status)
+        }
+    }
+
+    private nonisolated static func installAudioTap(
+        on inputNode: AVAudioInputNode,
+        format: AVAudioFormat,
+        request: SFSpeechAudioBufferRecognitionRequest,
+        levelHandler: @escaping (Float) -> Void
+    ) {
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, _ in
+            request.append(buffer)
+            levelHandler(averagePowerLevel(buffer: buffer))
+        }
+    }
+
+    private nonisolated static func startRecognition(
+        recognizer: SFSpeechRecognizer,
+        request: SFSpeechAudioBufferRecognitionRequest,
+        resultHandler: @escaping (SFSpeechRecognitionResult?, Error?) -> Void
+    ) -> SFSpeechRecognitionTask {
+        recognizer.recognitionTask(with: request) { result, error in
+            resultHandler(result, error)
+        }
     }
 }
 

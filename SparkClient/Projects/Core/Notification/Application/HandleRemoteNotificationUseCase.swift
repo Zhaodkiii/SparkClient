@@ -101,6 +101,16 @@ struct HandleRemoteNotificationUseCase {
         notificationRequestID: String? = nil,
         rawUserInfo: [AnyHashable: Any]? = nil
     ) {
+        if let rawUserInfo, let taskPayload = TaskReminderLaunchPayload.parse(userInfo: rawUserInfo) {
+            handleTaskReminder(
+                payload: taskPayload,
+                entryPoint: entryPoint,
+                notificationRequestID: notificationRequestID,
+                bannerTitle: payload.title,
+                bannerBody: payload.body
+            )
+            return
+        }
         if let rawUserInfo,
            let medicationPayload = MedicationReminderPayloadParser.parse(userInfo: rawUserInfo) {
             handleMedicationReminder(
@@ -302,6 +312,36 @@ struct HandleRemoteNotificationUseCase {
                 )
             )
         )
+    }
+
+    private func handleTaskReminder(
+        payload: TaskReminderLaunchPayload,
+        entryPoint: RemoteNotificationEntryPoint,
+        notificationRequestID: String?,
+        bannerTitle: String?,
+        bannerBody: String
+    ) {
+        let coordinator = launchIntentCoordinator
+        let makeIntent: (LaunchIntentSource) -> LaunchIntent = { source in
+            .taskReminder(TaskReminderLaunchIntent(
+                id: UUID(), payload: payload, receivedAt: Date(), source: source,
+                notificationRequestID: notificationRequestID
+            ))
+        }
+        switch entryPoint {
+        case .foreground:
+            notificationClient.publish(NotificationIntent(
+                title: bannerTitle ?? NSLocalizedString("task.notification.title", comment: "健康任务提醒"),
+                message: bannerBody,
+                level: .info,
+                presentation: .banner,
+                dedupeKey: payload.notificationID,
+                source: "task_reminder",
+                onTap: { [weak coordinator] in coordinator?.receive(makeIntent(.inAppNotificationBannerTap)) }
+            ))
+        case .interaction:
+            coordinator.receive(makeIntent(.localNotificationInteraction))
+        }
     }
 
     private func handleHealthResourceChanged(

@@ -96,12 +96,14 @@ struct HanlinChatComposerView: View {
                 }
             )
 
+#if DEBUG
             if !isKeyboardVisible {
                 ChatComposerModelPickerRow(
                     models: modelRows,
                     selectedModelName: selectedModelBinding
                 )
             }
+#endif
 
             if attachmentMenuOpen {
                 HanlinAttachmentSourceSelector(
@@ -124,13 +126,12 @@ struct HanlinChatComposerView: View {
                         showFileImporter = true
                     }
                 )
-                .padding(.bottom, 12)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
 
         }
         .animation(.spring(response: 0.5, dampingFraction: 0.7), value: attachmentMenuOpen)
-        .padding(.bottom, 12)
+//        .padding(.bottom, 12)
         .background(Color(uiColor: .systemBackground))
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
             withAnimation(.easeInOut(duration: 0.2)) {

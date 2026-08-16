@@ -201,3 +201,11 @@
 "chat.medical_card.preview.unsupported" = "該卡片暫不支援詳情預覽";
 "chat.medical_card.preview.title" = "卡片預覽";
 "tool.error.structured_health_card.extraction_failed" = "結構化健康卡片生成失敗，請稍後重試或補充更完整的病歷摘要。";
+"task.notification.setting.title" = "任務通知";
+"task.notification.open_settings" = "前往系統設定";
+"task.notification.status.off" = "已關閉";
+"task.notification.status.on" = "已開啟";
+"task.notification.status.waiting" = "等待系統通知名額";
+"task.notification.status.denied" = "已開啟，但系統通知權限關閉";
+"task.notification.status.missing_time" = "缺少提醒時間";
+"task.notification.status.past" = "提醒時間已過，本次不會補發";

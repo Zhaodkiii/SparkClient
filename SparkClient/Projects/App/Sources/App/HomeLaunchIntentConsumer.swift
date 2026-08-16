@@ -7,6 +7,7 @@ final class HomeLaunchIntentConsumer: LaunchIntentHandling {
     private let uploadViewModel: MedicalDocumentUploadViewModel
     private let homeViewModel: HomeViewModel
     private let sessionStore: AppSessionStore
+    private let taskManager: TaskManager
     private let logger: Logger
 
     init(
@@ -15,6 +16,7 @@ final class HomeLaunchIntentConsumer: LaunchIntentHandling {
         uploadViewModel: MedicalDocumentUploadViewModel,
         homeViewModel: HomeViewModel,
         sessionStore: AppSessionStore,
+        taskManager: TaskManager,
         logger: Logger
     ) {
         self.coordinator = coordinator
@@ -22,6 +24,7 @@ final class HomeLaunchIntentConsumer: LaunchIntentHandling {
         self.uploadViewModel = uploadViewModel
         self.homeViewModel = homeViewModel
         self.sessionStore = sessionStore
+        self.taskManager = taskManager
         self.logger = logger
     }
 
@@ -70,7 +73,7 @@ final class HomeLaunchIntentConsumer: LaunchIntentHandling {
             }
             return .blocked(.homeSheetBusy)
 
-        case .medicationReminder:
+        case .medicationReminder, .taskReminder:
             if hostState.activeSheetKind != nil {
                 return .blocked(.homeSheetBusy)
             }
@@ -121,6 +124,9 @@ final class HomeLaunchIntentConsumer: LaunchIntentHandling {
 
         case .medicationReminder(let reminderIntent):
             return await consumeMedicationReminder(reminderIntent)
+
+        case .taskReminder(let reminderIntent):
+            return await consumeTaskReminder(reminderIntent)
 
         case .healthResourceChanged(let resourceIntent):
             return await consumeHealthResourceChanged(resourceIntent)
@@ -199,6 +205,24 @@ final class HomeLaunchIntentConsumer: LaunchIntentHandling {
             shouldOpenLogSheet: true
         )
         routeStore.route(to: .homeMedicalList(.medicationPlans, focus))
+        return .consumed
+    }
+
+    private func consumeTaskReminder(_ intent: TaskReminderLaunchIntent) async -> LaunchIntentConsumeResult {
+        guard case .signedIn(let session) = sessionStore.state else { return .failedTerminal(.signedOut) }
+        let payload = intent.payload
+        guard payload.accountID == session.accountID else { return .failedTerminal(.accountNotPrepared) }
+        switch await homeViewModel.waitForMemberAvailability(payload.memberID) {
+        case .loading: return .notReady
+        case .unavailable: return .failedTerminal(.unsupportedInPhase)
+        case .available: break
+        }
+        await homeViewModel.switchMemberAndLoad(payload.memberID)
+        await taskManager.loadInitial(memberID: payload.memberID)
+        guard taskManager.task(for: payload.taskID)?.member == payload.memberID else {
+            return .failedTerminal(.unsupportedInPhase)
+        }
+        routeStore.route(to: .taskDetail(memberID: payload.memberID, taskID: payload.taskID))
         return .consumed
     }
 

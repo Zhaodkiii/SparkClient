@@ -86,6 +86,7 @@ struct TaskCreateFormDraft: Equatable {
             priority: priority,
             businessType: previewBusinessType,
             businessID: "",
+            notificationEnabled: true,
             extra: [:],
             taskMedical: medicalPayload,
             taskExercise: exercisePayload,
@@ -147,6 +148,7 @@ struct TaskCreateFormDraft: Equatable {
             repeatType: repeatType,
             priority: priority,
             extra: [:],
+            notificationEnabled: nil,
             taskMedical: medicalPayload,
             taskExercise: exercisePayload,
             taskDiet: dietPayload

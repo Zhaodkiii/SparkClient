@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct TaskDetailView: View {
     let memberID: Int?
@@ -17,6 +18,8 @@ struct TaskDetailView: View {
     @State private var actionError: String?
     @State private var relatedKnowledgeDocument: KnowledgeDocument?
     @State private var isLoadingRelatedBusiness = false
+    @State private var isUpdatingNotification = false
+    @State private var notificationState: TaskNotificationSchedulingState?
     @State private var pendingKnowledgeOpen: PendingKnowledgeOpen?
     let onPreviewSave: ((TaskCardPreviewContext, TaskCard) async throws -> HealthTask)?
     let onPreviewEdit: ((TaskCardPreviewContext, TaskCardPreviewEditResult) async -> Void)?
@@ -104,6 +107,9 @@ struct TaskDetailView: View {
         .task {
             if let taskID = currentMode.taskID {
                 await taskManager.loadExecutions(taskID: taskID)
+                if let task = taskManager.task(for: taskID) {
+                    notificationState = await taskManager.notificationSchedulingState(for: task)
+                }
             }
         }
         .task(id: task?.businessID ?? "") {
@@ -492,6 +498,7 @@ struct TaskDetailView: View {
             VStack(alignment: .leading, spacing: 20) {
                 headerSection(task: task, detailModel: detailModel)
                 basicInfoCard(task: task, detailModel: detailModel)
+                notificationPreferenceCard(task: task)
                 TaskBusinessPanelView(task: task)
                 relatedBusinessSection(task: task)
                 executionHistorySection(task: task)
@@ -508,6 +515,65 @@ struct TaskDetailView: View {
                     onFail: { submitExecution(status: .failed) }
                 )
             }
+        }
+    }
+
+    private func notificationPreferenceCard(task: HealthTask) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Toggle(isOn: Binding(
+                get: { task.notificationEnabled },
+                set: { updateNotification(taskID: task.id, enabled: $0) }
+            )) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(NSLocalizedString("task.notification.setting.title", comment: "任务通知"))
+                        .font(.body.weight(.medium))
+                    Text(notificationStatusText(task: task))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .disabled(isUpdatingNotification || task.status != .pending)
+
+            if notificationState == .systemDenied, task.notificationEnabled {
+                Button(NSLocalizedString("task.notification.open_settings", comment: "前往系统设置")) {
+                    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                    UIApplication.shared.open(url)
+                }
+                .font(.caption.weight(.semibold))
+            }
+        }
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color(uiColor: .secondarySystemGroupedBackground)))
+    }
+
+    private func updateNotification(taskID: Int, enabled: Bool) {
+        guard isUpdatingNotification == false else { return }
+        isUpdatingNotification = true
+        Task {
+            do {
+                notificationState = try await taskManager.setNotificationEnabled(taskID: taskID, enabled: enabled)
+            } catch {
+                actionError = error.localizedDescription
+            }
+            isUpdatingNotification = false
+        }
+    }
+
+    private func notificationStatusText(task: HealthTask) -> String {
+        guard task.notificationEnabled else {
+            return NSLocalizedString("task.notification.status.off", comment: "已关闭")
+        }
+        switch notificationState {
+        case .waitingForCapacity:
+            return NSLocalizedString("task.notification.status.waiting", comment: "等待系统通知名额")
+        case .systemDenied:
+            return NSLocalizedString("task.notification.status.denied", comment: "已开启，但系统通知权限关闭")
+        case .missingTime:
+            return NSLocalizedString("task.notification.status.missing_time", comment: "缺少提醒时间")
+        case .past:
+            return NSLocalizedString("task.notification.status.past", comment: "提醒时间已过")
+        default:
+            return NSLocalizedString("task.notification.status.on", comment: "已开启")
         }
     }
 

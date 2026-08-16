@@ -252,6 +252,11 @@ final class LaunchIntentCoordinator: ObservableObject {
             return .updateExisting(index: index)
         }
 
+        if let notificationID = incoming.taskReminderNotificationID,
+           let index = queue.firstIndex(where: { $0.intent.taskReminderNotificationID == notificationID }) {
+            return .updateExisting(index: index)
+        }
+
         return .keepBoth
     }
 
@@ -353,6 +358,8 @@ private extension LaunchIntent {
             return "memberInviteFromPush"
         case .medicationReminder:
             return "medicationReminder"
+        case .taskReminder:
+            return "taskReminder"
         case .healthResourceChanged:
             return "healthResourceChanged"
         case .appRoute:
@@ -367,6 +374,8 @@ private extension LaunchIntent {
         case .memberInviteFromPush(let intent):
             return intent.source.rawValue
         case .medicationReminder(let intent):
+            return intent.source.rawValue
+        case .taskReminder(let intent):
             return intent.source.rawValue
         case .healthResourceChanged(let intent):
             return intent.source.rawValue

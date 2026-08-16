@@ -72,6 +72,7 @@ struct HealthTask: Identifiable, Codable, Equatable, Sendable {
     var businessId: String
     var source: Source
     var notificationId: String
+    var notificationEnabled: Bool
     var extra: [String: String]
     var createdAt: Date
     var updatedAt: Date
@@ -82,6 +83,41 @@ struct HealthTask: Identifiable, Codable, Equatable, Sendable {
 
     // 本地扩展字段
     var localState: LocalState?
+
+    private enum CodingKeys: String, CodingKey {
+        case id, member, creator, title, description, type, status, startTime, dueTime
+        case repeatType, priority, businessType, businessId, source, notificationId
+        case notificationEnabled, extra, createdAt, updatedAt
+        case taskMedical, taskExercise, taskDiet, localState
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(Int.self, forKey: .id)
+        member = try container.decode(Int.self, forKey: .member)
+        creator = try container.decodeIfPresent(Int.self, forKey: .creator)
+        title = try container.decode(String.self, forKey: .title)
+        description = try container.decode(String.self, forKey: .description)
+        type = try container.decode(TaskType.self, forKey: .type)
+        status = try container.decode(TaskStatus.self, forKey: .status)
+        startTime = try container.decodeIfPresent(Date.self, forKey: .startTime)
+        dueTime = try container.decodeIfPresent(Date.self, forKey: .dueTime)
+        repeatType = try container.decode(RepeatType.self, forKey: .repeatType)
+        priority = try container.decode(Priority.self, forKey: .priority)
+        businessType = try container.decode(String.self, forKey: .businessType)
+        businessId = try container.decode(String.self, forKey: .businessId)
+        source = try container.decode(Source.self, forKey: .source)
+        notificationId = try container.decodeIfPresent(String.self, forKey: .notificationId) ?? ""
+        // 旧服务端响应没有该字段时按产品默认值开启，保证升级兼容。
+        notificationEnabled = try container.decodeIfPresent(Bool.self, forKey: .notificationEnabled) ?? true
+        extra = try container.decodeIfPresent([String: String].self, forKey: .extra) ?? [:]
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        taskMedical = try container.decodeIfPresent(TaskMedical.self, forKey: .taskMedical)
+        taskExercise = try container.decodeIfPresent(TaskExercise.self, forKey: .taskExercise)
+        taskDiet = try container.decodeIfPresent(TaskDiet.self, forKey: .taskDiet)
+        localState = try container.decodeIfPresent(LocalState.self, forKey: .localState)
+    }
 
     var businessID: String {
         get { businessId }
@@ -133,6 +169,7 @@ struct TaskStatusSyncItem: Codable, Sendable {
     let taskId: Int
     let status: HealthTask.TaskStatus
     let updatedAt: Date
+    let notificationEnabled: Bool?
 
     var taskID: Int { taskId }
 }

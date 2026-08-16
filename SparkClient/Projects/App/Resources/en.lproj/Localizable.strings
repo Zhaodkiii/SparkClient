@@ -4022,3 +4022,11 @@ Sex affects screening recommendations such as breast, cervical, and prostate exa
 "chat.billing.free" = "Free";
 "chat.billing.tokens" = "tokens";
 "chat.billing.calls" = "calls";
+"task.notification.setting.title" = "Task Notifications";
+"task.notification.open_settings" = "Open System Settings";
+"task.notification.status.off" = "Off";
+"task.notification.status.on" = "On";
+"task.notification.status.waiting" = "Waiting for an available notification slot";
+"task.notification.status.denied" = "On, but system notifications are disabled";
+"task.notification.status.missing_time" = "No reminder time";
+"task.notification.status.past" = "The reminder time has passed; it will not fire immediately";

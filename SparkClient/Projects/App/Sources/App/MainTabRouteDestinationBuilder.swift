@@ -62,6 +62,14 @@ struct MainTabRouteDestinationBuilder {
                 homeViewModel: homeViewModel,
                 dependencies: homeDependencies
             )
+        case .taskDetail(let memberID, let taskID):
+            TaskDetailView(
+                memberID: memberID,
+                taskManager: taskManager,
+                knowledgeDependencies: knowledgeDependencies,
+                knowledgeViewModel: knowledgeViewModel,
+                taskID: taskID
+            )
         case .popularScienceArticle(let articleID):
             PopularScienceArticleDetailView(
                 viewModel: popularScienceDependencies.makeDetailViewModel(articleID)

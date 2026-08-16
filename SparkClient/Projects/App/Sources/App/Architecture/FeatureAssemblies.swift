@@ -128,6 +128,7 @@ extension HomeFeatureDependencies {
             uploadViewModel: uploadViewModel,
             homeViewModel: homeViewModel,
             sessionStore: container.sessionStore,
+            taskManager: container.taskManager,
             logger: container.logger
         )
         let ownershipCoordinator = MedicationReminderOwnershipCoordinator(
