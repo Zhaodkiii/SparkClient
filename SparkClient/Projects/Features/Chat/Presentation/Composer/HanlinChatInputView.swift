@@ -1,4 +1,3 @@
-import AVFoundation
 import PhotosUI
 import SwiftUI
 import UIKit
@@ -18,7 +17,6 @@ struct HanlinChatInputView: View {
     let fileTransferService: FileTransferService
     let onSend: () -> Void
     let onCancel: () -> Void
-    let onRequestFileImport: () -> Void
     let onAttachmentsPicked: ([ChatComposerAttachmentPreview]) -> Void
     let onRemoveAttachment: (UUID) -> Void
     let onSetMemberBinding: (Int?) -> Void
@@ -38,10 +36,6 @@ struct HanlinChatInputView: View {
         composerDraft.isShowingAttachmentMenu
     }
 
-    private var canOpenCamera: Bool {
-        AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) != nil
-    }
-
     private var canSendPayload: Bool {
         (composerDraft.trimmedText.isEmpty == false || composerDraft.hasVisualContent)
             && stateStore.hasBlockingPreparedAttachmentWork(for: threadID) == false
@@ -49,24 +43,9 @@ struct HanlinChatInputView: View {
 
     var body: some View {
         content
-            .sheet(isPresented: attachmentMenuBinding) {
-                HanlinAttachmentSheet(
-                    isCameraAvailable: canOpenCamera,
-                    onPhotos: {
-                        stateStore.setAttachmentMenuPresented(false, for: threadID)
-                        stateStore.setPhotoPickerPresented(true, for: threadID)
-                    },
-                    onCamera: {
-                        stateStore.setAttachmentMenuPresented(false, for: threadID)
-                        stateStore.setCameraPresented(true, for: threadID)
-                    },
-                    onFiles: {
-                        stateStore.setAttachmentMenuPresented(false, for: threadID)
-                        onRequestFileImport()
-                    }
-                )
-            }
-            .sheet(isPresented: photoPickerBinding) {
+            .sheet(isPresented: photoPickerBinding, onDismiss: {
+                stateStore.setAttachmentMenuPresented(false, for: threadID)
+            }) {
                 HanlinPhotoLibraryPicker(
                     onCancel: {
                         stateStore.setPhotoPickerPresented(false, for: threadID)
@@ -84,7 +63,9 @@ struct HanlinChatInputView: View {
                     }
                 )
             }
-            .fullScreenCover(isPresented: cameraBinding) {
+            .fullScreenCover(isPresented: cameraBinding, onDismiss: {
+                stateStore.setAttachmentMenuPresented(false, for: threadID)
+            }) {
                 CustomCameraFullScreenView(
                     onMediaBatchCaptured: { mediaItems in
                         SparkLogger.log(
@@ -240,7 +221,6 @@ struct HanlinChatInputView: View {
             .background(Color(uiColor: .secondarySystemBackground))
             .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
             .padding(.horizontal, 12)
-//            .padding(.top, composerAttachmentAreaHasContent ? 6 : 12)
         }
     }
 
@@ -310,7 +290,7 @@ struct HanlinChatInputView: View {
 
     private var plusButton: some View {
         Button {
-            stateStore.setAttachmentMenuPresented(true, for: threadID)
+            stateStore.setAttachmentMenuPresented(!attachmentMenuOpen, for: threadID)
         } label: {
             Image(systemName: "plus.circle")
                 .resizable()
@@ -364,13 +344,6 @@ struct HanlinChatInputView: View {
                     .foregroundStyle(Color(.systemGray))
             }
         }
-    }
-
-    private var attachmentMenuBinding: Binding<Bool> {
-        Binding(
-            get: { composerDraft.isShowingAttachmentMenu },
-            set: { stateStore.setAttachmentMenuPresented($0, for: threadID) }
-        )
     }
 
     private var photoPickerBinding: Binding<Bool> {
@@ -567,88 +540,6 @@ private struct HanlinAttachmentThumbnail: View {
                 }
             }
         }
-    }
-}
-
-private struct HanlinAttachmentSheet: View {
-    let isCameraAvailable: Bool
-    let onPhotos: () -> Void
-    let onCamera: () -> Void
-    let onFiles: () -> Void
-
-    var body: some View {
-        CompatibleNavigationContainer(legacyStackStyle: true) {
-            VStack(spacing: 12) {
-                Text(L10n.text("chat.attachments.title"))
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                Text(L10n.text("chat.attachments.subtitle"))
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                attachmentRow(
-                    title: L10n.text("chat.attachments.photos"),
-                    subtitle: L10n.text("chat.attachments.photos.subtitle"),
-                    systemImage: "photo.on.rectangle.angled",
-                    action: onPhotos
-                )
-
-                attachmentRow(
-                    title: L10n.text("chat.attachments.camera"),
-                    subtitle: isCameraAvailable
-                        ? L10n.text("chat.attachments.camera.subtitle")
-                        : L10n.text("chat.attachments.camera.unavailable"),
-                    systemImage: "camera",
-                    action: onCamera
-                )
-                .disabled(isCameraAvailable == false)
-
-                attachmentRow(
-                    title: L10n.text("chat.attachments.files"),
-                    subtitle: L10n.text("chat.attachments.files.subtitle"),
-                    systemImage: "doc",
-                    action: onFiles
-                )
-
-                Spacer(minLength: 0)
-            }
-            .padding(20)
-            .navigationBarHidden(true)
-        }
-    }
-
-    private func attachmentRow(
-        title: String,
-        subtitle: String,
-        systemImage: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 14) {
-                Image(systemName: systemImage)
-                    .font(.title3)
-                    .frame(width: 38, height: 38)
-                    .background(Circle().fill(Color.accentColor.opacity(0.12)))
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(title)
-                        .font(.body.weight(.semibold))
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-            }
-            .padding(14)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
-            )
-        }
-        .buttonStyle(.plain)
     }
 }
 

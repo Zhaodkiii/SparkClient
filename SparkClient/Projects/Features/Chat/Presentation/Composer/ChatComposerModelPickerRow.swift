@@ -24,7 +24,7 @@ struct ChatComposerModelPickerRow: View {
                         modelButton(
                             title: L10n.text("chat.composer.model.default"),
                             isSelected: selectedModelName == nil,
-                            systemImage: "sparkles"
+                            icon: .system("sparkles")
                         ) {
                             selectedModelName = nil
                         }
@@ -33,7 +33,7 @@ struct ChatComposerModelPickerRow: View {
                             modelButton(
                                 title: row.displayTitle,
                                 isSelected: selectedModelName == row.name,
-                                systemImage: row.composerIconSystemName
+                                icon: composerIcon(for: row)
                             ) {
                                 selectedModelName = row.name
                             }
@@ -46,18 +46,28 @@ struct ChatComposerModelPickerRow: View {
         }
     }
 
+    private enum ComposerModelIcon {
+        case system(String)
+        case company(String)
+    }
+
+    private func composerIcon(for row: AIScenarioRemoteModelRow) -> ComposerModelIcon {
+        let customIcon = row.icon?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if customIcon.isEmpty == false {
+            return .system(customIcon)
+        }
+        return .company(row.company)
+    }
+
     private func modelButton(
         title: String,
         isSelected: Bool,
-        systemImage: String,
+        icon: ComposerModelIcon,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
             HStack(spacing: 6) {
-                Image(systemName: systemImage)
-                    .font(.body)
-                    .foregroundStyle(isSelected ? Color.accentColor : Color(.systemGray))
-                    .frame(width: 20, height: 20)
+                modelLeadingIcon(icon: icon, isSelected: isSelected)
 
                 if isSelected {
                     Text(title)
@@ -76,6 +86,48 @@ struct ChatComposerModelPickerRow: View {
             )
         }
         .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func modelLeadingIcon(icon: ComposerModelIcon, isSelected: Bool) -> some View {
+        switch icon {
+        case .system(let systemName):
+            Image(systemName: systemName)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 20, height: 20)
+                .foregroundStyle(isSelected ? Color.accentColor : Color(.systemGray))
+                .scaleEffect(isSelected ? 1.2 : 1.0)
+                .animation(
+                    .spring(response: 0.5, dampingFraction: 0.7, blendDuration: 0.5),
+                    value: isSelected
+                )
+        case .company(let company):
+            if isSelected {
+                Image(companyIconName(for: company))
+                    .renderingMode(.original)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 20, height: 20)
+                    .scaleEffect(1.2)
+                    .animation(
+                        .spring(response: 0.5, dampingFraction: 0.7, blendDuration: 0.5),
+                        value: isSelected
+                    )
+            } else {
+                Image(companyIconName(for: company))
+                    .renderingMode(.template)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 20, height: 20)
+                    .foregroundStyle(Color(.systemGray))
+                    .scaleEffect(1.0)
+                    .animation(
+                        .spring(response: 0.5, dampingFraction: 0.7, blendDuration: 0.5),
+                        value: isSelected
+                    )
+            }
+        }
     }
 
     private func modelBackground(isSelected: Bool) -> some View {

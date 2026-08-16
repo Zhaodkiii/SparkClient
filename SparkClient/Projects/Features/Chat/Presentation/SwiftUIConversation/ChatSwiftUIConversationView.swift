@@ -12,6 +12,15 @@ private struct ChatSwiftUIConversationInput: Equatable {
 private struct ChatSwiftUIScrollEvent: Equatable {
     let generation: UInt64
     let scrollRequestGeneration: UInt64
+    let layoutGeneration: UInt64
+}
+
+private struct ChatSwiftUIContentHeightPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
 }
 
 struct ChatSwiftUIConversationView: View {
@@ -24,6 +33,7 @@ struct ChatSwiftUIConversationView: View {
     @ObservedObject var uiStateStore: ChatMessageUIStateStore
     @ObservedObject var speechHelper: ChatSpeechHelper
     @ObservedObject var memberContextStore: MemberContextStore
+    @ObservedObject var navigationCoordinator: ChatMessageNavigationCoordinator
     let taskManager: TaskManager
     let logger: Logger
     let actionStateHandle: ChatMessageActionStateHandle
@@ -39,6 +49,8 @@ struct ChatSwiftUIConversationView: View {
     @StateObject private var streamBuffer = ChatSwiftUIStreamEventBuffer()
     @StateObject private var frameScheduler = ChatSwiftUIFrameScheduler()
     @StateObject private var scrollPolicy = ChatSwiftUIScrollAnchorPolicy()
+    @State private var layoutGeneration: UInt64 = 0
+    @State private var measuredContentHeight: CGFloat = 0
 
     init(
         threadID: UUID,
@@ -50,6 +62,7 @@ struct ChatSwiftUIConversationView: View {
         uiStateStore: ChatMessageUIStateStore,
         speechHelper: ChatSpeechHelper,
         memberContextStore: MemberContextStore,
+        navigationCoordinator: ChatMessageNavigationCoordinator,
         taskManager: TaskManager,
         logger: Logger,
         actionStateHandle: ChatMessageActionStateHandle,
@@ -70,6 +83,7 @@ struct ChatSwiftUIConversationView: View {
         self.uiStateStore = uiStateStore
         self.speechHelper = speechHelper
         self.memberContextStore = memberContextStore
+        self.navigationCoordinator = navigationCoordinator
         self.taskManager = taskManager
         self.logger = logger
         self.actionStateHandle = actionStateHandle
@@ -100,7 +114,8 @@ struct ChatSwiftUIConversationView: View {
         let frame = frameScheduler.frame
         let scrollEvent = ChatSwiftUIScrollEvent(
             generation: frame.generation,
-            scrollRequestGeneration: frame.scrollToBottomRequestGeneration
+            scrollRequestGeneration: frame.scrollToBottomRequestGeneration,
+            layoutGeneration: layoutGeneration
         )
 
         ScrollViewReader { proxy in
@@ -123,13 +138,13 @@ struct ChatSwiftUIConversationView: View {
                             uiStateStore: uiStateStore,
                             speechHelper: speechHelper,
                             memberContextStore: memberContextStore,
+                            navigationCoordinator: navigationCoordinator,
                             actionState: actionStateHandle.state,
                             conversationAppearance: conversationAppearance,
                             taskManager: taskManager,
                             logger: logger,
                             onHeightChangingUpdate: { update in
                                 update()
-                                scrollIfNeeded(proxy: proxy, frame: frame, animated: false)
                             }
                         )
                         .id(row.id)
@@ -140,6 +155,14 @@ struct ChatSwiftUIConversationView: View {
                         .id(ChatSwiftUIConversationLayoutConstants.bottomAnchorID)
                 }
                 .padding(.vertical, verticalContentPadding)
+                .background {
+                    GeometryReader { geometry in
+                        Color.clear.preference(
+                            key: ChatSwiftUIContentHeightPreferenceKey.self,
+                            value: geometry.size.height
+                        )
+                    }
+                }
             }
             .scrollIndicators(.hidden)
             .refreshable {
@@ -159,8 +182,18 @@ struct ChatSwiftUIConversationView: View {
             .onChange(of: threadID) { _, _ in
                 apply(input: input, reset: true)
             }
-            .onChange(of: scrollEvent) { _, _ in
-                scrollIfNeeded(proxy: proxy, frame: frameScheduler.frame, animated: false)
+            .onPreferenceChange(ChatSwiftUIContentHeightPreferenceKey.self) { height in
+                guard abs(height - measuredContentHeight) > 0.5 else { return }
+                measuredContentHeight = height
+                layoutGeneration &+= 1
+            }
+            .task(id: scrollEvent) {
+                await scrollIfNeeded(
+                    proxy: proxy,
+                    frame: frameScheduler.frame,
+                    layoutGeneration: scrollEvent.layoutGeneration,
+                    animated: false
+                )
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -230,14 +263,22 @@ struct ChatSwiftUIConversationView: View {
         frameScheduler.submit(nextFrame, priority: priority)
     }
 
+    @MainActor
     private func scrollIfNeeded(
         proxy: ScrollViewProxy,
         frame: ChatSwiftUIConversationFrame,
+        layoutGeneration: UInt64,
         animated: Bool
-    ) {
+    ) async {
+        // The measured content height changes on every frame of a collapsing tool
+        // trace. Since this task is keyed by `layoutGeneration`, it is cancelled
+        // and restarted until the real layout has remained stable for two frames.
+        try? await Task.sleep(for: .milliseconds(32))
+        guard Task.isCancelled == false else { return }
         guard scrollPolicy.shouldScrollToBottom(
             frame: frame,
-            behavior: uiPreferences.swiftUIRefreshBehavior
+            behavior: uiPreferences.swiftUIRefreshBehavior,
+            layoutGeneration: layoutGeneration
         ) else { return }
 
         let action = {
@@ -264,6 +305,7 @@ private struct ChatSwiftUIConversationMessageRow: View {
     @ObservedObject var uiStateStore: ChatMessageUIStateStore
     @ObservedObject var speechHelper: ChatSpeechHelper
     @ObservedObject var memberContextStore: MemberContextStore
+    @ObservedObject var navigationCoordinator: ChatMessageNavigationCoordinator
     let actionState: ChatMessageActionState
     let conversationAppearance: ChatConversationAppearancePreferences
     let taskManager: TaskManager
@@ -283,6 +325,7 @@ private struct ChatSwiftUIConversationMessageRow: View {
             uiStateStore: uiStateStore,
             speechHelper: speechHelper,
             memberContextStore: memberContextStore,
+            navigationCoordinator: navigationCoordinator,
             actionState: actionState,
             conversationAppearance: conversationAppearance,
             taskManager: taskManager,

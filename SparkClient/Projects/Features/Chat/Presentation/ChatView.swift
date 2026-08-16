@@ -24,6 +24,7 @@ struct ChatView: View {
     
     @State private var hasLoaded = false
     @StateObject private var uiStateStore = ChatMessageUIStateStore()
+    @StateObject private var messageNavigationCoordinator = ChatMessageNavigationCoordinator()
     private let actionStateHandle = ChatMessageActionStateHandle(ChatMessageActionState())
     @StateObject private var speechHelper = ChatSpeechHelper()
     @State private var showClearChatConfirmation = false
@@ -233,6 +234,90 @@ struct ChatView: View {
         baseLayout
             .navigationTitle(stateStore.selectedThread?.listDisplayTitle ?? L10n.text("chat.title"))
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(item: $messageNavigationCoordinator.activeSmallTaskPayload) { payload in
+                SmallTaskDetailView(
+                    viewModel: aiSettingsViewModel,
+                    taskCode: payload.code,
+                    source: payload.source
+                )
+            }
+            .navigationDestination(item: $messageNavigationCoordinator.activeTaskDetailMode) { mode in
+                TaskDetailView(
+                    memberID: nil,
+                    taskManager: taskManager,
+                    knowledgeDependencies: knowledgeDependencies,
+                    knowledgeViewModel: knowledgeViewModel,
+                    mode: mode,
+                    onPreviewSave: { previewContext, card in
+                        guard let message = messageForNavigation(clientMessageID: previewContext.messageClientID) else {
+                            throw NSError(
+                                domain: "ChatMessageNavigation",
+                                code: 1,
+                                userInfo: [NSLocalizedDescriptionKey: "无法找到任务卡对应的会话消息"]
+                            )
+                        }
+                        return try await detailViewModel.saveTaskCardPreview(
+                            threadID: previewContext.threadID,
+                            message: message,
+                            card: card
+                        )
+                    },
+                    onPreviewEdit: { previewContext, result in
+                        guard let message = messageForNavigation(clientMessageID: previewContext.messageClientID) else { return }
+                        await detailViewModel.updateTaskCardPreviewDraft(
+                            threadID: previewContext.threadID,
+                            message: message,
+                            cardID: previewContext.card.id,
+                            result: result
+                        )
+                    }
+                )
+            }
+            .navigationDestination(item: $messageNavigationCoordinator.activeStructuredHealthPreview) { context in
+                ChatStructuredHealthCardPreviewDestination(
+                    context: context,
+                    memberContextStore: homeViewModel.memberContextStoreForBinding,
+                    medicalQueryAPI: detailViewModel.sparkMedicalQueryAPI,
+                    fileTransferService: detailViewModel.attachmentFileTransferService,
+                    notificationClient: detailViewModel.chatNotificationClient,
+                    cachedCompleteData: detailViewModel.cachedMemberCompleteData,
+                    onDraftUpdated: { updatedItem in
+                        guard let message = messageForNavigation(clientMessageID: context.messageClientID) else { return }
+                        Task {
+                            await detailViewModel.updateStructuredHealthCardPreviewDraft(
+                                threadID: context.threadID,
+                                message: message,
+                                blockID: context.blockID,
+                                item: updatedItem
+                            )
+                        }
+                    }
+                )
+            }
+            .navigationDestination(item: $messageNavigationCoordinator.activeWeatherConfigCard) { _ in
+                AIWeatherToolSettingsView(viewModel: aiSettingsViewModel)
+                    .hidesMainTabBarWhenPushed()
+            }
+            .navigationDestination(item: $messageNavigationCoordinator.activeToolConsentDetailTarget) { target in
+                if let descriptor = ToolModelEgressConsentPolicy.descriptor(for: target.toolName) {
+                    AIToolConsentDetailView(viewModel: aiSettingsViewModel, descriptor: descriptor)
+                } else {
+                    List {
+                        Section {
+                            Text(SparkToolName.displayName(for: target.toolName))
+                                .font(.body.weight(.semibold))
+                            Text(target.toolName)
+                                .font(.footnote.monospaced())
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                            Text("当前工具没有可配置的授权详情。")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .navigationTitle("授权详情")
+                }
+            }
             .safeAreaInset(edge: .bottom) {
                 composerChrome
             }
@@ -342,6 +427,7 @@ struct ChatView: View {
             }
             .onChange(of: threadID) { _ in
                 activeParameterCard = nil
+                messageNavigationCoordinator.reset()
                 restoreCardActionSnapshotIfNeeded(forceReload: true)
             }
     }
@@ -483,6 +569,7 @@ struct ChatView: View {
                 uiStateStore: uiStateStore,
                 speechHelper: speechHelper,
                 memberContextStore: homeViewModel.memberContextStoreForBinding,
+                navigationCoordinator: messageNavigationCoordinator,
                 taskManager: taskManager,
                 logger: logger,
                 actionStateHandle: actionStateHandle,
@@ -504,6 +591,7 @@ struct ChatView: View {
                 uiStateStore: uiStateStore,
                 speechHelper: speechHelper,
                 memberContextStore: homeViewModel.memberContextStoreForBinding,
+                navigationCoordinator: messageNavigationCoordinator,
                 taskManager: taskManager,
                 logger: logger,
                 actionStateHandle: actionStateHandle,
@@ -516,6 +604,10 @@ struct ChatView: View {
                 scrollToBottomRequestGeneration: stateStore.scrollToBottomRequestGeneration(for: threadID)
             )
         }
+    }
+
+    private func messageForNavigation(clientMessageID: UUID) -> ChatMessage? {
+        visibleMessages.first { $0.clientMessageID == clientMessageID }
     }
     
     private var cardActionSnapshotStorageKey: String {
@@ -899,6 +991,7 @@ private struct ChatConversationMessageListContainer: View {
     @ObservedObject var uiStateStore: ChatMessageUIStateStore
     @ObservedObject var speechHelper: ChatSpeechHelper
     @ObservedObject var memberContextStore: MemberContextStore
+    @ObservedObject var navigationCoordinator: ChatMessageNavigationCoordinator
     let taskManager: TaskManager
     let logger: Logger
     let actionStateHandle: ChatMessageActionStateHandle
@@ -921,6 +1014,7 @@ private struct ChatConversationMessageListContainer: View {
         uiStateStore: ChatMessageUIStateStore,
         speechHelper: ChatSpeechHelper,
         memberContextStore: MemberContextStore,
+        navigationCoordinator: ChatMessageNavigationCoordinator,
         taskManager: TaskManager,
         logger: Logger,
         actionStateHandle: ChatMessageActionStateHandle,
@@ -940,6 +1034,7 @@ private struct ChatConversationMessageListContainer: View {
         self.uiStateStore = uiStateStore
         self.speechHelper = speechHelper
         self.memberContextStore = memberContextStore
+        self.navigationCoordinator = navigationCoordinator
         self.taskManager = taskManager
         self.logger = logger
         self.actionStateHandle = actionStateHandle
@@ -968,6 +1063,7 @@ private struct ChatConversationMessageListContainer: View {
             uiStateStore: uiStateStore,
             speechHelper: speechHelper,
             memberContextStore: memberContextStore,
+            navigationCoordinator: navigationCoordinator,
             taskManager: taskManager,
             logger: logger,
             actionStateHandle: actionStateHandle,

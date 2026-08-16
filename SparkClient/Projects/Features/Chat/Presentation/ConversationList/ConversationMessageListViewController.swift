@@ -54,6 +54,7 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
     weak var uiStateStore: ChatMessageUIStateStore?
     weak var speechHelper: ChatSpeechHelper?
     weak var memberContextStore: MemberContextStore?
+    weak var navigationCoordinator: ChatMessageNavigationCoordinator?
     var taskManager: TaskManager?
     var logger: Logger?
     var actionState: ChatMessageActionState?
@@ -544,6 +545,7 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
                let uiStateStore = uiStateStore,
                let speechHelper = speechHelper,
                let memberContextStore = memberContextStore,
+               let navigationCoordinator = navigationCoordinator,
                let actionState = actionState,
                let taskManager = taskManager,
                let logger = logger
@@ -565,6 +567,7 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
                     uiStateStore: uiStateStore,
                     speechHelper: speechHelper,
                     memberContextStore: memberContextStore,
+                    navigationCoordinator: navigationCoordinator,
                     actionState: actionState,
                     conversationAppearance: conversationAppearance,
                     taskManager: taskManager,

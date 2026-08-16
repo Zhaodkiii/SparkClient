@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -28,6 +29,27 @@ struct HanlinChatComposerView: View {
 
     @State private var showFileImporter = false
     @State private var isKeyboardVisible = false
+
+    private var composerDraft: ChatComposerDraft {
+        stateStore.composerDraft(for: threadID)
+    }
+
+    private var attachmentMenuOpen: Bool {
+        composerDraft.isShowingAttachmentMenu
+    }
+
+    private var selectedModelRow: AIScenarioRemoteModelRow? {
+        guard let selectedName = composerDraft.runtimeFlags.selectedChatModelName else { return nil }
+        return modelRows.first { $0.name == selectedName }
+    }
+
+    private var showsMediaAttachmentSources: Bool {
+        selectedModelRow?.company.uppercased() != "LOCAL"
+    }
+
+    private var canOpenCamera: Bool {
+        AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) != nil
+    }
 
     private var selectedModelBinding: Binding<String?> {
         Binding(
@@ -63,7 +85,6 @@ struct HanlinChatComposerView: View {
                 fileTransferService: fileTransferService,
                 onSend: onSend,
                 onCancel: onCancel,
-                onRequestFileImport: { showFileImporter = true },
                 onAttachmentsPicked: onAttachmentsPicked,
                 onRemoveAttachment: onRemoveAttachment,
                 onSetMemberBinding: onSetMemberBinding,
@@ -81,7 +102,34 @@ struct HanlinChatComposerView: View {
                     selectedModelName: selectedModelBinding
                 )
             }
+
+            if attachmentMenuOpen {
+                HanlinAttachmentSourceSelector(
+                    showsMediaSources: showsMediaAttachmentSources,
+                    attachmentCount: composerDraft.attachments.count,
+                    isSending: stateStore.isSending,
+                    isVisible: attachmentMenuOpen,
+                    showCameraPicker: composerDraft.isShowingCamera,
+                    showImagePicker: composerDraft.isShowingPhotoPicker,
+                    showDocumentPicker: showFileImporter,
+                    onCamera: {
+                        guard canOpenCamera else { return }
+                        stateStore.setCameraPresented(true, for: threadID)
+                    },
+                    onPhotos: {
+                        stateStore.setPhotoPickerPresented(true, for: threadID)
+                    },
+                    onFiles: {
+                        stateStore.setAttachmentMenuPresented(false, for: threadID)
+                        showFileImporter = true
+                    }
+                )
+                .padding(.bottom, 12)
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+
         }
+        .animation(.spring(response: 0.5, dampingFraction: 0.7), value: attachmentMenuOpen)
         .padding(.bottom, 12)
         .background(Color(uiColor: .systemBackground))
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
@@ -99,6 +147,9 @@ struct HanlinChatComposerView: View {
             allowedContentTypes: [.pdf, .plainText, .image, .jpeg, .png],
             allowsMultipleSelection: true
         ) { result in
+            defer {
+                stateStore.setAttachmentMenuPresented(false, for: threadID)
+            }
             guard case .success(let urls) = result else { return }
             Task {
                 let previews = await ChatComposerAttachmentImporter.importFiles(urls: urls)

@@ -3,19 +3,9 @@ import UIKit
 
 /// 单条会话消息行（从 ``ChatView`` 抽出），供 `UICollectionView` + `UIHostingController` 复用。
 struct ChatConversationMessageRow: View {
-    private struct ToolConsentDetailNavigationTarget: Identifiable, Hashable {
-        let toolName: String
-        var id: String { toolName }
-    }
-
     @State private var rowWidth: CGFloat = 0
     @State private var bubbleMenuConfig: ChatBubbleMenuConfig?
     @State private var textSelectionPayload: ChatSelectableTextPayload?
-    @State private var activeSmallTaskPayload: ChatSmallTaskMessageCardPayload?
-    @State private var activeTaskDetailMode: TaskDetailMode?
-    @State private var activeStructuredHealthPreview: ChatStructuredHealthCardPreviewContext?
-    @State private var activeWeatherConfigCard: ChatWeatherConfigCardPayload?
-    @State private var activeToolConsentDetailTarget: ToolConsentDetailNavigationTarget?
 
     let threadID: UUID
     let message: ChatMessage
@@ -28,6 +18,7 @@ struct ChatConversationMessageRow: View {
     @ObservedObject var uiStateStore: ChatMessageUIStateStore
     @ObservedObject var speechHelper: ChatSpeechHelper
     @ObservedObject var memberContextStore: MemberContextStore
+    @ObservedObject var navigationCoordinator: ChatMessageNavigationCoordinator
     let actionState: ChatMessageActionState
     let conversationAppearance: ChatConversationAppearancePreferences
     let taskManager: TaskManager
@@ -107,81 +98,6 @@ struct ChatConversationMessageRow: View {
                         }
                     }
                 }
-            }
-        }
-        .navigationDestination(item: $activeSmallTaskPayload) { payload in
-            SmallTaskDetailView(
-                viewModel: aiSettingsViewModel,
-                taskCode: payload.code,
-                source: payload.source
-            )
-        }
-        .navigationDestination(item: $activeTaskDetailMode) { mode in
-            TaskDetailView(
-                memberID: nil,
-                taskManager: taskManager,
-                knowledgeDependencies: knowledgeDependencies,
-                knowledgeViewModel: knowledgeViewModel,
-                mode: mode,
-                onPreviewSave: { previewContext, card in
-                    try await detailViewModel.saveTaskCardPreview(
-                        threadID: threadID,
-                        message: message,
-                        card: card
-                    )
-                },
-                onPreviewEdit: { previewContext, result in
-                    await detailViewModel.updateTaskCardPreviewDraft(
-                        threadID: threadID,
-                        message: message,
-                        cardID: previewContext.card.id,
-                        result: result
-                    )
-                }
-            )
-        }
-        .navigationDestination(item: $activeStructuredHealthPreview) { context in
-            ChatStructuredHealthCardPreviewDestination(
-                context: context,
-                memberContextStore: memberContextStore,
-                medicalQueryAPI: detailViewModel.sparkMedicalQueryAPI,
-                fileTransferService: detailViewModel.attachmentFileTransferService,
-                notificationClient: detailViewModel.chatNotificationClient,
-                cachedCompleteData: detailViewModel.cachedMemberCompleteData,
-                onDraftUpdated: { updatedItem in
-                    Task {
-                        await detailViewModel.updateStructuredHealthCardPreviewDraft(
-                            threadID: threadID,
-                            message: message,
-                            blockID: context.blockID,
-                            item: updatedItem
-                        )
-                    }
-                }
-            )
-        }
-        .navigationDestination(item: $activeWeatherConfigCard) { _ in
-            AIWeatherToolSettingsView(viewModel: aiSettingsViewModel)
-                .hidesMainTabBarWhenPushed()
-        }
-        .navigationDestination(item: $activeToolConsentDetailTarget) { target in
-            if let descriptor = ToolModelEgressConsentPolicy.descriptor(for: target.toolName) {
-                AIToolConsentDetailView(viewModel: aiSettingsViewModel, descriptor: descriptor)
-            } else {
-                List {
-                    Section {
-                        Text(SparkToolName.displayName(for: target.toolName))
-                            .font(.body.weight(.semibold))
-                        Text(target.toolName)
-                            .font(.footnote.monospaced())
-                            .foregroundStyle(.secondary)
-                            .textSelection(.enabled)
-                        Text("当前工具没有可配置的授权详情。")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .navigationTitle("授权详情")
             }
         }
     }
@@ -480,7 +396,7 @@ struct ChatConversationMessageRow: View {
             },
             onToolConsentCardOpenSettings: { card in
                 if let toolName = card.prompt.primaryToolName {
-                    activeToolConsentDetailTarget = ToolConsentDetailNavigationTarget(toolName: toolName)
+                    navigationCoordinator.activeToolConsentDetailTarget = ToolConsentDetailNavigationTarget(toolName: toolName)
                 }
             },
             onLocationPermissionCardAction: { card in
@@ -493,7 +409,7 @@ struct ChatConversationMessageRow: View {
                 }
             },
             onWeatherConfigCardOpen: { payload in
-                activeWeatherConfigCard = payload
+                navigationCoordinator.activeWeatherConfigCard = payload
             },
             savingStructuredHealthCardIDs: detailViewModel.savingStructuredHealthCardIDs,
             savingNutritionCardIDs: detailViewModel.savingNutritionCardIDs,
@@ -520,7 +436,7 @@ struct ChatConversationMessageRow: View {
                 }
             },
             onSmallTaskCardOpen: { payload in
-                activeSmallTaskPayload = payload
+                navigationCoordinator.activeSmallTaskPayload = payload
             },
             onPresentToolPreview: { prompt, renderContext in
                 detailViewModel.presentToolDetailPreview(prompt: prompt, renderContext: renderContext)
@@ -565,7 +481,7 @@ struct ChatConversationMessageRow: View {
         message: ChatMessage
     ) {
         guard ChatStructuredHealthCardPreviewAdapter.supportsPreview(item) else { return }
-        activeStructuredHealthPreview = ChatStructuredHealthCardPreviewContext(
+        navigationCoordinator.activeStructuredHealthPreview = ChatStructuredHealthCardPreviewContext(
             threadID: threadID,
             messageClientID: message.clientMessageID,
             blockID: blockID,
@@ -741,18 +657,18 @@ struct ChatConversationMessageRow: View {
 
     private func openTaskCard(_ card: TaskCard) {
         if card.status == .confirmed, let taskID = resolvedTaskID(for: card) {
-            activeTaskDetailMode = .normal(taskID: taskID)
+            navigationCoordinator.activeTaskDetailMode = .normal(taskID: taskID)
             return
         }
         if card.status == .confirmed {
-            activeTaskDetailMode = .preview(TaskCardPreviewContext(
+            navigationCoordinator.activeTaskDetailMode = .preview(TaskCardPreviewContext(
                 threadID: threadID,
                 messageClientID: message.clientMessageID,
                 card: card
             ))
             return
         }
-        activeTaskDetailMode = .preview(TaskCardPreviewContext(
+        navigationCoordinator.activeTaskDetailMode = .preview(TaskCardPreviewContext(
             threadID: threadID,
             messageClientID: message.clientMessageID,
             card: card

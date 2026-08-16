@@ -40,6 +40,7 @@ struct ConversationMessageListRepresentable: UIViewControllerRepresentable {
     @ObservedObject var uiStateStore: ChatMessageUIStateStore
     @ObservedObject var speechHelper: ChatSpeechHelper
     @ObservedObject var memberContextStore: MemberContextStore
+    @ObservedObject var navigationCoordinator: ChatMessageNavigationCoordinator
     let taskManager: TaskManager
     let logger: Logger
     let actionStateHandle: ChatMessageActionStateHandle
@@ -111,6 +112,7 @@ struct ConversationMessageListRepresentable: UIViewControllerRepresentable {
         vc.uiStateStore = uiStateStore
         vc.speechHelper = speechHelper
         vc.memberContextStore = memberContextStore
+        vc.navigationCoordinator = navigationCoordinator
         vc.taskManager = taskManager
         vc.logger = logger
         vc.actionState = actionStateHandle.state

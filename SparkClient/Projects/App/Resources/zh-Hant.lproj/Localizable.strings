@@ -103,6 +103,8 @@
 "ai_settings.tool_consent.runtime.user_denied" = "使用者未授權將該工具結果傳送給第三方模型。";
 "ai_settings.tool_consent.runtime.interaction_busy" = "授權互動繁忙，已阻止敏感工具結果傳送給模型。";
 "chat.attachments.camera.result" = "拍攝照片";
+"chat.attachments.source.photos" = "相簿選擇";
+"chat.attachments.source.files" = "文件文字";
 "chat.capture_card.report.title" = "整理與查看報告資料";
 "chat.capture_card.report.subtitle" = "請上傳清晰完整的檢查、檢驗或體檢報告。我會協助提取關鍵數值並整理報告資訊。";
 "chat.capture_card.report.disclaimer" = "註：AI 提取和整理結果僅供健康管理參考，不構成診斷、治療建議或用藥依據。如需醫療協助，請諮詢醫師。";

@@ -1103,6 +1103,8 @@
 "chat.attachments.camera.subtitle" = "Take a photo right now";
 "chat.attachments.camera.unavailable" = "Camera is unavailable on this device";
 "chat.attachments.camera.result" = "Camera photo";
+"chat.attachments.source.photos" = "Photo Library";
+"chat.attachments.source.files" = "Documents";
 "chat.attachments.files" = "Files";
 "chat.attachments.files.subtitle" = "Pick PDFs or images and prepare them before send";
 "chat.attachments.file.tap_to_download" = "Tap to download and preview";

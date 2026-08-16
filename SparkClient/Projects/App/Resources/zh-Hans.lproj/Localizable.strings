@@ -1103,6 +1103,8 @@
 "chat.attachments.camera.subtitle" = "立即拍摄一张照片";
 "chat.attachments.camera.unavailable" = "当前设备不可使用相机";
 "chat.attachments.camera.result" = "拍摄照片";
+"chat.attachments.source.photos" = "相册选择";
+"chat.attachments.source.files" = "文件文本";
 "chat.attachments.files" = "文件";
 "chat.attachments.files.subtitle" = "选择 PDF 或图片并在发送前完成准备";
 "chat.attachments.file.tap_to_download" = "点击下载后预览";

@@ -78,7 +78,8 @@ struct ChatMessageBubbleContentView: View {
                     ChatToolTraceDisclosureView(
                         payload: chatToolTracePayload,
                         displayMode: toolTraceDisplayMode,
-                        collapseToolsWhileStreaming: collapseToolsWhileStreaming
+                        collapseToolsWhileStreaming: collapseToolsWhileStreaming,
+                        onHeightChangingUpdate: onHeightChangingUpdate
                     ) {
                         ForEach(chatToolTraceTimelineNodes) { node in
                             node.render(context: renderContext)
@@ -933,23 +934,49 @@ private struct ChatToolTraceDisclosureView<Content: View>: View {
     let payload: ChatToolTracePresentationModel
     let displayMode: ChatToolTraceDisplayMode
     let collapseToolsWhileStreaming: Bool
+    let onHeightChangingUpdate: (@escaping () -> Void) -> Void
     let content: () -> Content
     @State private var userPinnedExpansion: Bool?
+    @State private var automaticExpansion: Bool
 
     init(
         payload: ChatToolTracePresentationModel,
         displayMode: ChatToolTraceDisplayMode,
         collapseToolsWhileStreaming: Bool,
+        onHeightChangingUpdate: @escaping (@escaping () -> Void) -> Void,
         @ViewBuilder content: @escaping () -> Content
     ) {
         self.payload = payload
         self.displayMode = displayMode
         self.collapseToolsWhileStreaming = collapseToolsWhileStreaming
+        self.onHeightChangingUpdate = onHeightChangingUpdate
         self.content = content
+        _automaticExpansion = State(
+            initialValue: Self.defaultExpansion(
+                payload: payload,
+                displayMode: displayMode,
+                collapseToolsWhileStreaming: collapseToolsWhileStreaming
+            )
+        )
     }
 
     private var effectiveExpanded: Bool {
-        if let userPinnedExpansion { return userPinnedExpansion }
+        userPinnedExpansion ?? automaticExpansion
+    }
+
+    private var desiredAutomaticExpansion: Bool {
+        Self.defaultExpansion(
+            payload: payload,
+            displayMode: displayMode,
+            collapseToolsWhileStreaming: collapseToolsWhileStreaming
+        )
+    }
+
+    private static func defaultExpansion(
+        payload: ChatToolTracePresentationModel,
+        displayMode: ChatToolTraceDisplayMode,
+        collapseToolsWhileStreaming: Bool
+    ) -> Bool {
         switch displayMode {
         case .expanded:
             return true
@@ -984,12 +1011,22 @@ private struct ChatToolTraceDisclosureView<Content: View>: View {
         }
         .padding(.bottom, 4)
         .accessibilityElement(children: .contain)
+        .onChange(of: desiredAutomaticExpansion) { _, newValue in
+            guard userPinnedExpansion == nil, automaticExpansion != newValue else { return }
+            onHeightChangingUpdate {
+                withAnimation(.easeOut(duration: 0.25)) {
+                    automaticExpansion = newValue
+                }
+            }
+        }
     }
 
     private var header: some View {
         Button {
-            withAnimation(.easeOut(duration: 0.25)) {
-                userPinnedExpansion = !effectiveExpanded
+            onHeightChangingUpdate {
+                withAnimation(.easeOut(duration: 0.25)) {
+                    userPinnedExpansion = !effectiveExpanded
+                }
             }
         } label: {
             HStack(spacing: 8) {
