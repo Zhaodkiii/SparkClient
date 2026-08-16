@@ -235,12 +235,7 @@ final class ChatStateStore: ObservableObject {
     /// 获取指定会话完整草稿对象（无则返回空草稿）
     func composerDraft(for threadID: UUID?) -> ChatComposerDraft {
         guard let threadID else { return ChatComposerDraft() }
-        if let draft = composerDrafts[threadID] {
-            return draft
-        }
-        let draft = makeDefaultComposerDraft()
-        composerDrafts[threadID] = draft
-        return draft
+        return composerDrafts[threadID] ?? makeDefaultComposerDraft()
     }
 
     /// 清空输入框全部内容（文本、附件、健康资料引用等）

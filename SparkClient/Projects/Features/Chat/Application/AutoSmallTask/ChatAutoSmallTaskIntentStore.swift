@@ -67,6 +67,10 @@ final class ChatAutoSmallTaskIntentStore: ObservableObject {
         update(threadID: threadID, status: .consumed)
     }
 
+    func markPending(threadID: UUID) {
+        update(threadID: threadID, status: .pending)
+    }
+
     func markFailed(threadID: UUID) {
         update(threadID: threadID, status: .failed)
     }

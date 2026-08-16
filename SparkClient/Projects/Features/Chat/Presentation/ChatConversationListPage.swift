@@ -14,6 +14,7 @@ struct ChatConversationListPage: View {
     @State private var searchText = ""
     @State private var pendingThreadNavigation: UUID?
     @State private var hasLoaded = false
+    @State private var hasHandledInitialAutoNavigation = false
     @State private var showNoAvailableChatModelAlert = false
     @State private var showAPIKeysSettingsSheet = false
     @State private var isEditingThreadAppearance = false
@@ -84,6 +85,7 @@ struct ChatConversationListPage: View {
             guard hasLoaded == false else { return }
             hasLoaded = true
             await listViewModel.loadForListIfNeeded()
+            await handleInitialAutoNavigationIfNeeded()
         }
         .refreshable {
             await listViewModel.refreshThreads()
@@ -313,6 +315,36 @@ struct ChatConversationListPage: View {
         pushAdapter.requestAuthorizationIfNotDetermined()
         await listViewModel.createThread()
         guard let threadID = stateStore.selectedThreadID else { return }
+        await navigateToThread(threadID)
+    }
+
+    private func handleInitialAutoNavigationIfNeeded() async {
+        guard hasHandledInitialAutoNavigation == false else { return }
+        hasHandledInitialAutoNavigation = true
+        guard shouldSkipInitialAutoNavigation == false else { return }
+
+        if let activeThreadID = mostRecentActiveThreadID(within: 5 * 60) {
+            await navigateToThread(activeThreadID)
+            return
+        }
+
+        await createThreadIfAvailable()
+    }
+
+    private func mostRecentActiveThreadID(within interval: TimeInterval) -> UUID? {
+        let cutoff = Date().addingTimeInterval(-interval)
+        return stateStore.threadItems.first(where: { $0.latestMessageAt >= cutoff })?.id
+    }
+
+    private var shouldSkipInitialAutoNavigation: Bool {
+        guard let selectedThreadID = stateStore.selectedThreadID else { return false }
+        let draft = stateStore.draft(for: selectedThreadID)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return draft.isEmpty == false
+    }
+
+    private func navigateToThread(_ threadID: UUID) async {
+        listViewModel.selectThread(threadID)
         await detailViewModel.loadMessagesIfNeeded(for: threadID, lockBottomViewport: true)
         pendingThreadNavigation = threadID
     }

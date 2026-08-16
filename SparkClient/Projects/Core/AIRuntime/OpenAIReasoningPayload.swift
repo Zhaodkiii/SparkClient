@@ -82,8 +82,9 @@ struct ProviderRegistry {
         // ✅ Anthropic（thinking: { type, budget_tokens }）
         "ANTHROPIC": .init(supportType: .thinkingObject, requiresExplicitDisable: false),
 
-        // ✅ 国内 thinkingObject 系（thinking: { type }，无 budget_tokens）
-        "ZHIPUAI":  .init(supportType: .thinkingObject, requiresExplicitDisable: false),
+        // ✅ 智谱 GLM-5.2 / 5.1 / 5 / 4.7 默认开启 Thinking；关闭时必须显式传 disabled。
+        // GLM thinking 只暴露开/关，不展示低/中/高强度档位。
+        "ZHIPUAI":  .init( supportType: .thinkingObject, requiresExplicitDisable: true, showsReasoningDepthMenu: false),
         "MOONSHOT": .init(supportType: .thinkingObject, requiresExplicitDisable: false),
         "KIMI":     .init(supportType: .thinkingObject, requiresExplicitDisable: false),
 

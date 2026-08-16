@@ -9,18 +9,18 @@ nonisolated enum BuiltInAutoSmallTaskCatalog {
         prompt: healthExamPlanPrompt,
         icon: "stethoscope",
         toolList: [
-            SparkToolName.getCurrentMember.rawValue,
-            SparkToolName.requestMemberSelection.rawValue,
-            SparkToolName.queryMemberProfile.rawValue,
-            SparkToolName.listMemberHealthSources.rawValue,
-            SparkToolName.getHealthResourceReference.rawValue,
-            SparkToolName.getHealthResourceContext.rawValue,
-            SparkToolName.searchKnowledgeBag.rawValue,
-            SparkToolName.insertHealthCitationSources.rawValue,
-            SparkToolName.askUserQuestion.rawValue,
-            SparkToolName.showMedicalRiskNotice.rawValue,
-            SparkToolName.createKnowledgeDocument.rawValue,
-            SparkToolName.generateTask.rawValue
+            SparkToolName.getCurrentMember.rawValue,              // 获取当前成员
+            SparkToolName.requestMemberSelection.rawValue,        // 成员不明确时请求选择
+            SparkToolName.queryMemberProfile.rawValue,            // 读取成员健康画像
+            SparkToolName.listMemberHealthSources.rawValue,       // 检索成员历史健康资料
+            SparkToolName.getHealthResourceReference.rawValue,    // 校验并返回单条资料引用
+            SparkToolName.getHealthResourceContext.rawValue,      // 获取单条资料解读上下文
+            SparkToolName.searchKnowledgeBag.rawValue,            // 检索知识库体检规则
+            SparkToolName.insertHealthCitationSources.rawValue,   // 插入健康引用来源卡片
+            SparkToolName.askUserQuestion.rawValue,               // 追问体检目的/预算等
+            SparkToolName.showMedicalRiskNotice.rawValue,         // 红旗症状风险提示
+            SparkToolName.createKnowledgeDocument.rawValue,       // 保存体检计划到知识库
+            SparkToolName.generateTask.rawValue                   // 创建关联体检任务
         ],
         definitionVersion: 3,
         minimumRuntimeVersion: 1,
@@ -36,13 +36,13 @@ nonisolated enum BuiltInAutoSmallTaskCatalog {
         prompt: reportInterpretationPrompt,
         icon: "doc.text.magnifyingglass",
         toolList: [
-            SparkToolName.showCustomMessageCard.rawValue,
-            SparkToolName.insertHealthCitationSources.rawValue,
-            SparkToolName.showMedicalRiskNotice.rawValue,
-            SparkToolName.askUserQuestion.rawValue,
-            SparkToolName.createKnowledgeDocument.rawValue,
-            SparkToolName.generateTask.rawValue,
-            SparkToolName.generateStructuredHealthCard.rawValue
+            SparkToolName.showCustomMessageCard.rawValue,         // 插入检查报告上传卡片
+            SparkToolName.insertHealthCitationSources.rawValue,   // 插入健康引用来源卡片
+            SparkToolName.showMedicalRiskNotice.rawValue,         // 危急值/红旗症状风险提示
+            SparkToolName.askUserQuestion.rawValue,               // 询问是否保存到健康档案
+            SparkToolName.createKnowledgeDocument.rawValue,       // 保存随访主要事项到知识库
+            SparkToolName.generateTask.rawValue,                  // 创建关联随访任务
+            SparkToolName.generateStructuredHealthCard.rawValue   // 用户确认后结构化归档报告
         ],
         definitionVersion: 4,
         minimumRuntimeVersion: 1,

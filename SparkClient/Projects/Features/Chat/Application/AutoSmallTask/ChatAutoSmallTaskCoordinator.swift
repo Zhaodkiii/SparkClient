@@ -28,16 +28,11 @@ final class ChatAutoSmallTaskCoordinator {
     ) async {
         guard runningThreadIDs.contains(threadID) == false else { return }
         guard let intent = intentStore.pendingIntent(for: threadID) else { return }
-        guard intentStore.markRunning(intent) else { return }
-        runningThreadIDs.insert(threadID)
-        defer { runningThreadIDs.remove(threadID) }
 
         guard stateStore.selectedThreadID == threadID else {
-            intentStore.markFailed(threadID: threadID)
             return
         }
         guard stateStore.isSending == false else {
-            intentStore.markFailed(threadID: threadID)
             return
         }
 
@@ -80,6 +75,10 @@ final class ChatAutoSmallTaskCoordinator {
             return
         }
 
+        guard intentStore.markRunning(intent) else { return }
+        runningThreadIDs.insert(threadID)
+        defer { runningThreadIDs.remove(threadID) }
+
         logger.info(
             "auto_small_task.send.start thread=\(threadID.uuidString.prefix(8)) businessKey=\(intent.businessKey.rawValue) code=\(intent.smallTaskCode)",
             module: .general
@@ -88,12 +87,12 @@ final class ChatAutoSmallTaskCoordinator {
         do {
             try await Task.sleep(nanoseconds: 500_000_000)
         } catch {
-            intentStore.markFailed(threadID: threadID)
+            intentStore.markPending(threadID: threadID)
             return
         }
 
         guard stateStore.selectedThreadID == threadID, stateStore.isSending == false else {
-            intentStore.markFailed(threadID: threadID)
+            intentStore.markPending(threadID: threadID)
             return
         }
 
@@ -141,4 +140,3 @@ final class ChatAutoSmallTaskCoordinator {
         value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 }
-
