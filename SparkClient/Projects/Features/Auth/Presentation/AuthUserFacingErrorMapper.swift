@@ -54,6 +54,9 @@ enum AuthUserFacingErrorMapper {
         case .transport, .timeout:
             return L10n.text("auth.notification.network_unavailable")
         case .httpError(let statusCode, let backend, _):
+            if let accessDeniedMessage = accessDeniedMessage(backend: backend) {
+                return accessDeniedMessage
+            }
             let backendMessage = BackendErrorLocalizer.message(for: backend, statusCode: statusCode)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if scenario == .deviceSignIn {
@@ -95,6 +98,15 @@ enum AuthUserFacingErrorMapper {
         let lowered = message.lowercased()
         let blockedMarkers = ["requestid", "request_id", "trace", "stack", "token", "exception"]
         return blockedMarkers.contains { lowered.contains($0) } == false
+    }
+
+    private static func accessDeniedMessage(backend: BackendError?) -> String? {
+        let code = backend?.code
+        let msg = (backend?.msg ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard code == 40371 || msg == "access_denied" else { return nil }
+        let localized = BackendErrorLocalizer.message(for: backend, statusCode: 403)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return localized.isEmpty ? L10n.text("api_error.msg.access_denied") : localized
     }
 
     private static func deviceLoginMessage(backend: BackendError?, statusCode: Int) -> String? {

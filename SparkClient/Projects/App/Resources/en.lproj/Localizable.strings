@@ -1553,6 +1553,9 @@
 "api_error.msg.invalid_phone_number" = "The phone number format is invalid. Please try again.";
 "api_error.msg.invalid_credentials" = "The account or password is incorrect.";
 "api_error.msg.user_inactive" = "This account has been disabled. Please contact support.";
+"api_error.msg.access_denied" = "Your account has been permanently banned from signing in due to a violation of the user agreement. Please contact support if you have questions.";
+"api_error.reason.account_banned" = "Your account has been permanently banned from signing in due to a violation of the user agreement. Please contact support if you have questions.";
+"api_error.code.40371" = "Your account has been permanently banned from signing in due to a violation of the user agreement. Please contact support if you have questions.";
 "api_error.msg.bundle_id_not_allowed" = "This app version does not support that sign-in method yet.";
 "api_error.msg.phone_region_not_supported" = "This phone region does not support SMS verification yet.";
 "api_error.msg.identity_token_required" = "Unable to read the Apple identity token.";

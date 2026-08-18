@@ -1553,6 +1553,9 @@
 "api_error.msg.invalid_phone_number" = "手机号格式不正确，请重新输入。";
 "api_error.msg.invalid_credentials" = "账号或密码不正确。";
 "api_error.msg.user_inactive" = "当前账号已停用，请联系管理员。";
+"api_error.msg.access_denied" = "您的账号因违规行为已触犯用户协议，已被系统永久禁止登录。如有疑问请联系客服处理。";
+"api_error.reason.account_banned" = "您的账号因违规行为已触犯用户协议，已被系统永久禁止登录。如有疑问请联系客服处理。";
+"api_error.code.40371" = "您的账号因违规行为已触犯用户协议，已被系统永久禁止登录。如有疑问请联系客服处理。";
 "api_error.msg.bundle_id_not_allowed" = "当前应用版本暂不支持该登录方式。";
 "api_error.msg.phone_region_not_supported" = "当前手机号地区暂不支持短信验证码服务。";
 "api_error.msg.identity_token_required" = "无法读取 Apple 身份令牌。";

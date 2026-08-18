@@ -209,3 +209,8 @@
 "task.notification.status.denied" = "已開啟，但系統通知權限關閉";
 "task.notification.status.missing_time" = "缺少提醒時間";
 "task.notification.status.past" = "提醒時間已過，本次不會補發";
+
+"api_error.msg.access_denied" = "您的帳號因違規行為已觸犯用戶協議，已被系統永久禁止登入。如有疑問請聯繫客服處理。";
+"api_error.reason.account_banned" = "您的帳號因違規行為已觸犯用戶協議，已被系統永久禁止登入。如有疑問請聯繫客服處理。";
+"api_error.code.40371" = "您的帳號因違規行為已觸犯用戶協議，已被系統永久禁止登入。如有疑問請聯繫客服處理。";
+"api_error.msg.user_inactive" = "當前帳號已停用，請聯繫管理員。";
