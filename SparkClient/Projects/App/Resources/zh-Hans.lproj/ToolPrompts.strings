@@ -115,6 +115,7 @@
 "tool.param.memory_original" = "原始记忆全文（完全匹配）";
 "tool.param.memory_updated" = "更新后的内容";
 "tool.param.attachment_types" = "report_photo / medicine_box_photo / skin_photo";
+"tool.param.attachment_upload_mode" = "可选，上传处理方式：inline 消息内处理（默认，卡片内上传后自动续跑对话）；composer 插入输入框（材料进入输入框预览区，自动上传+OCR，随下一条消息发送）";
 "tool.param.member_name_optional" = "可选，姓名（部分匹配）";
 "tool.param.member_relationship_optional" = "可选，关系（本人、妈妈等）";
 "tool.param.member_selection_reason" = "可选，简短说明为什么当前回复或后续工具需要选择成员。";

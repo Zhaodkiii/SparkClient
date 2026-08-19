@@ -109,6 +109,7 @@
 "tool.param.memory_original" = "原始記憶全文（完全匹配）";
 "tool.param.memory_updated" = "更新後的內容";
 "tool.param.attachment_types" = "report_photo / medicine_box_photo / skin_photo";
+"tool.param.attachment_upload_mode" = "可選，上傳處理方式：inline 訊息內處理（預設，卡片內上傳後自動續跑對話）；composer 插入輸入框（材料進入輸入框預覽區，自動上傳+OCR，隨下一條訊息發送）";
 "tool.param.member_name_optional" = "可選，姓名（部分匹配）";
 "tool.param.member_relationship_optional" = "可選，關係（本人、媽媽等）";
 "tool.param.member_selection_reason" = "可選，簡短說明為什麼目前回覆或後續工具需要選擇成員。";

@@ -1835,16 +1835,26 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         card: ChatCaptureMessageCardPayload,
         attachments: [ChatComposerAttachmentPreview]
     ) async {
-        guard let completionID = card.completionID else {
-            return
-        }
         guard card.status == .pending || card.status == .failed || card.status == .selected else {
             return
         }
         guard attachments.isEmpty == false else {
             return
         }
-        guard toolInteractionCoordinator.hasPendingInlineInteraction(completionID: completionID) else {
+        // composer 模式（工具调用 upload_mode=composer）：与历史插入卡片版本一致，
+        // 材料直接进入输入框预览区，自动上传+OCR，随下一条消息发送，不在消息内处理。
+        // inline 模式下 AI 回复已结束（continuation 已释放或卡片缺少 completionID，如中断生成/App 重启后的历史卡片）时，
+        // 附件同样转入输入框草稿，复用输入区「选图即上传 + 进度 + OCR」链路，避免静默失败。
+        let hasPendingInteraction = card.completionID.map {
+            toolInteractionCoordinator.hasPendingInlineInteraction(completionID: $0)
+        } ?? false
+        guard card.uploadMode != .composer, hasPendingInteraction, let completionID = card.completionID else {
+            await handOverInlineCaptureCardAttachmentsToComposer(
+                threadID: threadID,
+                message: message,
+                card: card,
+                attachments: attachments
+            )
             return
         }
 
@@ -1967,7 +1977,17 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         guard let completionID = card.completionID else {
             return
         }
+        // AI 回复已结束后取消：continuation 已不存在，仅把卡片置为本地取消态，避免按钮无响应。
         guard toolInteractionCoordinator.hasPendingInlineInteraction(completionID: completionID) else {
+            await updateInlineCaptureCard(
+                threadID: threadID,
+                messageClientID: message.clientMessageID,
+                cardID: card.id
+            ) {
+                $0.status = .cancelled
+                $0.resultSummary = "用户已取消上传材料。"
+                $0.updatedAt = Date()
+            }
             return
         }
         await updateInlineCaptureCard(
@@ -1980,6 +2000,69 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
             $0.updatedAt = Date()
         }
         toolInteractionCoordinator.cancelInlineAttachmentCapture(id: completionID)
+    }
+
+    /// AI 回复已结束后，上传卡片选定的材料转入输入框草稿。
+    /// 复用输入区附件链路（`enqueueComposerAttachments`）：转入即在输入框缩略图上展示上传进度与 OCR 预处理，
+    /// 完成后随下一条消息发送，与输入框内选图/拍摄/文件选择的体验完全一致。
+    private func handOverInlineCaptureCardAttachmentsToComposer(
+        threadID: UUID,
+        message: ChatMessage,
+        card: ChatCaptureMessageCardPayload,
+        attachments: [ChatComposerAttachmentPreview]
+    ) async {
+        logger.info(
+            "上传卡片材料转入输入框 thread=\(shortID(threadID)) card=\(shortID(card.id)) count=\(attachments.count)",
+            module: .general
+        )
+        // 输入框附件上限与 HanlinChatInputView.maxComposerAttachments 对齐（最多 5 个）。
+        let currentCount = stateStore.composerDraft(for: threadID).attachments.count
+        let remainingCapacity = max(0, 5 - currentCount)
+        guard remainingCapacity > 0 else {
+            let overflowMessage = L10n.text(
+                "chat.capture_card.handover.composer_full",
+                fallback: "输入框附件已达上限（5 个），请先删除部分附件后重试。"
+            )
+            await updateInlineCaptureCard(
+                threadID: threadID,
+                messageClientID: message.clientMessageID,
+                cardID: card.id
+            ) {
+                $0.status = .failed
+                $0.errorMessage = overflowMessage
+                $0.updatedAt = Date()
+            }
+            notificationClient.error(overflowMessage, title: nil, source: "chat.capture_card.handover")
+            return
+        }
+        let accepted = Array(attachments.prefix(remainingCapacity))
+        enqueueComposerAttachments(accepted, for: threadID)
+        // composer 模式是工具调用显式指定的行为；其余场景（inline 模式下 AI 已结束）为兜底，
+        // 摘要文案需说明"本轮对话已结束"，避免用户误解对话会自动续跑。
+        let leading = card.uploadMode == .composer ? "" : "本轮对话已结束，"
+        let summary: String
+        if accepted.count == attachments.count {
+            summary = L10n.text(
+                "chat.capture_card.handover.summary",
+                fallback: "\(leading)材料已转入输入框，可直接发送。"
+            )
+        } else {
+            summary = L10n.text(
+                "chat.capture_card.handover.summary_truncated",
+                fallback: "\(leading)已将 \(accepted.count) 份材料转入输入框（超出附件上限的部分已忽略），可直接发送。"
+            )
+        }
+        await updateInlineCaptureCard(
+            threadID: threadID,
+            messageClientID: message.clientMessageID,
+            cardID: card.id
+        ) {
+            $0.status = .cancelled
+            $0.errorMessage = nil
+            $0.resultSummary = summary
+            $0.updatedAt = Date()
+        }
+        notificationClient.info(summary, title: nil, source: "chat.capture_card.handover")
     }
 
     func showInlineToolConsentDetails(

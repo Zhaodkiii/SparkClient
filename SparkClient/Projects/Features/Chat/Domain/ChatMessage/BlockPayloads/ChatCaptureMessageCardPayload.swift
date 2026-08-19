@@ -23,10 +23,21 @@ nonisolated enum ChatCaptureAttachmentSource: String, Codable, Sendable {
     case document
 }
 
+/// 上传卡片材料的处理方式（由 `show_custom_message_card` 工具调用的 `upload_mode` 参数决定）。
+/// - `inline`：消息内处理（默认）——卡片内上传 + OCR 后经工具 continuation 续跑对话。
+/// - `composer`：插入输入框（与历史插入卡片版本一致）——材料进入输入框预览区，
+///   自动上传 + OCR，随下一条消息发送，不在消息内处理。
+nonisolated enum ChatCaptureUploadMode: String, Codable, Sendable {
+    case inline
+    case composer
+}
+
 nonisolated struct ChatCaptureMessageCardPayload: Codable, Equatable, Sendable {
     let id: UUID
     let completionID: UUID?
     let cardType: ChatCaptureCardType
+    /// 材料处理方式（默认 `inline`；历史数据缺失该字段时按 `inline` 解码）。
+    let uploadMode: ChatCaptureUploadMode
     let sourceToolCallID: String?
     var status: ChatCaptureCardStatus
     var selectedAttachments: [ChatInlineCapturedAttachment]
@@ -39,6 +50,7 @@ nonisolated struct ChatCaptureMessageCardPayload: Codable, Equatable, Sendable {
         id: UUID = UUID(),
         completionID: UUID? = nil,
         cardType: ChatCaptureCardType,
+        uploadMode: ChatCaptureUploadMode = .inline,
         sourceToolCallID: String? = nil,
         status: ChatCaptureCardStatus = .pending,
         selectedAttachments: [ChatInlineCapturedAttachment] = [],
@@ -50,6 +62,7 @@ nonisolated struct ChatCaptureMessageCardPayload: Codable, Equatable, Sendable {
         self.id = id
         self.completionID = completionID
         self.cardType = cardType
+        self.uploadMode = uploadMode
         self.sourceToolCallID = sourceToolCallID
         self.status = status
         self.selectedAttachments = selectedAttachments
@@ -63,6 +76,7 @@ nonisolated struct ChatCaptureMessageCardPayload: Codable, Equatable, Sendable {
         case id
         case completionID = "completionId"
         case cardType
+        case uploadMode
         case sourceToolCallID = "sourceToolCallId"
         case status
         case selectedAttachments
@@ -77,6 +91,7 @@ nonisolated struct ChatCaptureMessageCardPayload: Codable, Equatable, Sendable {
         id = try c.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         completionID = try c.decodeIfPresent(UUID.self, forKey: .completionID)
         cardType = try c.decode(ChatCaptureCardType.self, forKey: .cardType)
+        uploadMode = try c.decodeIfPresent(ChatCaptureUploadMode.self, forKey: .uploadMode) ?? .inline
         sourceToolCallID = try c.decodeIfPresent(String.self, forKey: .sourceToolCallID)
         status = try c.decodeIfPresent(ChatCaptureCardStatus.self, forKey: .status) ?? .pending
         selectedAttachments = try c.decodeIfPresent([ChatInlineCapturedAttachment].self, forKey: .selectedAttachments) ?? []

@@ -15,6 +15,23 @@ extension ToolHub {
             )
         }
 
+        // upload_mode 可选：inline 消息内处理（默认，卡片内上传后续跑对话）；
+        // composer 插入输入框（与历史插入卡片版本一致）——材料进入输入框预览区自动上传+OCR，
+        // 随下一条消息发送，不在消息内处理、不阻塞本轮生成（无需等待 continuation）。
+        let uploadModeRaw = (invocation.arguments["upload_mode"] ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let uploadMode = ChatCaptureUploadMode(rawValue: uploadModeRaw) ?? .inline
+        if uploadMode == .composer {
+            let payload = ChatCaptureMessageCardPayload(cardType: type, uploadMode: .composer)
+            return ToolExecutionResult(
+                toolName: invocation.name,
+                outputText: "已展示上传/拍照卡片入口\(hint)，用户上传的材料将进入输入框，随下一条消息发送。请继续引导用户上传材料。",
+                sensitive: false,
+                shouldBypassModel: true,
+                sideEffects: [.captureCard(payload)]
+            )
+        }
+
         guard let toolInteractionCoordinator else {
             let payload = ChatCaptureMessageCardPayload(cardType: type)
             return ToolExecutionResult(

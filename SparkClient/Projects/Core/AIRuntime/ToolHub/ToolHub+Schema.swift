@@ -214,6 +214,11 @@ extension ToolHub {
                     type: "string",
                     description: td("tool.param.attachment_types"),
                     enumValues: ["report_photo", "medicine_box_photo", "skin_photo"]
+                ),
+                "upload_mode": AIRuntimeToolProperty(
+                    type: "string",
+                    description: td("tool.param.attachment_upload_mode"),
+                    enumValues: ["inline", "composer"]
                 )
             ]
         case .showMedicalRiskNotice:

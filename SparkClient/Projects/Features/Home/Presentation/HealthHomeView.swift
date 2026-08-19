@@ -65,12 +65,57 @@ struct HealthHomeView: View {
         .refreshable {
             await viewModel.refresh()
         }
-        .navigationBarHidden(true)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            memberSelectorBar
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(.regularMaterial)
+//        .navigationBarHidden(true)
+//        .safeAreaInset(edge: .top, spacing: 0) {
+//            memberSelectorBar
+//                .padding(.horizontal, 16)
+//                .padding(.vertical, 8)
+//                .background(.regularMaterial)
+//        }
+        .toolbar {
+            ToolbarItem(placement: .navigationBarLeading) {
+                memberToolbarMenu
+            }
+        }
+    }
+
+    private var selectedMember: Member? {
+        let members = viewModel.dashboard?.members ?? viewModel.memberContextStoreForBinding.context.members
+        guard let selectedMemberID = viewModel.selectedMemberID else {
+            return members.first
+        }
+        return members.first(where: { $0.id == selectedMemberID }) ?? members.first
+    }
+
+    @ViewBuilder
+    private var memberToolbarMenu: some View {
+        if let selectedMember,
+           viewModel.memberContextStoreForBinding.context.members.isEmpty == false {
+            MemberProfileBindingMenu(
+                memberContextStore: viewModel.memberContextStoreForBinding,
+                selectedMemberID: viewModel.selectedMemberID,
+                onSelect: { memberID in
+                    guard let memberID, memberID != viewModel.selectedMemberID else { return }
+                    viewModel.selectMember(memberID)
+                    triggerHaptic(style: .light)
+                }
+            ) {
+                MemberSelectorChip(
+                    member: selectedMember,
+                    badgeText: MemberSelectorChip.badgeText(for: selectedMember),
+                    isSelected: false,
+                    variant: .compactToolbar,
+                    onSelect: {},
+                    onViewDetail: {},
+                    onShare: {}
+                )
+            }
+            .accessibilityLabel(
+                String(
+                    format: L10n.text("home.medical.medication_execution.member_switch.accessibility"),
+                    selectedMember.name
+                )
+            )
         }
     }
 

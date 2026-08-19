@@ -105,6 +105,7 @@
 "tool.param.memory_original" = "Original memory text (exact match)";
 "tool.param.memory_updated" = "Updated content";
 "tool.param.attachment_types" = "report_photo, medicine_box_photo, or skin_photo";
+"tool.param.attachment_upload_mode" = "Optional. inline: process within the message (default, uploads auto-resume the conversation); composer: insert into the input box (materials enter the composer preview area with auto upload + OCR and are sent with the next message)";
 "tool.param.member_name_optional" = "Optional name partial match";
 "tool.param.member_relationship_optional" = "Optional relationship e.g. self, mother";
 "tool.param.member_selection_reason" = "Optional short reason why the current answer or next tool call needs member selection.";
