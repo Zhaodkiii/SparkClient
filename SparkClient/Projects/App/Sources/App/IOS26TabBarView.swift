@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// iOS 26 正式主导航：系统 Liquid Glass 浮动 TabBar，底部 Tab 为首页、对话、知识背包、搜索、设置（IOS26-TABBAR-000002）。
 @available(iOS 26.0, *)
@@ -31,6 +32,9 @@ struct IOS26TabBarView: View {
     @Binding var activeHomeFullScreenCover: HomeFullScreenCover?
 
     @State private var showsDeviceAccountUpgradeSheet = false
+    @State private var showsChatNoModelAlert = false
+    @State private var showsChatAPIKeysSettingsSheet = false
+    @State private var pendingKnowledgeDetailDocumentID: UUID?
 
     private var destinationBuilder: MainTabRouteDestinationBuilder {
         MainTabRouteDestinationBuilder(
@@ -67,18 +71,19 @@ struct IOS26TabBarView: View {
     }
 
     var body: some View {
-        TabView(selection: $routeStore.selectedTab) {
-            Tab(L10n.text("tab.health"), systemImage: "heart.fill", value: AppRouteStore.RootTab.healthHome) {
-                healthContainer
-            }
+        CompatibleRouteNavigationContainer(path: routePath(routeStore.selectedTab)) {
+            TabView(selection: $routeStore.selectedTab) {
+                Tab(L10n.text("tab.health"), systemImage: "heart.fill", value: AppRouteStore.RootTab.healthHome) {
+                    healthContainer
+                }
 
-            Tab(L10n.text("tab.nutrition"), systemImage: "fork.knife", value: AppRouteStore.RootTab.nutrition) {
-                nutritionContainer
-            }
+                Tab(L10n.text("tab.nutrition"), systemImage: "fork.knife", value: AppRouteStore.RootTab.nutrition) {
+                    nutritionContainer
+                }
 
-//            Tab(L10n.text("tab.knowledge"), systemImage: "backpack.fill", value: AppRouteStore.RootTab.knowledge) {
-//                knowledgeContainer
-//            }
+            Tab(L10n.text("tab.knowledge"), systemImage: "backpack.fill", value: AppRouteStore.RootTab.knowledge) {
+                knowledgeContainer
+            }
 
             
 /// iOS 26 正式主导航：系统 Liquid Glass 浮动 TabBar，底部 Tab 为首页、对话、DeepTutor、搜索、设置（IOS26-TABBAR-000002）。
@@ -90,17 +95,60 @@ struct IOS26TabBarView: View {
 //                IOS26SearchTabView()
 //            }
 
-            Tab(L10n.text("tab.settings"), systemImage: "gearshape.fill", value: AppRouteStore.RootTab.settings) {
-                settingsContainer
-            }
+                Tab(L10n.text("tab.settings"), systemImage: "gearshape.fill", value: AppRouteStore.RootTab.settings) {
+                    settingsContainer
+                }
             
-            Tab(L10n.text("tab.chat"), systemImage: "bubble.left.and.bubble.right.fill", value: AppRouteStore.RootTab.chat,role: .search) {
-                chatContainer
+                Tab(L10n.text("tab.chat"), systemImage: "bubble.left.and.bubble.right.fill", value: AppRouteStore.RootTab.chat, role: .search) {
+                    chatContainer
+                }
             }
+            .tabBarMinimizeBehavior(.onScrollDown)
+            .navigationTitle(tabNavigationTitle)
+            .navigationBarTitleDisplayMode(tabTitleDisplayMode)
+            .toolbar { tabToolbar }
+            .navigationDestination(isPresented: Binding(
+                get: { pendingKnowledgeDetailDocumentID != nil },
+                set: { active in
+                    if active == false {
+                        pendingKnowledgeDetailDocumentID = nil
+                    }
+                }
+            )) {
+                if let id = pendingKnowledgeDetailDocumentID {
+                    KnowledgeDocumentDetailView(
+                        dependencies: knowledgeDependencies,
+                        viewModel: knowledgeViewModel,
+                        documentID: id
+                    )
+                    .hidesMainTabBarWhenPushed()
+                }
+            }
+        } destination: { route in
+            destinationBuilder.destination(route)
         }
-        .tabBarMinimizeBehavior(.onScrollDown)
         .sheet(isPresented: $showsDeviceAccountUpgradeSheet) {
             LoginView(viewModel: upgradeLoginViewModel, mode: .upgradeDeviceAccount)
+        }
+        .alert(L10n.text("chat.list.no_available_model.title"), isPresented: $showsChatNoModelAlert) {
+            Button(L10n.text("chat.list.no_available_model.action")) {
+                showsChatAPIKeysSettingsSheet = true
+            }
+            Button(L10n.text("common.cancel"), role: .cancel) {}
+        } message: {
+            Text(L10n.text("chat.list.no_available_model.message"))
+        }
+        .sheet(isPresented: $showsChatAPIKeysSettingsSheet) {
+            NavigationView {
+                APIKeysSettingsView(viewModel: aiSettingsViewModel)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button(L10n.text("common.done")) {
+                                showsChatAPIKeysSettingsSheet = false
+                            }
+                        }
+                    }
+            }
         }
         .onChange(of: session.isDeviceAccount) { _, isDeviceAccount in
             if isDeviceAccount == false {
@@ -118,6 +166,166 @@ struct IOS26TabBarView: View {
         .onDisappear {
             launchIntentCoordinator.updateReadiness { $0.mainTabReady = false }
         }
+    }
+
+    private var tabNavigationTitle: String {
+        switch routeStore.selectedTab {
+        case .healthHome:
+            return "ios26.home.title"
+        case .nutrition:
+            return L10n.text("nutrition.home.title")
+        case .knowledge:
+            return L10n.text("knowledge.library.title")
+        case .settings:
+            return L10n.text("settings.title")
+        case .chat:
+            return L10n.text("chat.title")
+        default:
+            return ""
+        }
+    }
+
+    private var tabTitleDisplayMode: NavigationBarItem.TitleDisplayMode {
+        switch routeStore.selectedTab {
+        case .chat:
+            return .inline
+        default:
+//            return .inline
+            return .large
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var tabToolbar: some ToolbarContent {
+        switch routeStore.selectedTab {
+        case .healthHome:
+            ToolbarItem(placement: .topBarLeading) {
+                memberSelectorHeader
+            }
+        case .chat:
+            ToolbarItem(placement: .topBarLeading) {
+                MainNavigationLink {
+                    KnowledgeLibraryView(
+                        dependencies: knowledgeDependencies,
+                        viewModel: knowledgeViewModel
+                    )
+                } label: {
+                    Image(systemName: "backpack.fill")
+                }
+                .accessibilityLabel(L10n.text("knowledge.library.title"))
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    Task { await createChatThread() }
+                } label: {
+                    Image(systemName: "plus.bubble")
+                }
+            }
+        case .nutrition:
+            ToolbarItem(placement: .topBarTrailing) {
+                MainNavigationLink {
+                    NutritionGoalView(
+                        goalUseCase: homeDependencies.nutritionDependencies.goalUseCase,
+                        memberID: nutritionResolvedMemberID,
+                        member: homeDependencies.nutritionDependencies.memberContextStore.context.selectedMember,
+                        onSaved: {
+                            NotificationCenter.default.post(name: .nutritionGoalDidSave, object: nil)
+                        }
+                    )
+                } label: {
+                    Image(systemName: "target")
+                }
+                .disabled(nutritionResolvedMemberID == 0)
+                .accessibilityLabel(L10n.text("nutrition.goal.title", fallback: "我的目标"))
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                MainNavigationLink {
+                    NutritionHistoryView(
+                        mealRecordUseCase: homeDependencies.nutritionDependencies.mealRecordUseCase,
+                        memberID: nutritionResolvedMemberID
+                    )
+                } label: {
+                    Text(L10n.text("nutrition.history.entry"))
+                }
+            }
+        case .knowledge:
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                MainNavigationLink {
+                    KnowledgeSearchView(dependencies: knowledgeDependencies, viewModel: knowledgeViewModel)
+                } label: {
+                    Image(systemName: "magnifyingglass")
+                }
+
+                Button {
+                    Task { await createKnowledgeDocumentAndNavigate() }
+                } label: {
+                    Image(systemName: "plus")
+                }
+            }
+        default:
+            ToolbarItem(placement: .automatic) {
+                EmptyView()
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var memberSelectorHeader: some View {
+        let members = homeViewModel.dashboard?.members ?? homeViewModel.memberContextStoreForBinding.context.members
+        let resolvedMember: Member? = {
+            if let selectedMemberID = homeViewModel.selectedMemberID {
+                return members.first(where: { $0.id == selectedMemberID }) ?? members.first
+            }
+            return members.first
+        }()
+
+        if let member = resolvedMember, members.isEmpty == false {
+            MemberProfileBindingMenu(
+                memberContextStore: homeViewModel.memberContextStoreForBinding,
+                selectedMemberID: homeViewModel.selectedMemberID,
+                onSelect: { memberID in
+                    guard let memberID, memberID != homeViewModel.selectedMemberID else { return }
+                    homeViewModel.selectMember(memberID)
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                }
+            ) {
+                MemberSelectorChip(
+                    member: member,
+                    badgeText: MemberSelectorChip.badgeText(for: member),
+                    isSelected: false,
+                    variant: .compactToolbar,
+                    onSelect: {},
+                    onViewDetail: {},
+                    onShare: {}
+                )
+            }
+            .accessibilityLabel(
+                String(
+                    format: L10n.text("home.medical.medication_execution.member_switch.accessibility"),
+                    member.name
+                )
+            )
+        }
+    }
+
+    private func createChatThread() async {
+        guard await chatDetailViewModel.hasAvailableChatModel() else {
+            showsChatNoModelAlert = true
+            return
+        }
+        pushAdapter.requestAuthorizationIfNotDetermined()
+        await chatListViewModel.createThread()
+        guard let threadID = chatStateStore.selectedThreadID else { return }
+        routeStore.route(to: .chatThread(threadID))
+    }
+
+    private var nutritionResolvedMemberID: Int {
+        homeDependencies.nutritionDependencies.memberContextStore.context.selectedMemberID ?? 0
+    }
+
+    private func createKnowledgeDocumentAndNavigate() async {
+        guard let document = await knowledgeViewModel.createNewDocument() else { return }
+        pendingKnowledgeDetailDocumentID = document.id
     }
 
     private var homeContainer: some View {
@@ -146,50 +354,38 @@ struct IOS26TabBarView: View {
     }
 
     private var chatContainer: some View {
-        CompatibleRouteNavigationContainer(path: routePath(.chat)) {
-            ChatConversationListPage(
-                stateStore: chatStateStore,
-                listViewModel: chatListViewModel,
-                detailViewModel: chatDetailViewModel,
-                knowledgeDependencies: knowledgeDependencies,
-                knowledgeViewModel: knowledgeViewModel,
-                taskManager: taskManager,
-                homeViewModel: homeViewModel,
-                aiSettingsViewModel: aiSettingsViewModel,
-                pushAdapter: pushAdapter
-            )
-        } destination: { route in
-            destinationBuilder.destination(route)
-        }
+        ChatConversationListPage(
+            stateStore: chatStateStore,
+            listViewModel: chatListViewModel,
+            detailViewModel: chatDetailViewModel,
+            knowledgeDependencies: knowledgeDependencies,
+            knowledgeViewModel: knowledgeViewModel,
+            taskManager: taskManager,
+            homeViewModel: homeViewModel,
+            aiSettingsViewModel: aiSettingsViewModel,
+            pushAdapter: pushAdapter
+        )
     }
 
     private var healthContainer: some View {
-        CompatibleRouteNavigationContainer(path: routePath(.healthHome)) {
-            HealthHomeView(
-                dependencies: homeDependencies,
-                viewModel: homeViewModel,
-                medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
-                externalMedicalDocumentImportCoordinator: externalMedicalDocumentImportCoordinator,
-                launchIntentCoordinator: launchIntentCoordinator,
-                session: session,
-                taskManager: taskManager,
-                chatListViewModel: chatListViewModel,
-                deepTutorChatViewModel: deepTutorChatViewModel,
-                autoSmallTaskRegistry: autoSmallTaskRegistry,
-                autoSmallTaskIntentStore: chatAutoSmallTaskIntentStore,
-                activeFullScreenCover: $activeHomeFullScreenCover
-            )
-        } destination: { route in
-            destinationBuilder.destination(route)
-        }
+        HealthHomeView(
+            dependencies: homeDependencies,
+            viewModel: homeViewModel,
+            medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
+            externalMedicalDocumentImportCoordinator: externalMedicalDocumentImportCoordinator,
+            launchIntentCoordinator: launchIntentCoordinator,
+            session: session,
+            taskManager: taskManager,
+            chatListViewModel: chatListViewModel,
+            deepTutorChatViewModel: deepTutorChatViewModel,
+            autoSmallTaskRegistry: autoSmallTaskRegistry,
+            autoSmallTaskIntentStore: chatAutoSmallTaskIntentStore,
+            activeFullScreenCover: $activeHomeFullScreenCover
+        )
     }
 
     private var nutritionContainer: some View {
-        CompatibleRouteNavigationContainer(path: routePath(.nutrition)) {
-            NutritionHomeView(dependencies: homeDependencies.nutritionDependencies)
-        } destination: { route in
-            destinationBuilder.destination(route)
-        }
+        NutritionHomeView(dependencies: homeDependencies.nutritionDependencies)
     }
 
     private var deepTutorContainer: some View {
@@ -204,30 +400,27 @@ struct IOS26TabBarView: View {
     }
 
     private var knowledgeContainer: some View {
-        CompatibleRouteNavigationContainer(path: routePath(.knowledge)) {
-            KnowledgeLibraryView(
-                dependencies: knowledgeDependencies,
-                viewModel: knowledgeViewModel
-            )
-        } destination: { route in
-            destinationBuilder.destination(route)
-        }
+//        CompatibleRouteNavigationContainer(path: routePath(.knowledge)) {
+//           
+//        } destination: { route in
+//            destinationBuilder.destination(route)
+//        }
+        KnowledgeLibraryView(
+            dependencies: knowledgeDependencies,
+            viewModel: knowledgeViewModel
+        )
     }
 
     private var settingsContainer: some View {
-        CompatibleRouteNavigationContainer(path: routePath(.settings)) {
-            SettingsView(
-                viewModel: settingsViewModel,
-                aiSettingsViewModel: aiSettingsViewModel,
-                accountManagementViewModel: accountManagementViewModel,
-                versionUpdateCoordinator: versionUpdateCoordinator,
-                memberContextStore: homeDependencies.memberContextStore,
-                session: session,
-                showsDeviceAccountUpgradeSheet: $showsDeviceAccountUpgradeSheet
-            )
-        } destination: { route in
-            destinationBuilder.destination(route)
-        }
+        SettingsView(
+            viewModel: settingsViewModel,
+            aiSettingsViewModel: aiSettingsViewModel,
+            accountManagementViewModel: accountManagementViewModel,
+            versionUpdateCoordinator: versionUpdateCoordinator,
+            memberContextStore: homeDependencies.memberContextStore,
+            session: session,
+            showsDeviceAccountUpgradeSheet: $showsDeviceAccountUpgradeSheet
+        )
     }
 
     private func routePath(_ tab: AppRouteStore.RootTab) -> Binding<[AppRoute]> {

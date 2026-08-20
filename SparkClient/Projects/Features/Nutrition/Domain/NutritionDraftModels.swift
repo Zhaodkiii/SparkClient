@@ -140,6 +140,7 @@ nonisolated enum NutritionFoodAddContentFilter: String, CaseIterable, Identifiab
 extension Notification.Name {
     static let nutritionMealRecordDidSave = Notification.Name("nutritionMealRecordDidSave")
     static let nutritionEnergyBurnDidChange = Notification.Name("nutritionEnergyBurnDidChange")
+    static let nutritionGoalDidSave = Notification.Name("nutritionGoalDidSave")
 }
 
 enum NutritionMealRecordMapper {

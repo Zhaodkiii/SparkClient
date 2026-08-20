@@ -22,36 +22,36 @@ struct NutritionHomeView: View {
             .padding(.vertical, 12)
         }
         .background(Color(uiColor: .systemGroupedBackground))
-//        .navigationTitle(L10n.text("nutrition.home.title"))
+        .navigationTitle(L10n.text("nutrition.home.title"))
         .navigationBarTitleDisplayMode(.large)
-//        .toolbar {
-//            ToolbarItem(placement: .topBarTrailing) {
-//                MainNavigationLink {
-//                    NutritionGoalView(
-//                        goalUseCase: dependencies.goalUseCase,
-//                        memberID: resolvedMemberID,
-//                        member: memberContextStore.context.selectedMember,
-//                        onSaved: {
-//                            Task { await viewModel.reload() }
-//                        }
-//                    )
-//                } label: {
-//                    Image(systemName: "target")
-//                }
-//                .disabled(resolvedMemberID == 0)
-//                .accessibilityLabel(L10n.text("nutrition.goal.title", fallback: "我的目标"))
-//            }
-//            ToolbarItem(placement: .topBarTrailing) {
-//                MainNavigationLink {
-//                    NutritionHistoryView(
-//                        mealRecordUseCase: dependencies.mealRecordUseCase,
-//                        memberID: resolvedMemberID
-//                    )
-//                } label: {
-//                    Text(L10n.text("nutrition.history.entry"))
-//                }
-//            }
-//        }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                MainNavigationLink {
+                    NutritionGoalView(
+                        goalUseCase: dependencies.goalUseCase,
+                        memberID: resolvedMemberID,
+                        member: memberContextStore.context.selectedMember,
+                        onSaved: {
+                            Task { await viewModel.reload() }
+                        }
+                    )
+                } label: {
+                    Image(systemName: "target")
+                }
+                .disabled(resolvedMemberID == 0)
+                .accessibilityLabel(L10n.text("nutrition.goal.title", fallback: "我的目标"))
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                MainNavigationLink {
+                    NutritionHistoryView(
+                        mealRecordUseCase: dependencies.mealRecordUseCase,
+                        memberID: resolvedMemberID
+                    )
+                } label: {
+                    Text(L10n.text("nutrition.history.entry"))
+                }
+            }
+        }
         .refreshable {
             await viewModel.reload()
         }
@@ -65,6 +65,9 @@ struct NutritionHomeView: View {
             Task { await viewModel.reload() }
         }
         .onReceive(NotificationCenter.default.publisher(for: .nutritionEnergyBurnDidChange)) { _ in
+            Task { await viewModel.reload() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .nutritionGoalDidSave)) { _ in
             Task { await viewModel.reload() }
         }
     }
