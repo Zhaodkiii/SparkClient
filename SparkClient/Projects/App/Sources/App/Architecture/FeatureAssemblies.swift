@@ -53,6 +53,7 @@ struct HomeFeatureDependencies {
     let medicationReminderSyncCoordinator: MedicationReminderSyncCoordinator
     let medicationReminderOwnershipCoordinator: MedicationReminderOwnershipCoordinator
     let nutritionDependencies: NutritionFeatureDependencies
+    let fitnessDependencies: FitnessFeatureDependencies
     let launchIntentCoordinator: LaunchIntentCoordinator
     let homeLaunchIntentConsumer: HomeLaunchIntentConsumer
 }
@@ -116,6 +117,26 @@ extension HomeFeatureDependencies {
     }
 
     @MainActor
+    static func makeFitnessDependencies(
+        backend: Backend,
+        memberContextStore: MemberContextStore,
+        logger: Logger
+    ) -> FitnessFeatureDependencies {
+        let repository = NutritionRepository(api: backend.nutrition)
+        let dashboardUseCase = FitnessDashboardUseCase(
+            healthKitStore: FitnessHealthKitStore(logger: logger),
+            nutritionGoalUseCase: NutritionGoalUseCase(repository: repository, logger: logger),
+            nutritionDashboardUseCase: NutritionDashboardUseCase(repository: repository, logger: logger),
+            logger: logger
+        )
+        return FitnessFeatureDependencies(
+            dashboardUseCase: dashboardUseCase,
+            memberContextStore: memberContextStore,
+            logger: logger
+        )
+    }
+
+    @MainActor
     static var preview: HomeFeatureDependencies {
         let container = AppContainer.preview
         let routeStore = AppRouteStore()
@@ -166,6 +187,11 @@ extension HomeFeatureDependencies {
                 aiRuntimeService: container.aiRuntimeService,
                 configCenter: container.aiConfigCenter,
                 notificationStore: container.notificationStore,
+                logger: container.logger
+            ),
+            fitnessDependencies: makeFitnessDependencies(
+                backend: container.backend,
+                memberContextStore: container.memberContextStore,
                 logger: container.logger
             ),
             launchIntentCoordinator: container.launchIntentCoordinator,

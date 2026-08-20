@@ -6,6 +6,7 @@ enum HomeMedicalListRoute: Hashable {
     case healthExamReports
     case examinationReports
     case medicationPlans
+    case medication
 }
 
 /// 医疗列表总入口：首屏直接消费 `/complete-data/`，列表内按需刷新对应资源。
@@ -114,33 +115,32 @@ struct HomeMedicalListView: View {
             .onDisappear {
                 onDismiss?()
             }
-            
-            
-//            MedicationExecutionCenterPage(
-//                medicationPlans: completeData?.medicationPlans ?? [],
-//                medicineBoxes: completeData?.medicineBoxes ?? [],
-//                initialRecords: completeData?.todayMedicationRecords ?? [],
-//                memberID: completeData?.memberId ?? dependencies.memberContextStore.context.selectedMember?.id,
-//                medicalQueryAPI: dependencies.medicalQueryAPI,
-//                workflowAPI: dependencies.medicalWorkflowAPI,
-//                fileTransferService: dependencies.fileTransferService,
-//                notificationClient: dependencies.notificationClient,
-//                logger: dependencies.logger,
-//                completeData: completeData,
-//                memberContextStore: dependencies.memberContextStore,
-//                medicalDocumentUploadViewModel: dependencies.medicalDocumentUploadViewModel,
-//                aiSettingsViewModel: dependencies.aiSettingsViewModel,
-//                homeDependencies: dependencies,
-//                initialFocus: initialFocus,
-//                onMedicationPlansChanged: onMedicationPlansUpdated,
-//                onPrescriptionsChanged: onPrescriptionsUpdated,
-//                onMedicineBoxesChanged: onMedicineBoxesUpdated,
-//                selectedMemberID: selectedMemberID,
-//                onMemberIDSelected: onMemberIDSelected
-//            )
-//            .onDisappear {
-//                onDismiss?()
-//            }
+        case .medication:
+            MedicationExecutionCenterPage(
+                medicationPlans: completeData?.medicationPlans ?? [],
+                medicineBoxes: completeData?.medicineBoxes ?? [],
+                initialRecords: completeData?.todayMedicationRecords ?? [],
+                memberID: completeData?.memberId ?? dependencies.memberContextStore.context.selectedMember?.id,
+                medicalQueryAPI: dependencies.medicalQueryAPI,
+                workflowAPI: dependencies.medicalWorkflowAPI,
+                fileTransferService: dependencies.fileTransferService,
+                notificationClient: dependencies.notificationClient,
+                logger: dependencies.logger,
+                completeData: completeData,
+                memberContextStore: dependencies.memberContextStore,
+                medicalDocumentUploadViewModel: dependencies.medicalDocumentUploadViewModel,
+                aiSettingsViewModel: dependencies.aiSettingsViewModel,
+                homeDependencies: dependencies,
+                initialFocus: initialFocus,
+                onMedicationPlansChanged: onMedicationPlansUpdated,
+                onPrescriptionsChanged: onPrescriptionsUpdated,
+                onMedicineBoxesChanged: onMedicineBoxesUpdated,
+                selectedMemberID: selectedMemberID,
+                onMemberIDSelected: onMemberIDSelected
+            )
+            .onDisappear {
+                onDismiss?()
+            }
         }
     }
 }

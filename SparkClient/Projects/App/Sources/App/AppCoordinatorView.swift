@@ -73,22 +73,22 @@ struct AppCoordinatorView: View {
                     }
                 } else {
                     SignedInMainTabHostView(session: session, mainTab: mainTab)
-                    .environmentObject(mainTab.memberContextStore)
-                    .id(session.accountID)
-                    .onAppear {
-                        mainTab.launchIntentCoordinator.updateReadiness {
-                            $0.isSignedIn = true
-                            $0.accountID = session.accountID
-                            $0.isAccountPrepared = true
-                            $0.isOnboardingBlocking = false
+                        .environmentObject(mainTab.memberContextStore)
+                        .id(session.accountID)
+                        .onAppear {
+                            mainTab.launchIntentCoordinator.updateReadiness {
+                                $0.isSignedIn = true
+                                $0.accountID = session.accountID
+                                $0.isAccountPrepared = true
+                                $0.isOnboardingBlocking = false
+                            }
                         }
-                    }
-                    .task(id: session.accountID) {
-                        // 通知权限仅在用户已进入已登录态后询问（含会话恢复），避免登录页弹系统对话框。
-//                        lifecycle.requestNotificationAuthorizationIfNeeded()
-                        // 设备登记由 AppLifecycleCoordinator / DeviceRegistrationCoordinator 在启动与会话恢复时统一触发。
-                        await versionUpdateCoordinator.checkOnLaunchIfNeeded(force: true)
-                    }
+                        .task(id: session.accountID) {
+                            // 通知权限仅在用户已进入已登录态后询问（含会话恢复），避免登录页弹系统对话框。
+                            //                        lifecycle.requestNotificationAuthorizationIfNeeded()
+                            // 设备登记由 AppLifecycleCoordinator / DeviceRegistrationCoordinator 在启动与会话恢复时统一触发。
+                            await versionUpdateCoordinator.checkOnLaunchIfNeeded(force: true)
+                        }
                 }
             } else {
                 // 账号准备由 AppLifecycleCoordinator 统一调度（冷启动 / 登录），避免 SwiftUI .task 取消导致登记中断。

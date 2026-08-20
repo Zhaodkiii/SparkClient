@@ -29,7 +29,7 @@ struct IOS26HomeDashboardActionHandler {
             medicalDocumentUploadViewModel.presentUploadPage()
         case .medication:
             homeViewModel.logMedicalListNavigation(kind: .medicationPlans)
-            routeStore.route(to: .homeMedicalList(.medicationPlans, nil))
+            routeStore.route(to: .homeMedicalList(.medication, nil))
         case .familyMedicineCabinet:
             guard let memberID = homeViewModel.selectedMemberID else {
                 notificationClient.info(

@@ -7,6 +7,7 @@ enum AppRoute: Hashable, Sendable {
     case home
     case knowledge
     case nutrition
+    case fitness
     case chatList
     case chatThread(UUID)
     case deepTutorList
@@ -30,6 +31,8 @@ enum AppRoute: Hashable, Sendable {
             return .knowledge
         case .nutrition:
             return .nutrition
+        case .fitness:
+            return .fitness
         case .chatList, .chatThread:
             return .chat
         case .deepTutorList, .deepTutorThread:
@@ -43,7 +46,7 @@ enum AppRoute: Hashable, Sendable {
 
     var isRootDestination: Bool {
         switch self {
-        case .home, .knowledge, .nutrition, .chatList, .popularScience, .settings, .deepTutorList:
+        case .home, .knowledge, .nutrition, .fitness, .chatList, .popularScience, .settings, .deepTutorList:
             return true
         case .chatThread, .popularScienceArticle, .aiSettings, .accountManagement, .homeMedicalList, .homeFamilyMedicineCabinet, .taskDetail, .deepTutorThread:
             return false
@@ -67,6 +70,8 @@ final class AppRouteStore: ObservableObject {
         case search = 7
         /// 饮食营养 Tab，使用新 raw value，避免影响历史 Tab 选中态。
         case nutrition = 8
+        /// 运动健康 Tab，使用新 raw value，避免影响历史 Tab 选中态。
+        case fitness = 9
     }
 
     @Published var selectedTab: RootTab = AppRouteStore.defaultRootTab

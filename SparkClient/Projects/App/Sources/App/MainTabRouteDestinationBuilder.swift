@@ -74,7 +74,7 @@ struct MainTabRouteDestinationBuilder {
             PopularScienceArticleDetailView(
                 viewModel: popularScienceDependencies.makeDetailViewModel(articleID)
             )
-        case .home, .knowledge, .nutrition, .chatList, .popularScience, .settings, .deepTutorList:
+        case .home, .knowledge, .nutrition, .fitness, .chatList, .popularScience, .settings, .deepTutorList:
             EmptyView()
         }
     }

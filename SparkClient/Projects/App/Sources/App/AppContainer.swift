@@ -871,6 +871,11 @@ final class AppContainer {
                     notificationStore: notificationStore,
                     logger: logger
                 ),
+                fitnessDependencies: HomeFeatureDependencies.makeFitnessDependencies(
+                    backend: backend,
+                    memberContextStore: memberContextStore,
+                    logger: logger
+                ),
                 launchIntentCoordinator: launchIntentCoordinator,
                 homeLaunchIntentConsumer: homeLaunchIntentConsumer
             ),

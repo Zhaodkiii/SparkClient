@@ -708,7 +708,7 @@ struct HealthHomeView: View {
         )
     }
 
-    @available(iOS 26.0, *)
+//    @available(iOS 26.0, *)
     private var hasMembers: Bool {
         viewModel.dashboard?.members.isEmpty == false
     }
@@ -743,7 +743,7 @@ struct HealthHomeView: View {
         viewModel.activeSheet = .taskCenter
     }
 
-    @available(iOS 26.0, *)
+//    @available(iOS 26.0, *)
     private var secondaryActions: some View {
         HStack(spacing: 14) {
             compactActionCard(for: medicationItem)
@@ -798,7 +798,7 @@ struct HealthHomeView: View {
         )
     }
 
-    @available(iOS 26.0, *)
+//    @available(iOS 26.0, *)
     private var medicationItem: IOS26HomeActionItem {
         IOS26HomeActionItem(
             id: .medication,
@@ -824,7 +824,7 @@ struct HealthHomeView: View {
         )
     }
 
-    @available(iOS 26.0, *)
+//    @available(iOS 26.0, *)
     private var familyMedicineCabinetItem: IOS26HomeActionItem {
         IOS26HomeActionItem(
             id: .familyMedicineCabinet,
@@ -859,7 +859,7 @@ struct HealthHomeView: View {
         )
     }
 
-    @available(iOS 26.0, *)
+//    @available(iOS 26.0, *)
     @ViewBuilder
     private func compactActionCard(for item: IOS26HomeActionItem) -> some View {
         IOS26HomeActionCard(

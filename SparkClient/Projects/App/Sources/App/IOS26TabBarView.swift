@@ -31,6 +31,10 @@ struct IOS26TabBarView: View {
     @ObservedObject var launchIntentCoordinator: LaunchIntentCoordinator
     @Binding var activeHomeFullScreenCover: HomeFullScreenCover?
 
+    @ObservedObject private var homeStylePreferenceStore = HomeStylePreferenceStore.shared
+
+    @State private var homeSection = IOS26HomeView.HomeSection.dashboard
+
     @State private var showsDeviceAccountUpgradeSheet = false
     @State private var showsChatNoModelAlert = false
     @State private var showsChatAPIKeysSettingsSheet = false
@@ -74,37 +78,46 @@ struct IOS26TabBarView: View {
         CompatibleRouteNavigationContainer(path: routePath(routeStore.selectedTab)) {
             TabView(selection: $routeStore.selectedTab) {
                 Tab(L10n.text("tab.health"), systemImage: "heart.fill", value: AppRouteStore.RootTab.healthHome) {
-                    healthContainer
+                    if homeStylePreferenceStore.style == .dashboard {
+                        homeContainer
+                    } else {
+                        healthContainer
+                    }
                 }
 
-                Tab(L10n.text("tab.nutrition"), systemImage: "fork.knife", value: AppRouteStore.RootTab.nutrition) {
-                    nutritionContainer
+                if homeStylePreferenceStore.style == .classic {
+                    Tab(L10n.text("tab.nutrition"), systemImage: "fork.knife", value: AppRouteStore.RootTab.nutrition) {
+                        nutritionContainer
+                    }
+
+                    Tab(L10n.text("tab.fitness"), systemImage: "figure.run", value: AppRouteStore.RootTab.fitness) {
+                        fitnessContainer
+                    }
                 }
 
-            Tab(L10n.text("tab.knowledge"), systemImage: "backpack.fill", value: AppRouteStore.RootTab.knowledge) {
-                knowledgeContainer
-            }
+                //            Tab(L10n.text("tab.knowledge"), systemImage: "backpack.fill", value: AppRouteStore.RootTab.knowledge) {
+                //                knowledgeContainer
+                //            }
 
-            
-/// iOS 26 正式主导航：系统 Liquid Glass 浮动 TabBar，底部 Tab 为首页、对话、DeepTutor、搜索、设置（IOS26-TABBAR-000002）。
-//            Tab(L10n.text("tab.deep_tutor"), systemImage: "graduationcap.fill", value: AppRouteStore.RootTab.deepTutor) {
-//                deepTutorContainer
-//            }
-            
-//            Tab(L10n.text("tab.search"), systemImage: "magnifyingglass", value: AppRouteStore.RootTab.search, role: .search) {
-//                IOS26SearchTabView()
-//            }
+                /// iOS 26 正式主导航：系统 Liquid Glass 浮动 TabBar，底部 Tab 为首页、对话、DeepTutor、搜索、设置（IOS26-TABBAR-000002）。
+                //            Tab(L10n.text("tab.deep_tutor"), systemImage: "graduationcap.fill", value: AppRouteStore.RootTab.deepTutor) {
+                //                deepTutorContainer
+                //            }
+
+                //            Tab(L10n.text("tab.search"), systemImage: "magnifyingglass", value: AppRouteStore.RootTab.search, role: .search) {
+                //                IOS26SearchTabView()
+                //            }
 
                 Tab(L10n.text("tab.settings"), systemImage: "gearshape.fill", value: AppRouteStore.RootTab.settings) {
                     settingsContainer
                 }
-            
+
                 Tab(L10n.text("tab.chat"), systemImage: "bubble.left.and.bubble.right.fill", value: AppRouteStore.RootTab.chat, role: .search) {
                     chatContainer
                 }
             }
             .tabBarMinimizeBehavior(.onScrollDown)
-            .navigationTitle(tabNavigationTitle)
+//            .navigationTitle(tabNavigationTitle)
             .navigationBarTitleDisplayMode(tabTitleDisplayMode)
             .toolbar { tabToolbar }
             .navigationDestination(isPresented: Binding(
@@ -166,14 +179,23 @@ struct IOS26TabBarView: View {
         .onDisappear {
             launchIntentCoordinator.updateReadiness { $0.mainTabReady = false }
         }
+        .onChange(of: homeStylePreferenceStore.style) { _, newStyle in
+            // 新款首页隐藏饮食/运动独立 Tab 后，避免选中态停留在已消失的 Tab 上
+            if newStyle == .dashboard,
+               routeStore.selectedTab == .nutrition || routeStore.selectedTab == .fitness {
+                routeStore.selectedTab = .healthHome
+            }
+        }
     }
 
     private var tabNavigationTitle: String {
         switch routeStore.selectedTab {
         case .healthHome:
-            return "ios26.home.title"
+            return L10n.text("ios26.home.title")
         case .nutrition:
             return L10n.text("nutrition.home.title")
+        case .fitness:
+            return L10n.text("fitness.home.title")
         case .knowledge:
             return L10n.text("knowledge.library.title")
         case .settings:
@@ -190,8 +212,8 @@ struct IOS26TabBarView: View {
         case .chat:
             return .inline
         default:
-//            return .inline
-            return .large
+            return .inline
+//            return .large
         }
     }
 
@@ -202,6 +224,7 @@ struct IOS26TabBarView: View {
             ToolbarItem(placement: .topBarLeading) {
                 memberSelectorHeader
             }
+            healthHomeTrailingToolbar
         case .chat:
             ToolbarItem(placement: .topBarLeading) {
                 MainNavigationLink {
@@ -251,7 +274,10 @@ struct IOS26TabBarView: View {
         case .knowledge:
             ToolbarItemGroup(placement: .topBarTrailing) {
                 MainNavigationLink {
-                    KnowledgeSearchView(dependencies: knowledgeDependencies, viewModel: knowledgeViewModel)
+                    KnowledgeSearchView(
+                        dependencies: knowledgeDependencies,
+                        viewModel: knowledgeViewModel
+                    )
                 } label: {
                     Image(systemName: "magnifyingglass")
                 }
@@ -264,6 +290,60 @@ struct IOS26TabBarView: View {
             }
         default:
             ToolbarItem(placement: .automatic) {
+                EmptyView()
+            }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var healthHomeTrailingToolbar: some ToolbarContent {
+        switch homeSection {
+        case .dashboard:
+            ToolbarItem(placement: .topBarTrailing) {
+                MainNavigationLink {
+                    SettingsView(
+                        viewModel: settingsViewModel,
+                        aiSettingsViewModel: aiSettingsViewModel,
+                        accountManagementViewModel: accountManagementViewModel,
+                        versionUpdateCoordinator: versionUpdateCoordinator,
+                        memberContextStore: homeDependencies.memberContextStore,
+                        session: session,
+                        showsDeviceAccountUpgradeSheet: $showsDeviceAccountUpgradeSheet
+                    )
+                } label: {
+                    Image(systemName: "gearshape")
+                }
+                .accessibilityLabel(L10n.text("settings.title"))
+            }
+        case .nutrition:
+            ToolbarItem(placement: .topBarTrailing) {
+                MainNavigationLink {
+                    NutritionGoalView(
+                        goalUseCase: homeDependencies.nutritionDependencies.goalUseCase,
+                        memberID: nutritionResolvedMemberID,
+                        member: homeDependencies.nutritionDependencies.memberContextStore.context.selectedMember,
+                        onSaved: {
+                            NotificationCenter.default.post(name: .nutritionGoalDidSave, object: nil)
+                        }
+                    )
+                } label: {
+                    Image(systemName: "target")
+                }
+                .disabled(nutritionResolvedMemberID == 0)
+                .accessibilityLabel(L10n.text("nutrition.goal.title", fallback: "我的目标"))
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                MainNavigationLink {
+                    NutritionHistoryView(
+                        mealRecordUseCase: homeDependencies.nutritionDependencies.mealRecordUseCase,
+                        memberID: nutritionResolvedMemberID
+                    )
+                } label: {
+                    Text(L10n.text("nutrition.history.entry"))
+                }
+            }
+        case .fitness:
+            ToolbarItem(placement: .topBarTrailing) {
                 EmptyView()
             }
         }
@@ -329,42 +409,43 @@ struct IOS26TabBarView: View {
     }
 
     private var homeContainer: some View {
-        CompatibleRouteNavigationContainer(path: routePath(.healthHome)) {
-            IOS26HomeView(
-                dependencies: homeDependencies,
-                viewModel: homeViewModel,
+        IOS26HomeView(
+            dependencies: homeDependencies,
+            viewModel: homeViewModel,
+            taskManager: taskManager,
+            medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
+            externalMedicalDocumentImportCoordinator: externalMedicalDocumentImportCoordinator,
+            launchIntentCoordinator: launchIntentCoordinator,
+            session: session,
+            actionHandler: homeDashboardActionHandler,
+            chatListViewModel: chatListViewModel,
+            deepTutorChatViewModel: deepTutorChatViewModel,
+            currentSection: $homeSection,
+            activeFullScreenCover: $activeHomeFullScreenCover
+        )
+        // The system TabView owns the bottom safe area. Apply the policy at the
+        // tab-content boundary so it is recalculated correctly after a pushed
+        // destination temporarily hides, then restores, the main tab bar.
+//        .ignoresSafeArea(.container, edges: .bottom)
+//        .toolbar(.visible, for: .tabBar)
+    }
+
+    private var chatContainer: some View {
+        CompatibleRouteNavigationContainer(path: routePath(.chat)) {
+            ChatConversationListPage(
+                stateStore: chatStateStore,
+                listViewModel: chatListViewModel,
+                detailViewModel: chatDetailViewModel,
+                knowledgeDependencies: knowledgeDependencies,
+                knowledgeViewModel: knowledgeViewModel,
                 taskManager: taskManager,
-                medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
-                externalMedicalDocumentImportCoordinator: externalMedicalDocumentImportCoordinator,
-                launchIntentCoordinator: launchIntentCoordinator,
-                session: session,
-                actionHandler: homeDashboardActionHandler,
-                chatListViewModel: chatListViewModel,
-                deepTutorChatViewModel: deepTutorChatViewModel,
-                settingsViewModel: settingsViewModel,
-                accountManagementViewModel: accountManagementViewModel,
+                homeViewModel: homeViewModel,
                 aiSettingsViewModel: aiSettingsViewModel,
-                versionUpdateCoordinator: versionUpdateCoordinator,
-                showsDeviceAccountUpgradeSheet: $showsDeviceAccountUpgradeSheet,
-                activeFullScreenCover: $activeHomeFullScreenCover
+                pushAdapter: pushAdapter
             )
         } destination: { route in
             destinationBuilder.destination(route)
         }
-    }
-
-    private var chatContainer: some View {
-        ChatConversationListPage(
-            stateStore: chatStateStore,
-            listViewModel: chatListViewModel,
-            detailViewModel: chatDetailViewModel,
-            knowledgeDependencies: knowledgeDependencies,
-            knowledgeViewModel: knowledgeViewModel,
-            taskManager: taskManager,
-            homeViewModel: homeViewModel,
-            aiSettingsViewModel: aiSettingsViewModel,
-            pushAdapter: pushAdapter
-        )
     }
 
     private var healthContainer: some View {
@@ -388,6 +469,10 @@ struct IOS26TabBarView: View {
         NutritionHomeView(dependencies: homeDependencies.nutritionDependencies)
     }
 
+    private var fitnessContainer: some View {
+        FitnessHomeView(dependencies: homeDependencies.fitnessDependencies)
+    }
+
     private var deepTutorContainer: some View {
         CompatibleRouteNavigationContainer(path: routePath(.deepTutor)) {
             DeepTutorConversationListPage(
@@ -400,11 +485,6 @@ struct IOS26TabBarView: View {
     }
 
     private var knowledgeContainer: some View {
-//        CompatibleRouteNavigationContainer(path: routePath(.knowledge)) {
-//           
-//        } destination: { route in
-//            destinationBuilder.destination(route)
-//        }
         KnowledgeLibraryView(
             dependencies: knowledgeDependencies,
             viewModel: knowledgeViewModel

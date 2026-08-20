@@ -6,10 +6,12 @@ struct GeneralSettingsView: View {
     @ObservedObject private var preferencesStore = HomeNutritionEntryPreferencesStore.shared
     @ObservedObject private var quickStartPreferenceStore = HomeQuickStartConversationPreferenceStore.shared
     @ObservedObject private var medicationPreferencesStore = MedicationReminderPreferencesStore.shared
+    @ObservedObject private var homeStylePreferenceStore = HomeStylePreferenceStore.shared
 
     var body: some View {
         List {
             versionSection
+            homeStyleSection
             homeAIConversationSection
             homeNutritionEntrySection
             medicalSection
@@ -17,6 +19,21 @@ struct GeneralSettingsView: View {
             cacheSection
         }
         .navigationTitle(L10n.text("settings.general.title"))
+    }
+
+    private var homeStyleSection: some View {
+        Section {
+            Picker(
+                L10n.text("settings.general.home_style.title"),
+                selection: $homeStylePreferenceStore.style
+            ) {
+                ForEach(HomeStyle.allCases) { style in
+                    Text(L10n.text(style.localizationKey)).tag(style)
+                }
+            }
+        } footer: {
+            Text(L10n.text("settings.general.home_style.footer"))
+        }
     }
 
     private var medicalSection: some View {

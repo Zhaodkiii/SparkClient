@@ -4,6 +4,7 @@ import UIKit
 #endif
 
 /// iOS 26 首页独立 root：承载工作台、Launch Intent 与上传/成员详情等宿主触发能力。
+/// 顶部自定义分段头（参考 DreamHua MyHome.swift），支持左右滑动在新款首页、饮食营养、运动健康三个分页间切换。
 @available(iOS 26.0, *)
 struct IOS26HomeView: View {
     let dependencies: HomeFeatureDependencies
@@ -16,13 +17,34 @@ struct IOS26HomeView: View {
     let actionHandler: IOS26HomeDashboardActionHandler
     @ObservedObject var chatListViewModel: ChatListViewModel
     @ObservedObject var deepTutorChatViewModel: DeepTutorChatViewModel
-    @ObservedObject var settingsViewModel: SettingsViewModel
-    @ObservedObject var accountManagementViewModel: AccountManagementViewModel
-    @ObservedObject var aiSettingsViewModel: AISettingsViewModel
-    @ObservedObject var versionUpdateCoordinator: AppVersionUpdateCoordinator
+
+    /// 首页内可左右切换的分页（参考 MyHome.Tab）。
+    enum HomeSection: CaseIterable, Identifiable {
+        case dashboard
+        case nutrition
+        case fitness
+
+        var id: Self { self }
+
+        /// 分段头标签
+        var title: String {
+            switch self {
+            case .dashboard:
+                return L10n.text("home.title")
+            case .nutrition:
+                return L10n.text("nutrition.home.title")
+            case .fitness:
+                return L10n.text("fitness.home.title")
+            }
+        }
+    }
 
     @State private var hasLoaded = false
-    @Binding var showsDeviceAccountUpgradeSheet: Bool
+    @Binding var currentSection: HomeSection
+    /// 标记切换来自点击分段头，屏蔽滑动偏移回调与切换动画的相互干扰（参考 MyHome.isTapped）。
+    @State private var isSectionTapped = false
+    /// 当前分页滑动偏移，驱动分段指示器实时跟随（参考 MyHome.offset）。
+    @State private var sectionSwipeOffset: CGFloat = 0
     @Binding var activeFullScreenCover: HomeFullScreenCover?
     @State private var showExternalImportErrorAlert = false
 
@@ -37,14 +59,6 @@ struct IOS26HomeView: View {
 
 @available(iOS 26.0, *)
 private extension IOS26HomeView {
-    var selectedMember: Member? {
-        let members = viewModel.dashboard?.members ?? viewModel.memberContextStoreForBinding.context.members
-        guard let selectedMemberID = viewModel.selectedMemberID else {
-            return members.first
-        }
-        return members.first(where: { $0.id == selectedMemberID }) ?? members.first
-    }
-
     var dashboardContent: some View {
         IOS26HomeDashboardView(
             viewModel: viewModel,
@@ -54,69 +68,118 @@ private extension IOS26HomeView {
             chatListViewModel: chatListViewModel,
             deepTutorChatViewModel: deepTutorChatViewModel
         )
+
         .refreshable {
             await viewModel.refresh()
             await taskManager.syncIncremental(memberID: viewModel.selectedMemberID)
         }
-        .navigationTitle(L10n.text("ios26.home.title"))
-        .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                memberToolbarMenu
-            }
-            ToolbarItem(placement: .navigationBarTrailing) {
-                MainNavigationLink {
-                    SettingsView(
-                        viewModel: settingsViewModel,
-                        aiSettingsViewModel: aiSettingsViewModel,
-                        accountManagementViewModel: accountManagementViewModel,
-                        versionUpdateCoordinator: versionUpdateCoordinator,
-                        memberContextStore: viewModel.memberContextStoreForBinding,
-                        session: session,
-                        showsDeviceAccountUpgradeSheet: $showsDeviceAccountUpgradeSheet
-                    )
-                } label: {
-                    Image(systemName: "gearshape")
-                }
-                .accessibilityLabel(L10n.text("settings.title"))
-            }
-        }
     }
 
-    @ViewBuilder
-    var memberToolbarMenu: some View {
-        if let selectedMember,
-           viewModel.memberContextStoreForBinding.context.members.isEmpty == false {
-            MemberProfileBindingMenu(
-                memberContextStore: viewModel.memberContextStoreForBinding,
-                selectedMemberID: viewModel.selectedMemberID,
-                onSelect: { memberID in
-                    guard let memberID, memberID != viewModel.selectedMemberID else { return }
-                    viewModel.selectMember(memberID)
-                    triggerHaptic(style: .light)
-                }
-            ) {
-                MemberSelectorChip(
-                    member: selectedMember,
-                    badgeText: MemberSelectorChip.badgeText(for: selectedMember),
-                    isSelected: false,
-                    variant: .compactToolbar,
-                    onSelect: {},
-                    onViewDetail: {},
-                    onShare: {}
-                )
-            }
-            .accessibilityLabel(
-                String(
-                    format: L10n.text("home.medical.medication_execution.member_switch.accessibility"),
-                    selectedMember.name
-                )
-            )
-        }
-    }
+    // MARK: - 分段切换（参考 MyHome.swift DynamicTabHeader + TabView 分页）
 
     var contentWithPresentation: some View {
-        dashboardContent
+        GeometryReader { proxy in
+            let size = proxy.size
+            VStack(spacing: 0) {
+                sectionHeader(size: size)
+                sectionPager(size: size)
+            }
+        }
+    }
+
+    func sectionHeader(size: CGSize) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 0) {
+                ForEach(HomeSection.allCases) { section in
+                    Text(section.title)
+                        .fontWeight(section == currentSection ? .black : .semibold)
+                        .padding(.vertical, 6)
+                        .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            guard section != currentSection else { return }
+                            // 点击切换时先屏蔽滑动偏移回调，避免与切换动画相互覆盖
+                            isSectionTapped = true
+                            withAnimation(.easeInOut) {
+                                currentSection = section
+                                sectionSwipeOffset = -(size.width) * CGFloat(indexOf(section: section))
+                            }
+                        }
+                }
+            }
+            .overlay(alignment: .leading) {
+                VStack {
+                    Spacer()
+                    Capsule()
+                        .fill(.tint)
+                        .frame(width: sectionIndicatorWidth(size: size), height: 4)
+                        .offset(x: sectionIndicatorOffset(size: size))
+                }
+            }
+        }
+    }
+
+    func sectionPager(size: CGSize) -> some View {
+        TabView(selection: $currentSection) {
+            dashboardContent
+                .sectionOffsetTracker { value in
+                    handleSectionSwipeOffset(value, section: .dashboard, size: size)
+                }
+                .tag(HomeSection.dashboard)
+
+            NutritionHomeView(
+                dependencies: dependencies.nutritionDependencies,
+                showsNavigationChrome: false
+            )
+            .sectionOffsetTracker { value in
+                handleSectionSwipeOffset(value, section: .nutrition, size: size)
+            }
+            .tag(HomeSection.nutrition)
+
+            FitnessHomeView(
+                dependencies: dependencies.fitnessDependencies,
+                showsNavigationChrome: false
+            )
+            .sectionOffsetTracker { value in
+                handleSectionSwipeOffset(value, section: .fitness, size: size)
+            }
+            .tag(HomeSection.fitness)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        // 用户快速滑动时提前解除点击态，恢复滑动跟踪（参考 MyHome.InteractionManager）
+        .simultaneousGesture(
+            DragGesture().onChanged { _ in
+                isSectionTapped = false
+            }
+        )
+    }
+
+    func handleSectionSwipeOffset(_ value: CGFloat, section: HomeSection, size: CGSize) {
+        guard size.width > 0 else { return }
+        // 仅由当前分页驱动偏移，滑动过程中实时更新指示器位置
+        if currentSection == section && !isSectionTapped && value != size.width {
+            sectionSwipeOffset = value - (size.width * CGFloat(indexOf(section: section)))
+        }
+        // 点击切换的动画落定后恢复滑动跟踪
+        if value == 0 && isSectionTapped {
+            isSectionTapped = false
+        }
+    }
+
+    // MARK: 分段指示器几何（参考 MyHome.tabOffset / indexOf）
+
+    func sectionIndicatorWidth(size: CGSize) -> CGFloat {
+        size.width / (CGFloat(HomeSection.allCases.count) * 3)
+    }
+
+    func sectionIndicatorOffset(size: CGSize) -> CGFloat {
+        let slotWidth = size.width / CGFloat(HomeSection.allCases.count)
+        return (-sectionSwipeOffset / size.width) * slotWidth + sectionIndicatorWidth(size: size)
+    }
+
+    func indexOf(section: HomeSection) -> Int {
+        HomeSection.allCases.firstIndex { $0 == section } ?? 0
     }
 
     var contentWithLifecycle: some View {
@@ -222,10 +285,27 @@ private extension IOS26HomeView {
             immediate: true
         )
     }
+}
 
-    func triggerHaptic(style: UIImpactFeedbackGenerator.FeedbackStyle) {
-#if canImport(UIKit)
-        UIImpactFeedbackGenerator(style: style).impactOccurred()
-#endif
+// MARK: - 分页滑动偏移追踪（参考 MyHome.offsetX + OffsetKey）
+
+private struct HomeSectionOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
+
+private extension View {
+    /// 回传视图在全局坐标系中的 minX，用于驱动分段指示器跟随分页滑动。
+    func sectionOffsetTracker(onChange: @escaping (CGFloat) -> Void) -> some View {
+        overlay {
+            GeometryReader { proxy in
+                Color.clear
+                    .preference(key: HomeSectionOffsetKey.self, value: proxy.frame(in: .global).minX)
+                    .onPreferenceChange(HomeSectionOffsetKey.self, perform: onChange)
+            }
+        }
     }
 }

@@ -247,7 +247,7 @@ struct IOS26HomeDashboardView: View {
     }
 }
 
-@available(iOS 26.0, *)
+//@available(iOS 26.0, *)
 struct IOS26HomeActionCard: View {
     let item: IOS26HomeActionItem
     let isLoading: Bool
