@@ -41,7 +41,7 @@ final class HomeStylePreferenceStore: ObservableObject {
            let style = HomeStyle(rawValue: raw) {
             self.style = style
         } else {
-            self.style = .dashboard
+            self.style = .classic
         }
     }
 }

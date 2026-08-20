@@ -29,7 +29,7 @@ struct SignedInMainTabHostView: View {
     private var tabContent: some View {
         
         
-        if #available(iOS 26.0, *) {
+        if #available(iOS 28.0, *) {
             IOS26TabBarView(
                 session: session,
                 routeStore: mainTab.routeStore,

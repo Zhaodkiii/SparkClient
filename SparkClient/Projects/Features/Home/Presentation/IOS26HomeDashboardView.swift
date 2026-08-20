@@ -28,7 +28,7 @@ struct IOS26HomeActionItem: Identifiable, Equatable {
     }
 }
 
-@available(iOS 26.0, *)
+//@available(iOS 26.0, *)
 struct IOS26HomeDashboardView: View {
     @ObservedObject var viewModel: HomeViewModel
     @ObservedObject var taskManager: TaskManager
@@ -63,11 +63,17 @@ struct IOS26HomeDashboardView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                taskSummarySection
-                secondaryActions
+                if shouldShowTaskSummarySection {
+                    taskSummarySection
+                }
+                HomeMedicalDashboardGridSection(
+                    cards: viewModel.dashboard?.medical.cards ?? [],
+                    selectedMemberID: viewModel.selectedMemberID,
+                    onSelect: handleMedicalDashboardCard,
+                    onInterpretReport: { handlePrimaryAction(reportInterpretationItem) },
+                    onUploadReport: { handlePrimaryAction(reportUploadItem) }
+                )
                 primaryActions
-                
-                familyArchiveAction
             }
             .padding(.horizontal, 18)
             .padding(.top, 16)
@@ -96,6 +102,10 @@ struct IOS26HomeDashboardView: View {
         }
     }
 
+    private var shouldShowTaskSummarySection: Bool {
+        taskSummary.pendingCount > 0
+    }
+
     private var taskSummarySection: some View {
         IOS26HomeTaskSummaryView(
             summary: taskSummary,
@@ -115,24 +125,35 @@ struct IOS26HomeDashboardView: View {
     }
 
     private var primaryActions: some View {
-        VStack(spacing: 14) {
-            actionCard(for: checkupPlanItem)
-            actionCard(for: reportInterpretationItem)
-            actionCard(for: reportUploadItem)
-        }
+        HomePrimaryActionSection(
+            items: primaryActionItems,
+            loadingAction: loadingAction,
+            isCreatingQuickStartConversation: isCreatingQuickStartConversation,
+            onLoadingFinished: { loadingAction = nil },
+            onSelect: handlePrimaryAction,
+            footerItem: familyArchiveItem
+        )
     }
 
-    private var secondaryActions: some View {
-        HStack(spacing: 14) {
-            compactActionCard(for: medicationItem)
-                .frame(maxWidth: .infinity)
-            compactActionCard(for: familyMedicineCabinetItem)
-                .frame(maxWidth: .infinity)
-        }
+    private var primaryActionItems: [IOS26HomeActionItem] {
+        [
+            checkupPlanItem,
+            reportInterpretationItem,
+            reportUploadItem
+        ]
     }
 
-    private var familyArchiveAction: some View {
-        actionCard(for: familyArchiveItem)
+    private func handleMedicalDashboardCard(_ kind: HomeDashboard.MedicalCard.Kind) {
+        switch kind {
+        case .medication:
+            actionHandler.handle(.medication)
+        case .familyMedicineCabinet:
+            actionHandler.handle(.familyMedicineCabinet)
+        default:
+            viewModel.logMedicalListNavigation(kind: kind)
+            triggerHaptic(style: .light)
+            actionHandler.routeStore.route(to: .homeMedicalList(kind.homeMedicalListRoute, nil))
+        }
     }
 
     private var checkupPlanItem: IOS26HomeActionItem {
@@ -159,18 +180,6 @@ struct IOS26HomeDashboardView: View {
         )
     }
 
-    private var medicationItem: IOS26HomeActionItem {
-        IOS26HomeActionItem(
-            id: .medication,
-            title: L10n.text("ios26.home.action.medication.title"),
-            subtitle: L10n.text("ios26.home.action.medication.subtitle"),
-            symbolName: "pills.fill",
-            prominence: .compact,
-            isEnabled: true,
-            actionLabel: nil
-        )
-    }
-
     private var reportUploadItem: IOS26HomeActionItem {
         IOS26HomeActionItem(
             id: .reportUpload,
@@ -180,18 +189,6 @@ struct IOS26HomeDashboardView: View {
             prominence: .primary,
             isEnabled: hasMembers,
             actionLabel: L10n.text("ios26.home.action.start")
-        )
-    }
-
-    private var familyMedicineCabinetItem: IOS26HomeActionItem {
-        IOS26HomeActionItem(
-            id: .familyMedicineCabinet,
-            title: L10n.text("ios26.home.action.family_medicine_cabinet.title"),
-            subtitle: L10n.text("ios26.home.action.family_medicine_cabinet.subtitle"),
-            symbolName: "cross.case.fill",
-            prominence: .compact,
-            isEnabled: hasMembers,
-            actionLabel: nil
         )
     }
 
@@ -207,95 +204,22 @@ struct IOS26HomeDashboardView: View {
         )
     }
 
-  @ViewBuilder
-    private func actionCard(for item: IOS26HomeActionItem) -> some View {
-        IOS26HomeActionCard(
-            item: item,
-            isLoading: loadingAction == item.id && isCreatingQuickStartConversation,
-            action: {
-                guard item.isEnabled else { return }
-                triggerHaptic(style: .light)
-                if item.id == .checkupPlan || item.id == .reportInterpretation {
-                    loadingAction = item.id
-                }
-                actionHandler.handle(item.id)
-            }
-        )
+    private func handlePrimaryAction(_ item: IOS26HomeActionItem) {
+        guard item.isEnabled else { return }
+        triggerHaptic(style: .light)
+        if item.id == .checkupPlan || item.id == .reportInterpretation {
+            loadingAction = item.id
+        }
+        actionHandler.handle(item.id)
     }
 
     private var isCreatingQuickStartConversation: Bool {
         deepTutorChatViewModel.isCreatingConversation || chatListViewModel.isCreatingQuickStartThread
     }
 
-    @ViewBuilder
-    private func compactActionCard(for item: IOS26HomeActionItem) -> some View {
-        IOS26HomeActionCard(
-            item: item,
-            isLoading: false,
-            action: {
-                guard item.isEnabled else { return }
-                triggerHaptic(style: .light)
-                actionHandler.handle(item.id)
-            }
-        )
-    }
-
     private func triggerHaptic(style: UIImpactFeedbackGenerator.FeedbackStyle) {
         #if canImport(UIKit)
         UIImpactFeedbackGenerator(style: style).impactOccurred()
         #endif
-    }
-}
-
-//@available(iOS 26.0, *)
-struct IOS26HomeActionCard: View {
-    let item: IOS26HomeActionItem
-    let isLoading: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Image(systemName: item.symbolName)
-                        .font(.title2.weight(.semibold))
-                        .foregroundStyle(item.isEnabled ? Color.accentColor : .secondary)
-                    Spacer()
-                    if isLoading {
-                        ProgressView()
-                    } else if let actionLabel = item.actionLabel {
-                        Text(actionLabel)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(item.isEnabled ? Color.accentColor : .secondary)
-                    }
-                }
-                Text(item.title)
-                    .font(.headline)
-                    .foregroundStyle(item.isEnabled ? .primary : .secondary)
-                Text(item.subtitle)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                if item.isEnabled == false {
-                    Text(L10n.text("ios26.home.action.requires_member"))
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(18)
-            .background {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(item.prominence == .primary ? AnyShapeStyle(.regularMaterial) : AnyShapeStyle(Color(uiColor: .secondarySystemGroupedBackground)))
-            }
-            .overlay {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .strokeBorder(.quaternary, lineWidth: 1)
-            }
-        }
-        .buttonStyle(.plain)
-        .disabled(item.isEnabled == false || isLoading)
-        .accessibilityLabel(item.title)
-        .accessibilityHint(item.subtitle)
     }
 }

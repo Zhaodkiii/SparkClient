@@ -5,7 +5,7 @@ import UIKit
 
 /// iOS 26 首页独立 root：承载工作台、Launch Intent 与上传/成员详情等宿主触发能力。
 /// 顶部自定义分段头（参考 DreamHua MyHome.swift），支持左右滑动在新款首页、饮食营养、运动健康三个分页间切换。
-@available(iOS 26.0, *)
+//@available(iOS 26.0, *)
 struct IOS26HomeView: View {
     let dependencies: HomeFeatureDependencies
     @ObservedObject var viewModel: HomeViewModel
@@ -57,7 +57,7 @@ struct IOS26HomeView: View {
     }
 }
 
-@available(iOS 26.0, *)
+//@available(iOS 26.0, *)
 private extension IOS26HomeView {
     var dashboardContent: some View {
         IOS26HomeDashboardView(
@@ -68,7 +68,6 @@ private extension IOS26HomeView {
             chatListViewModel: chatListViewModel,
             deepTutorChatViewModel: deepTutorChatViewModel
         )
-
         .refreshable {
             await viewModel.refresh()
             await taskManager.syncIncremental(memberID: viewModel.selectedMemberID)

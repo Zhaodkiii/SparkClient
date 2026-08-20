@@ -22,6 +22,7 @@
 "ios26.home.greeting.generic" = "Hello";
 "ios26.home.greeting.named" = "Hello, %@";
 "ios26.home.current_member" = "Current Member";
+"home.primary_actions.title" = "Health Actions";
 "ios26.home.action.start" = "Start";
 "ios26.home.action.interpret" = "Interpret";
 "ios26.home.action.requires_member" = "Available after adding a member";

@@ -17,6 +17,8 @@
 "ai_settings.tool_consent.follow_default" = "跟隨通用策略";
 "ai_settings.tool_consent.custom" = "單獨設定";
 "ai_settings.tool_consent.follow_default.short" = "跟隨通用";
+"home.primary_actions.title" = "健康行動";
+
 "ai_settings.tool_consent.picker.send_to_ai" = "傳送給 AI";
 "ai_settings.tool_consent.picker.follow_default_format" = "跟隨通用策略（%@）";
 "ai_settings.tool_consent.action.restore_default" = "恢復跟隨通用策略";

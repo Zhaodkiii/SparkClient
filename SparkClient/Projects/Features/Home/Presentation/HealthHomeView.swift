@@ -79,9 +79,10 @@ struct HealthHomeView: View {
             VStack(alignment: .leading, spacing: 20) {
 //                headerCard
                 // 增加 任务
-                if #available(iOS 26.0, *) {
+                if shouldShowTaskSummarySection {
                     taskSummarySection
                 }
+
                 if viewModel.shouldShowMedicalSection {
                     medicalInfoSection
                 }
@@ -102,6 +103,16 @@ struct HealthHomeView: View {
         .refreshable {
             await viewModel.refresh()
         }
+        .task {
+            await taskManager.loadInitial(memberID: viewModel.selectedMemberID)
+            await taskManager.syncIncremental(memberID: viewModel.selectedMemberID)
+        }
+        .onChange(of: viewModel.selectedMemberID) { _, memberID in
+            Task {
+                await taskManager.loadInitial(memberID: memberID)
+                await taskManager.syncIncremental(memberID: memberID)
+            }
+        }
 //        .navigationBarHidden(true)
 //        .safeAreaInset(edge: .top, spacing: 0) {
 //            memberSelectorBar
@@ -109,11 +120,6 @@ struct HealthHomeView: View {
 //                .padding(.vertical, 8)
 //                .background(.regularMaterial)
 //        }
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                memberToolbarMenu
-            }
-        }
     }
 
     private var selectedMember: Member? {
@@ -430,61 +436,36 @@ struct HealthHomeView: View {
     /// 包含医疗板块标题栏、各类医疗数据卡片网格、AI健康报告入口按钮
     private var medicalInfoSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // 板块标题行：医疗标题 + 家庭药箱入口 + 当前选中成员名称
-            HStack {
-                // 医疗板块标题，搭配医疗箱图标
-                Label(L10n.text("home.medical.title"), systemImage: "cross.case")
-                    .font(.headline)
-                Spacer()
-                // 存在选中成员时，展示家庭药箱跳转按钮
-                if let entryMemberID = viewModel.selectedMemberID {
-                    Button {
-                        // 路由跳转至对应成员的家庭药箱页面
-                        dependencies.routeStore.route(to: .homeFamilyMedicineCabinet(memberID: entryMemberID))
-                        // 轻量级触觉反馈
-                        triggerHaptic(style: .light)
-                    } label: {
-                        Label(
-                            L10n.text("home.medical.family_cabinet.title"),
-                            systemImage: "cross.vial.fill"
-                        )
-                        .font(.footnote.weight(.semibold))
-                    }
-                    .buttonStyle(.plain)
-                }
-                // 展示当前选中家庭成员姓名
-//                if viewModel.dashboard?.selectedMember != nil {
-//                    Text(viewModel.dashboard?.selectedMember?.name ?? "")
-//                        .font(.footnote)
-//                        .foregroundStyle(.secondary)
-//                }
-            }
-
-            // 增加 药箱
-            if #available(iOS 26.0, *) {
-                secondaryActions
-            }
-            // 读取仪表盘医疗模块卡片数组，无数据则为空数组
-            let cards = viewModel.dashboard?.medical.cards ?? []
-            // 两列自适应网格布局，懒加载优化性能
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                ForEach(cards, id: \.id) { card in
-                    Button {
-                        // 埋点：记录医疗分类列表点击日志
-                        viewModel.logMedicalListNavigation(kind: card.id)
-                        // 路由跳转至对应医疗分类详情列表页
-                        dependencies.routeStore.route(to: .homeMedicalList(card.id.homeMedicalListRoute, nil))
-                        triggerHaptic(style: .light)
-                    } label: {
-                        // 渲染单张医疗分类卡片
-                        medicalCard(card)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
+            HomeMedicalDashboardGridSection(
+                cards: viewModel.dashboard?.medical.cards ?? [],
+                selectedMemberID: viewModel.selectedMemberID,
+                onSelect: handleMedicalDashboardCard,
+                onInterpretReport: { handlePrimaryAction(reportInterpretationItem) },
+                onUploadReport: openMedicalDocumentUploadPage
+            )
 
             // AI健康报告独立入口按钮
-            medicalAIReportButton
+//            medicalAIReportButton
+        }
+    }
+
+    private func handleMedicalDashboardCard(_ kind: HomeDashboard.MedicalCard.Kind) {
+        viewModel.logMedicalListNavigation(kind: kind)
+        triggerHaptic(style: .light)
+
+        switch kind {
+        case .familyMedicineCabinet:
+            guard let memberID = viewModel.selectedMemberID else {
+                dependencies.notificationClient.info(
+                    L10n.text("ios26.home.family_medicine_cabinet.member_required"),
+                    title: L10n.text("ios26.home.action.family_medicine_cabinet.title"),
+                    source: "home_medical_grid"
+                )
+                return
+            }
+            dependencies.routeStore.route(to: .homeFamilyMedicineCabinet(memberID: memberID))
+        default:
+            dependencies.routeStore.route(to: .homeMedicalList(kind.homeMedicalListRoute, nil))
         }
     }
 
@@ -589,10 +570,15 @@ struct HealthHomeView: View {
         }
     }
 
+    private func openMedicalDocumentUploadPage() {
+        guard viewModel.selectedMemberID != nil else { return }
+        medicalDocumentUploadViewModel.presentUploadPage()
+        triggerHaptic(style: .medium)
+    }
+
     private var medicalAIReportButton: some View {
         Button {
-            medicalDocumentUploadViewModel.presentUploadPage()
-            triggerHaptic(style: .medium)
+            openMedicalDocumentUploadPage()
         } label: {
             Label(
                 L10n.text("home.medical.ai_report", fallback: "AI 智能整理报告"),
@@ -631,74 +617,8 @@ struct HealthHomeView: View {
         .disabled(viewModel.selectedMemberID == nil)
     }
 
-    private func medicalCard(_ card: HomeDashboard.MedicalCard) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Image(systemName: card.symbol)
-                .font(.title3)
-                .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(Color(uiColor: .systemBlue))
-
-            Text(medicalCardTitle(for: card.id))
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.primary)
-
-            Text(medicalCardSubtitle(for: card.id))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Spacer(minLength: 0)
-
-            HStack {
-                Text("\(card.count)")
-                    .font(.title3.weight(.bold))
-                    .monospacedDigit()
-                Spacer()
-                if let latestDate = card.latestDate {
-                    Text(latestDate.formatted(date: .abbreviated, time: .omitted))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, minHeight: 142, alignment: .leading)
-        .padding(16)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(Color(uiColor: .separator), lineWidth: 1)
-        }
-    }
-
-    private func medicalCardTitle(for kind: HomeDashboard.MedicalCard.Kind) -> String {
-        switch kind {
-        case .medicalCases:
-            return L10n.text("home.medical.card.medical_cases.title")
-        case .healthExamReports:
-            return L10n.text("home.medical.card.examination_reports.title")
-        case .medicalReports:
-            return L10n.text("home.medical.card.medical_reports.title")
-        case .medicationPlans:
-            return L10n.text("home.medical.card.medication_plans.title")
-        }
-    }
-
-    private func medicalCardSubtitle(for kind: HomeDashboard.MedicalCard.Kind) -> String {
-        switch kind {
-        case .medicalCases:
-            return L10n.text("home.medical.card.medical_cases.subtitle")
-        case .healthExamReports:
-            return L10n.text("home.medical.card.examination_reports.subtitle")
-        case .medicalReports:
-            return L10n.text("home.medical.card.medical_reports.subtitle")
-        case .medicationPlans:
-            return L10n.text("home.medical.card.medication_plans.subtitle")
-        }
-    }
-
     // MARK: - iOS 26 首页板块（任务 / 药箱 / 对话入口）
 
-    @available(iOS 26.0, *)
     private var taskSummary: IOS26HomeTaskSummary {
         IOS26HomeTaskSummaryBuilder.makeHomeTaskSummary(
             tasks: taskManager.tasks,
@@ -713,7 +633,10 @@ struct HealthHomeView: View {
         viewModel.dashboard?.members.isEmpty == false
     }
 
-    @available(iOS 26.0, *)
+    private var shouldShowTaskSummarySection: Bool {
+        taskSummary.pendingCount > 0
+    }
+
     private var taskSummarySection: some View {
         IOS26HomeTaskSummaryView(
             summary: taskSummary,
@@ -725,54 +648,32 @@ struct HealthHomeView: View {
                 }
             }
         )
-        .task {
-            await taskManager.loadInitial(memberID: viewModel.selectedMemberID)
-            await taskManager.syncIncremental(memberID: viewModel.selectedMemberID)
-        }
-        .onChange(of: viewModel.selectedMemberID) { _, memberID in
-            Task {
-                await taskManager.loadInitial(memberID: memberID)
-                await taskManager.syncIncremental(memberID: memberID)
-            }
-        }
     }
 
-    @available(iOS 26.0, *)
     private func openTaskCenter() {
         triggerHaptic(style: .light)
         viewModel.activeSheet = .taskCenter
     }
 
-//    @available(iOS 26.0, *)
-    private var secondaryActions: some View {
-        HStack(spacing: 14) {
-            compactActionCard(for: medicationItem)
-                .frame(maxWidth: .infinity)
-            compactActionCard(for: familyMedicineCabinetItem)
-                .frame(maxWidth: .infinity)
-        }
-    }
-
-    @available(iOS 26.0, *)
     private var primaryActions: some View {
-        VStack(spacing: 14) {
-            actionCard(for: checkupPlanItem)
-            actionCard(for: reportInterpretationItem)
-            actionCard(for: reportUploadItem)
-        }
-        .onChange(of: deepTutorChatViewModel.isCreatingConversation) { _, isCreating in
-            if isCreating == false {
-                loadingAction = nil
-            }
-        }
-        .onChange(of: chatListViewModel.isCreatingQuickStartThread) { _, isCreating in
-            if isCreating == false {
-                loadingAction = nil
-            }
-        }
+        HomePrimaryActionSection(
+            items: primaryActionItems,
+            loadingAction: loadingAction,
+            isCreatingQuickStartConversation: isCreatingQuickStartConversation,
+            onLoadingFinished: { loadingAction = nil },
+            onSelect: handlePrimaryAction,
+            footerItem: familyArchiveItem
+        )
     }
 
-    @available(iOS 26.0, *)
+    private var primaryActionItems: [IOS26HomeActionItem] {
+        [
+            checkupPlanItem,
+            reportInterpretationItem,
+            reportUploadItem
+        ]
+    }
+
     private var checkupPlanItem: IOS26HomeActionItem {
         IOS26HomeActionItem(
             id: .checkupPlan,
@@ -785,7 +686,6 @@ struct HealthHomeView: View {
         )
     }
 
-    @available(iOS 26.0, *)
     private var reportInterpretationItem: IOS26HomeActionItem {
         IOS26HomeActionItem(
             id: .reportInterpretation,
@@ -798,20 +698,6 @@ struct HealthHomeView: View {
         )
     }
 
-//    @available(iOS 26.0, *)
-    private var medicationItem: IOS26HomeActionItem {
-        IOS26HomeActionItem(
-            id: .medication,
-            title: L10n.text("ios26.home.action.medication.title"),
-            subtitle: L10n.text("ios26.home.action.medication.subtitle"),
-            symbolName: "pills.fill",
-            prominence: .compact,
-            isEnabled: true,
-            actionLabel: nil
-        )
-    }
-
-    @available(iOS 26.0, *)
     private var reportUploadItem: IOS26HomeActionItem {
         IOS26HomeActionItem(
             id: .reportUpload,
@@ -824,53 +710,30 @@ struct HealthHomeView: View {
         )
     }
 
-//    @available(iOS 26.0, *)
-    private var familyMedicineCabinetItem: IOS26HomeActionItem {
+    private var familyArchiveItem: IOS26HomeActionItem {
         IOS26HomeActionItem(
-            id: .familyMedicineCabinet,
-            title: L10n.text("ios26.home.action.family_medicine_cabinet.title"),
-            subtitle: L10n.text("ios26.home.action.family_medicine_cabinet.subtitle"),
-            symbolName: "cross.case.fill",
-            prominence: .compact,
+            id: .familyArchive,
+            title: L10n.text("ios26.home.action.family_archive.title"),
+            subtitle: L10n.text("ios26.home.action.family_archive.subtitle"),
+            symbolName: "person.3.fill",
+            prominence: .secondary,
             isEnabled: hasMembers,
             actionLabel: nil
         )
     }
 
-    @available(iOS 26.0, *)
+//    @available(iOS 26.0, *)
     private var isCreatingQuickStartConversation: Bool {
         deepTutorChatViewModel.isCreatingConversation || chatListViewModel.isCreatingQuickStartThread
     }
 
-    @available(iOS 26.0, *)
-    @ViewBuilder
-    private func actionCard(for item: IOS26HomeActionItem) -> some View {
-        IOS26HomeActionCard(
-            item: item,
-            isLoading: loadingAction == item.id && isCreatingQuickStartConversation,
-            action: {
-                guard item.isEnabled else { return }
-                triggerHaptic(style: .light)
-                if item.id == .checkupPlan || item.id == .reportInterpretation {
-                    loadingAction = item.id
-                }
-                actionHandler.handle(item.id)
-            }
-        )
-    }
-
-//    @available(iOS 26.0, *)
-    @ViewBuilder
-    private func compactActionCard(for item: IOS26HomeActionItem) -> some View {
-        IOS26HomeActionCard(
-            item: item,
-            isLoading: false,
-            action: {
-                guard item.isEnabled else { return }
-                triggerHaptic(style: .light)
-                actionHandler.handle(item.id)
-            }
-        )
+    private func handlePrimaryAction(_ item: IOS26HomeActionItem) {
+        guard item.isEnabled else { return }
+        triggerHaptic(style: .light)
+        if item.id == .checkupPlan || item.id == .reportInterpretation {
+            loadingAction = item.id
+        }
+        actionHandler.handle(item.id)
     }
 
     private func triggerHaptic(style: UIImpactFeedbackGenerator.FeedbackStyle) {
@@ -984,7 +847,9 @@ extension HomeViewModel {
                 HomeDashboard.MedicalCard(id: .medicalCases, count: 4, latestDate: now.addingTimeInterval(-86_400), symbol: "doc.text.fill"),
                 HomeDashboard.MedicalCard(id: .healthExamReports, count: 2, latestDate: now.addingTimeInterval(-172_800), symbol: "heart.text.square.fill"),
                 HomeDashboard.MedicalCard(id: .medicalReports, count: 6, latestDate: now.addingTimeInterval(-259_200), symbol: "list.clipboard.fill"),
-                HomeDashboard.MedicalCard(id: .medicationPlans, count: 3, latestDate: now.addingTimeInterval(-86_400 * 2), symbol: "calendar.badge.clock")
+                HomeDashboard.MedicalCard(id: .medication, count: 4, latestDate: now.addingTimeInterval(-3_600), symbol: "pills.fill"),
+                HomeDashboard.MedicalCard(id: .medicationPlans, count: 3, latestDate: now.addingTimeInterval(-86_400 * 2), symbol: "calendar.badge.clock"),
+                HomeDashboard.MedicalCard(id: .familyMedicineCabinet, count: 9, latestDate: now.addingTimeInterval(-86_400 * 5), symbol: "cross.case.fill")
             ], completeData: nil)
         )
 

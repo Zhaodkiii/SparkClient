@@ -1,6 +1,5 @@
 import SwiftUI
 
-@available(iOS 26.0, *)
 struct IOS26HomeTaskSummaryView: View {
     let summary: IOS26HomeTaskSummary
     let onOpenTaskCenter: () -> Void

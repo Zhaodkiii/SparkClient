@@ -26,6 +26,7 @@ struct NutritionHomeView: View {
                 pageContent
             }
         }
+
     }
 
     private var pageContent: some View {
@@ -38,6 +39,7 @@ struct NutritionHomeView: View {
             .padding(.vertical, 12)
         }
         .background(Color(uiColor: .systemGroupedBackground))
+        .ignoresSafeArea(.container, edges: .bottom)
         .refreshable {
             await viewModel.reload()
         }

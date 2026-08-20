@@ -65,7 +65,9 @@ struct LoadHomeMedicalOverviewUseCase: Sendable {
             HomeDashboard.MedicalCard(id: .medicalCases, count: 0, latestDate: nil, symbol: "doc.text.fill"),
             HomeDashboard.MedicalCard(id: .healthExamReports, count: 0, latestDate: nil, symbol: "heart.text.square.fill"),
             HomeDashboard.MedicalCard(id: .medicalReports, count: 0, latestDate: nil, symbol: "list.clipboard.fill"),
-            HomeDashboard.MedicalCard(id: .medicationPlans, count: 0, latestDate: nil, symbol: "calendar.badge.clock")
+            HomeDashboard.MedicalCard(id: .medication, count: 0, latestDate: nil, symbol: "pills.fill"),
+            HomeDashboard.MedicalCard(id: .medicationPlans, count: 0, latestDate: nil, symbol: "calendar.badge.clock"),
+            HomeDashboard.MedicalCard(id: .familyMedicineCabinet, count: 0, latestDate: nil, symbol: "cross.case.fill")
         ]
     }
 
@@ -80,6 +82,8 @@ struct LoadHomeMedicalOverviewUseCase: Sendable {
         let healthExamReports = (complete.healthExamReports ?? []).map(\.domainModel)
         let examinationReports = (complete.examinationReports ?? []).map(\.domainModel)
         let medicationPlans = complete.medicationPlans ?? []
+        let medicationRecords = complete.todayMedicationRecords ?? []
+        let medicineBoxes = complete.familyMedicineBoxes ?? complete.medicineBoxes ?? []
 
         return [
             HomeDashboard.MedicalCard(
@@ -101,10 +105,22 @@ struct LoadHomeMedicalOverviewUseCase: Sendable {
                 symbol: "list.clipboard.fill"
             ),
             HomeDashboard.MedicalCard(
+                id: .medication,
+                count: complete.medicationSummary?.todayTotal ?? medicationRecords.count,
+                latestDate: medicationRecords.map(\.updatedAt).max(),
+                symbol: "pills.fill"
+            ),
+            HomeDashboard.MedicalCard(
                 id: .medicationPlans,
                 count: complete.medicationSummary?.activePlanCount ?? medicationPlans.filter { $0.status == "active" }.count,
                 latestDate: medicationPlans.map(\.updatedAt).max(),
                 symbol: "calendar.badge.clock"
+            ),
+            HomeDashboard.MedicalCard(
+                id: .familyMedicineCabinet,
+                count: medicineBoxes.count,
+                latestDate: medicineBoxes.map(\.updatedAt).max(),
+                symbol: "cross.case.fill"
             )
         ]
     }

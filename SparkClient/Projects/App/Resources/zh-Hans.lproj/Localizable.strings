@@ -22,6 +22,7 @@
 "ios26.home.greeting.generic" = "你好";
 "ios26.home.greeting.named" = "你好，%@";
 "ios26.home.current_member" = "当前成员";
+"home.primary_actions.title" = "健康行动";
 "ios26.home.action.start" = "开始";
 "ios26.home.action.interpret" = "解读";
 "ios26.home.action.requires_member" = "创建成员后可用";

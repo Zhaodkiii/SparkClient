@@ -93,6 +93,11 @@ struct IOS26TabBarView: View {
                     Tab(L10n.text("tab.fitness"), systemImage: "figure.run", value: AppRouteStore.RootTab.fitness) {
                         fitnessContainer
                     }
+                } else {
+                    Tab(L10n.text("tab.settings"), systemImage: "gearshape.fill", value: AppRouteStore.RootTab.settings) {
+                        settingsContainer
+                    }
+
                 }
 
                 //            Tab(L10n.text("tab.knowledge"), systemImage: "backpack.fill", value: AppRouteStore.RootTab.knowledge) {
@@ -108,10 +113,7 @@ struct IOS26TabBarView: View {
                 //                IOS26SearchTabView()
                 //            }
 
-                Tab(L10n.text("tab.settings"), systemImage: "gearshape.fill", value: AppRouteStore.RootTab.settings) {
-                    settingsContainer
-                }
-
+            
                 Tab(L10n.text("tab.chat"), systemImage: "bubble.left.and.bubble.right.fill", value: AppRouteStore.RootTab.chat, role: .search) {
                     chatContainer
                 }

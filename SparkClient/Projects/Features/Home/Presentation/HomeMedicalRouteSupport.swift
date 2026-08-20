@@ -9,8 +9,12 @@ extension HomeDashboard.MedicalCard.Kind {
             return .healthExamReports
         case .medicalReports:
             return .examinationReports
+        case .medication:
+            return .medication
         case .medicationPlans:
             return .medicationPlans
+        case .familyMedicineCabinet:
+            return .medication
         }
     }
 }
