@@ -750,6 +750,96 @@ extension ToolHub {
         return nil
     }
 
+    /// 健康数据工具取数前校验结果：`denied` 非 nil 时按无数据处理短路返回；`resolvedMemberID` 为本轮解析出的成员（含选择卡片新选择），需回传给结果绑定会话。
+    struct HealthDataAccessCheck: Sendable {
+        let denied: ToolExecutionResult?
+        let resolvedMemberID: Int?
+    }
+
+    /// 健康数据工具取数前校验：先走通用成员解析拿到成员 ID（未解析到时插入「请求选择成员」卡片，等待用户选择后继续），再经 `HealthDataAccessGate` 检查该成员是否绑定苹果健康设备及授权状态。
+    /// - Returns: 校验通过 `denied == nil`，调用方继续正常取数；否则直接返回 `denied` 结束本次工具调用。
+    func healthDataAccessCheck(
+        invocation: ToolInvocation,
+        context: ToolExecutionContext,
+        toolName: SparkToolName
+    ) async -> HealthDataAccessCheck {
+        var resolvedMemberID = await resolveTargetMemberID(invocation: invocation, context: context)
+        if resolvedMemberID == nil || resolvedMemberID! <= 0 {
+            // 未解析到成员：插入「请求选择成员」卡片，挂起等待用户选择后继续校验。
+            resolvedMemberID = await awaitMemberSelection(
+                invocation: invocation,
+                context: context,
+                reason: invocation.name
+            )
+        }
+
+        guard let memberID = resolvedMemberID, memberID > 0 else {
+            return HealthDataAccessCheck(
+                denied: ToolExecutionResult(
+                    toolName: toolName,
+                    outputText: L10n.text(
+                        "health.tool.error.member_unresolved",
+                        fallback: "当前未选择成员，无法读取健康数据。请先选择成员后再试。"
+                    ),
+                    sensitive: false,
+                    shouldBypassModel: true
+                ),
+                resolvedMemberID: nil
+            )
+        }
+
+        // 用户经卡片新选择的成员与上下文不一致时，后续结果回传 resolvedMemberID 绑定本轮会话。
+        let propagatedMemberID = context.memberID == memberID ? nil : memberID
+
+        func denied(_ outputText: String) -> ToolExecutionResult {
+            ToolExecutionResult(
+                toolName: toolName,
+                outputText: outputText,
+                sensitive: false,
+                shouldBypassModel: true,
+                resolvedMemberID: propagatedMemberID
+            )
+        }
+
+        switch await HealthDataAccessGate.shared.checkAccess(memberId: memberID) {
+        case .granted:
+            return HealthDataAccessCheck(denied: nil, resolvedMemberID: propagatedMemberID)
+        case .noBinding, .memberNotBound:
+            return HealthDataAccessCheck(
+                denied: denied(L10n.format(
+                    "health.tool.error.no_device_binding",
+                    fallback: "未查询到健康数据：当前成员（member_id=%d）尚未绑定苹果健康数据来源。请前往【设置-我的设备】添加并绑定苹果健康后再试。",
+                    memberID
+                )),
+                resolvedMemberID: propagatedMemberID
+            )
+        case .authorizationDenied, .authorizationRevoked, .partialAuthorization:
+            return HealthDataAccessCheck(
+                denied: denied(L10n.text(
+                    "health.tool.error.authorization_denied",
+                    fallback: "未查询到健康数据：苹果健康读取权限未开启或已收回。请前往【设置-我的设备】检查设备绑定，并在系统设置【隐私与安全性-健康】中开启读取权限后重试。"
+                )),
+                resolvedMemberID: propagatedMemberID
+            )
+        case .healthKitUnavailable:
+            return HealthDataAccessCheck(
+                denied: denied(L10n.text(
+                    "health.tool.error.healthkit_unavailable",
+                    fallback: "未查询到健康数据：当前设备不支持苹果健康。"
+                )),
+                resolvedMemberID: propagatedMemberID
+            )
+        case .dataSourceNotAvailable:
+            return HealthDataAccessCheck(
+                denied: denied(L10n.text(
+                    "health.tool.error.source_unavailable",
+                    fallback: "该健康数据来源暂未接入，敬请期待。"
+                )),
+                resolvedMemberID: propagatedMemberID
+            )
+        }
+    }
+
 
     func awaitMemberSelection(
         invocation: ToolInvocation,

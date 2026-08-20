@@ -68,16 +68,12 @@ struct IOS26TabBarView: View {
 
     var body: some View {
         TabView(selection: $routeStore.selectedTab) {
-            Tab(L10n.text("tab.home"), systemImage: "house.fill", value: AppRouteStore.RootTab.home) {
-                homeContainer
-            }
-
-            Tab(L10n.text("tab.chat"), systemImage: "bubble.left.and.bubble.right.fill", value: AppRouteStore.RootTab.chat,role: .search) {
-                chatContainer
-            }
-
-            Tab(L10n.text("tab.health"), systemImage: "heart.fill", value: AppRouteStore.RootTab.health) {
+            Tab(L10n.text("tab.health"), systemImage: "heart.fill", value: AppRouteStore.RootTab.healthHome) {
                 healthContainer
+            }
+
+            Tab(L10n.text("tab.nutrition"), systemImage: "fork.knife", value: AppRouteStore.RootTab.nutrition) {
+                nutritionContainer
             }
 
 //            Tab(L10n.text("tab.knowledge"), systemImage: "backpack.fill", value: AppRouteStore.RootTab.knowledge) {
@@ -94,9 +90,13 @@ struct IOS26TabBarView: View {
 //                IOS26SearchTabView()
 //            }
 
-//            Tab(L10n.text("tab.settings"), systemImage: "gearshape.fill", value: AppRouteStore.RootTab.settings) {
-//                settingsContainer
-//            }
+            Tab(L10n.text("tab.settings"), systemImage: "gearshape.fill", value: AppRouteStore.RootTab.settings) {
+                settingsContainer
+            }
+            
+            Tab(L10n.text("tab.chat"), systemImage: "bubble.left.and.bubble.right.fill", value: AppRouteStore.RootTab.chat,role: .search) {
+                chatContainer
+            }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
         .sheet(isPresented: $showsDeviceAccountUpgradeSheet) {
@@ -121,7 +121,7 @@ struct IOS26TabBarView: View {
     }
 
     private var homeContainer: some View {
-        CompatibleRouteNavigationContainer(path: routePath(.home)) {
+        CompatibleRouteNavigationContainer(path: routePath(.healthHome)) {
             IOS26HomeView(
                 dependencies: homeDependencies,
                 viewModel: homeViewModel,
@@ -164,7 +164,7 @@ struct IOS26TabBarView: View {
     }
 
     private var healthContainer: some View {
-        CompatibleRouteNavigationContainer(path: routePath(.health)) {
+        CompatibleRouteNavigationContainer(path: routePath(.healthHome)) {
             HealthHomeView(
                 dependencies: homeDependencies,
                 viewModel: homeViewModel,
@@ -172,8 +172,21 @@ struct IOS26TabBarView: View {
                 externalMedicalDocumentImportCoordinator: externalMedicalDocumentImportCoordinator,
                 launchIntentCoordinator: launchIntentCoordinator,
                 session: session,
+                taskManager: taskManager,
+                chatListViewModel: chatListViewModel,
+                deepTutorChatViewModel: deepTutorChatViewModel,
+                autoSmallTaskRegistry: autoSmallTaskRegistry,
+                autoSmallTaskIntentStore: chatAutoSmallTaskIntentStore,
                 activeFullScreenCover: $activeHomeFullScreenCover
             )
+        } destination: { route in
+            destinationBuilder.destination(route)
+        }
+    }
+
+    private var nutritionContainer: some View {
+        CompatibleRouteNavigationContainer(path: routePath(.nutrition)) {
+            NutritionHomeView(dependencies: homeDependencies.nutritionDependencies)
         } destination: { route in
             destinationBuilder.destination(route)
         }
@@ -208,6 +221,7 @@ struct IOS26TabBarView: View {
                 aiSettingsViewModel: aiSettingsViewModel,
                 accountManagementViewModel: accountManagementViewModel,
                 versionUpdateCoordinator: versionUpdateCoordinator,
+                memberContextStore: homeDependencies.memberContextStore,
                 session: session,
                 showsDeviceAccountUpgradeSheet: $showsDeviceAccountUpgradeSheet
             )

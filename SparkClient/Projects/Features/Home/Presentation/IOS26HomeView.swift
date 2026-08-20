@@ -71,6 +71,7 @@ private extension IOS26HomeView {
                         aiSettingsViewModel: aiSettingsViewModel,
                         accountManagementViewModel: accountManagementViewModel,
                         versionUpdateCoordinator: versionUpdateCoordinator,
+                        memberContextStore: viewModel.memberContextStoreForBinding,
                         session: session,
                         showsDeviceAccountUpgradeSheet: $showsDeviceAccountUpgradeSheet
                     )

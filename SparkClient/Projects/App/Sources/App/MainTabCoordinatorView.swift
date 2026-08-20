@@ -52,7 +52,7 @@ struct MainTabCoordinatorView: View {
 
     var body: some View {
         TabView(selection: $routeStore.selectedTab) {
-            CompatibleRouteNavigationContainer(path: routePath(.health)) {
+            CompatibleRouteNavigationContainer(path: routePath(.healthHome)) {
                 HealthHomeView(
                     dependencies: homeDependencies,
                     viewModel: homeViewModel,
@@ -60,6 +60,11 @@ struct MainTabCoordinatorView: View {
                     externalMedicalDocumentImportCoordinator: externalMedicalDocumentImportCoordinator,
                     launchIntentCoordinator: launchIntentCoordinator,
                     session: session,
+                    taskManager: taskManager,
+                    chatListViewModel: chatListViewModel,
+                    deepTutorChatViewModel: deepTutorChatViewModel,
+                    autoSmallTaskRegistry: autoSmallTaskRegistry,
+                    autoSmallTaskIntentStore: chatAutoSmallTaskIntentStore,
                     activeFullScreenCover: $activeHomeFullScreenCover
                 )
             } destination: { route in
@@ -68,7 +73,17 @@ struct MainTabCoordinatorView: View {
             .tabItem {
                 Label(L10n.text("tab.health"), systemImage: "heart.fill")
             }
-            .tag(AppRouteStore.RootTab.health)
+            .tag(AppRouteStore.RootTab.healthHome)
+
+            CompatibleRouteNavigationContainer(path: routePath(.nutrition)) {
+                NutritionHomeView(dependencies: homeDependencies.nutritionDependencies)
+            } destination: { route in
+                destinationBuilder.destination(route)
+            }
+            .tabItem {
+                Label(L10n.text("tab.nutrition"), systemImage: "fork.knife")
+            }
+            .tag(AppRouteStore.RootTab.nutrition)
 
             CompatibleRouteNavigationContainer(path: routePath(.chat)) {
                 ChatConversationListPage(
@@ -119,6 +134,7 @@ struct MainTabCoordinatorView: View {
                     aiSettingsViewModel: aiSettingsViewModel,
                     accountManagementViewModel: accountManagementViewModel,
                     versionUpdateCoordinator: versionUpdateCoordinator,
+                    memberContextStore: homeDependencies.memberContextStore,
                     session: session,
                     showsDeviceAccountUpgradeSheet: $showsDeviceAccountUpgradeSheet
                 )

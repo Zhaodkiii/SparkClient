@@ -2,6 +2,16 @@ import Foundation
 
 extension ToolHub {
     func runFetchSleep(invocation: ToolInvocation, context: ToolExecutionContext) async -> ToolExecutionResult {
+        // 取数前校验：成员是否绑定苹果健康设备（未选择成员时先弹选择卡片，等待用户选择后继续）；未绑定/无权限则按无数据处理并引导绑定。
+        let accessCheck = await healthDataAccessCheck(
+            invocation: invocation,
+            context: context,
+            toolName: .fetchSleepDetails
+        )
+        if let denied = accessCheck.denied {
+            return denied
+        }
+
         let range = resolveHealthRange(arguments: invocation.arguments, fallbackDays: 2)
         let startedAt = Date()
         let normalizedToolCallID = context.pendingToolCallID?
@@ -58,6 +68,7 @@ extension ToolHub {
                 outputText: outputText,
                 sensitive: containsUserData,
                 shouldBypassModel: true,
+                resolvedMemberID: accessCheck.resolvedMemberID,
                 sideEffects: sideEffects
             )
         } catch {

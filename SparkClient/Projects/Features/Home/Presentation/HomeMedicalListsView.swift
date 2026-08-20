@@ -97,31 +97,50 @@ struct HomeMedicalListView: View {
                 onMedicalCasesUpdated: onMedicalCasesUpdated
             )
         case .medicationPlans:
-            MedicationExecutionCenterPage(
-                medicationPlans: completeData?.medicationPlans ?? [],
-                medicineBoxes: completeData?.medicineBoxes ?? [],
-                initialRecords: completeData?.todayMedicationRecords ?? [],
-                memberID: completeData?.memberId ?? dependencies.memberContextStore.context.selectedMember?.id,
-                medicalQueryAPI: dependencies.medicalQueryAPI,
-                workflowAPI: dependencies.medicalWorkflowAPI,
-                fileTransferService: dependencies.fileTransferService,
-                notificationClient: dependencies.notificationClient,
-                logger: dependencies.logger,
-                completeData: completeData,
-                memberContextStore: dependencies.memberContextStore,
-                medicalDocumentUploadViewModel: dependencies.medicalDocumentUploadViewModel,
-                aiSettingsViewModel: dependencies.aiSettingsViewModel,
-                homeDependencies: dependencies,
-                initialFocus: initialFocus,
-                onMedicationPlansChanged: onMedicationPlansUpdated,
-                onPrescriptionsChanged: onPrescriptionsUpdated,
-                onMedicineBoxesChanged: onMedicineBoxesUpdated,
-                selectedMemberID: selectedMemberID,
-                onMemberIDSelected: onMemberIDSelected
-            )
+            MedicationsListPage(
+                 completeData: completeData,
+                 workflowAPI: dependencies.medicalWorkflowAPI,
+                 medicalQueryAPI: dependencies.medicalQueryAPI,
+                 fileTransferService: dependencies.fileTransferService,
+                 memberContextStore: dependencies.memberContextStore,
+                 medicalDocumentUploadViewModel: dependencies.medicalDocumentUploadViewModel,
+                 aiSettingsViewModel: dependencies.aiSettingsViewModel,
+                 notificationClient: dependencies.notificationClient,
+                 logger: dependencies.logger,
+                 onMedicationPlansChanged: onMedicationPlansUpdated,
+                 onPrescriptionsChanged: onPrescriptionsUpdated,
+                 onMedicineBoxesChanged: onMedicineBoxesUpdated
+             )
             .onDisappear {
                 onDismiss?()
             }
+            
+            
+//            MedicationExecutionCenterPage(
+//                medicationPlans: completeData?.medicationPlans ?? [],
+//                medicineBoxes: completeData?.medicineBoxes ?? [],
+//                initialRecords: completeData?.todayMedicationRecords ?? [],
+//                memberID: completeData?.memberId ?? dependencies.memberContextStore.context.selectedMember?.id,
+//                medicalQueryAPI: dependencies.medicalQueryAPI,
+//                workflowAPI: dependencies.medicalWorkflowAPI,
+//                fileTransferService: dependencies.fileTransferService,
+//                notificationClient: dependencies.notificationClient,
+//                logger: dependencies.logger,
+//                completeData: completeData,
+//                memberContextStore: dependencies.memberContextStore,
+//                medicalDocumentUploadViewModel: dependencies.medicalDocumentUploadViewModel,
+//                aiSettingsViewModel: dependencies.aiSettingsViewModel,
+//                homeDependencies: dependencies,
+//                initialFocus: initialFocus,
+//                onMedicationPlansChanged: onMedicationPlansUpdated,
+//                onPrescriptionsChanged: onPrescriptionsUpdated,
+//                onMedicineBoxesChanged: onMedicineBoxesUpdated,
+//                selectedMemberID: selectedMemberID,
+//                onMemberIDSelected: onMemberIDSelected
+//            )
+//            .onDisappear {
+//                onDismiss?()
+//            }
         }
     }
 }

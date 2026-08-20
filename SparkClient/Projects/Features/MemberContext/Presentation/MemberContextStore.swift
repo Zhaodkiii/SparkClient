@@ -14,7 +14,7 @@ final class MemberContextStore: ObservableObject {
     /// 选中成员ID持久化工具协议实现，按账号隔离存储
     private let persistence: any SelectedMemberIDPersisting
     /// 当前登录账号ID，用于区分多账号选中记录
-    private var activeAccountID: Int64?
+    private(set) var activeAccountID: Int64?
     /// 成员增删改业务用例，需外部注入配置
     private var manageUseCase: ManageHomeMemberUseCase?
 

@@ -11,6 +11,11 @@ struct HealthHomeView: View {
     @ObservedObject var externalMedicalDocumentImportCoordinator: ExternalMedicalDocumentImportCoordinator
     @ObservedObject var launchIntentCoordinator: LaunchIntentCoordinator
     let session: UserSession
+    @ObservedObject var taskManager: TaskManager
+    @ObservedObject var chatListViewModel: ChatListViewModel
+    @ObservedObject var deepTutorChatViewModel: DeepTutorChatViewModel
+    let autoSmallTaskRegistry: AutoSmallTaskRegistry
+    let autoSmallTaskIntentStore: ChatAutoSmallTaskIntentStore
 
     init(
         dependencies: HomeFeatureDependencies,
@@ -19,6 +24,11 @@ struct HealthHomeView: View {
         externalMedicalDocumentImportCoordinator: ExternalMedicalDocumentImportCoordinator,
         launchIntentCoordinator: LaunchIntentCoordinator,
         session: UserSession,
+        taskManager: TaskManager,
+        chatListViewModel: ChatListViewModel,
+        deepTutorChatViewModel: DeepTutorChatViewModel,
+        autoSmallTaskRegistry: AutoSmallTaskRegistry,
+        autoSmallTaskIntentStore: ChatAutoSmallTaskIntentStore,
         activeFullScreenCover: Binding<HomeFullScreenCover?> = .constant(nil)
     ) {
         self.dependencies = dependencies
@@ -27,6 +37,11 @@ struct HealthHomeView: View {
         self.externalMedicalDocumentImportCoordinator = externalMedicalDocumentImportCoordinator
         self.launchIntentCoordinator = launchIntentCoordinator
         self.session = session
+        self.taskManager = taskManager
+        self.chatListViewModel = chatListViewModel
+        self.deepTutorChatViewModel = deepTutorChatViewModel
+        self.autoSmallTaskRegistry = autoSmallTaskRegistry
+        self.autoSmallTaskIntentStore = autoSmallTaskIntentStore
         self._activeFullScreenCover = activeFullScreenCover
     }
 
@@ -34,10 +49,26 @@ struct HealthHomeView: View {
         dependencies.homeLaunchIntentConsumer
     }
 
+    private var actionHandler: IOS26HomeDashboardActionHandler {
+        IOS26HomeDashboardActionHandler(
+            routeStore: dependencies.routeStore,
+            homeViewModel: viewModel,
+            medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
+            chatListViewModel: chatListViewModel,
+            deepTutorChatViewModel: deepTutorChatViewModel,
+            notificationClient: dependencies.notificationClient,
+            quickStartPreferenceStore: .shared,
+            autoSmallTaskRegistry: autoSmallTaskRegistry,
+            autoSmallTaskIntentStore: autoSmallTaskIntentStore,
+            ownerAccountID: session.accountID
+        )
+    }
+
     @State private var hasLoaded = false
     @State private var memberActionTarget: Member?
     @Binding private var activeFullScreenCover: HomeFullScreenCover?
     @State private var showExternalImportErrorAlert = false
+    @State private var loadingAction: IOS26HomeActionItem.Kind?
 
     var body: some View {
         homeContent
@@ -47,14 +78,20 @@ struct HealthHomeView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
 //                headerCard
+                // 增加 任务
+                if #available(iOS 26.0, *) {
+                    taskSummarySection
+                }
                 if viewModel.shouldShowMedicalSection {
                     medicalInfoSection
                 }
-                if viewModel.shouldShowNutritionSection {
-                    nutritionInfoSection
-                }
                 if viewModel.shouldShowModuleMaintenanceSection {
                     moduleMaintenanceSection
+                }
+
+                // 增加跳转 对话
+                if #available(iOS 26.0, *) {
+                    primaryActions
                 }
             }
             .padding(.horizontal, 16)
@@ -423,6 +460,10 @@ struct HealthHomeView: View {
 //                }
             }
 
+            // 增加 药箱
+            if #available(iOS 26.0, *) {
+                secondaryActions
+            }
             // 读取仪表盘医疗模块卡片数组，无数据则为空数组
             let cards = viewModel.dashboard?.medical.cards ?? []
             // 两列自适应网格布局，懒加载优化性能
@@ -445,13 +486,6 @@ struct HealthHomeView: View {
             // AI健康报告独立入口按钮
             medicalAIReportButton
         }
-    }
-
-    private var nutritionInfoSection: some View {
-        HomeNutritionEntrySection(
-            dependencies: dependencies.nutritionDependencies,
-            memberID: viewModel.selectedMemberID
-        )
     }
 
     // MARK: - 健康模块维护板块组件
@@ -662,6 +696,183 @@ struct HealthHomeView: View {
         }
     }
 
+    // MARK: - iOS 26 首页板块（任务 / 药箱 / 对话入口）
+
+    @available(iOS 26.0, *)
+    private var taskSummary: IOS26HomeTaskSummary {
+        IOS26HomeTaskSummaryBuilder.makeHomeTaskSummary(
+            tasks: taskManager.tasks,
+            lastSyncTime: taskManager.lastSyncTime,
+            isLoading: taskManager.isSyncing,
+            errorMessage: taskManager.lastSyncError
+        )
+    }
+
+    @available(iOS 26.0, *)
+    private var hasMembers: Bool {
+        viewModel.dashboard?.members.isEmpty == false
+    }
+
+    @available(iOS 26.0, *)
+    private var taskSummarySection: some View {
+        IOS26HomeTaskSummaryView(
+            summary: taskSummary,
+            onOpenTaskCenter: openTaskCenter,
+            onOpenTaskItem: { _ in openTaskCenter() },
+            onRetrySync: {
+                Task {
+                    await taskManager.syncIncremental(memberID: viewModel.selectedMemberID)
+                }
+            }
+        )
+        .task {
+            await taskManager.loadInitial(memberID: viewModel.selectedMemberID)
+            await taskManager.syncIncremental(memberID: viewModel.selectedMemberID)
+        }
+        .onChange(of: viewModel.selectedMemberID) { _, memberID in
+            Task {
+                await taskManager.loadInitial(memberID: memberID)
+                await taskManager.syncIncremental(memberID: memberID)
+            }
+        }
+    }
+
+    @available(iOS 26.0, *)
+    private func openTaskCenter() {
+        triggerHaptic(style: .light)
+        viewModel.activeSheet = .taskCenter
+    }
+
+    @available(iOS 26.0, *)
+    private var secondaryActions: some View {
+        HStack(spacing: 14) {
+            compactActionCard(for: medicationItem)
+                .frame(maxWidth: .infinity)
+            compactActionCard(for: familyMedicineCabinetItem)
+                .frame(maxWidth: .infinity)
+        }
+    }
+
+    @available(iOS 26.0, *)
+    private var primaryActions: some View {
+        VStack(spacing: 14) {
+            actionCard(for: checkupPlanItem)
+            actionCard(for: reportInterpretationItem)
+            actionCard(for: reportUploadItem)
+        }
+        .onChange(of: deepTutorChatViewModel.isCreatingConversation) { _, isCreating in
+            if isCreating == false {
+                loadingAction = nil
+            }
+        }
+        .onChange(of: chatListViewModel.isCreatingQuickStartThread) { _, isCreating in
+            if isCreating == false {
+                loadingAction = nil
+            }
+        }
+    }
+
+    @available(iOS 26.0, *)
+    private var checkupPlanItem: IOS26HomeActionItem {
+        IOS26HomeActionItem(
+            id: .checkupPlan,
+            title: L10n.text("ios26.home.action.checkup_plan.title"),
+            subtitle: L10n.text("ios26.home.action.checkup_plan.subtitle"),
+            symbolName: "heart.text.clipboard",
+            prominence: .primary,
+            isEnabled: hasMembers,
+            actionLabel: L10n.text("ios26.home.action.start")
+        )
+    }
+
+    @available(iOS 26.0, *)
+    private var reportInterpretationItem: IOS26HomeActionItem {
+        IOS26HomeActionItem(
+            id: .reportInterpretation,
+            title: L10n.text("ios26.home.action.report_interpretation.title"),
+            subtitle: L10n.text("ios26.home.action.report_interpretation.subtitle"),
+            symbolName: "doc.text.magnifyingglass",
+            prominence: .primary,
+            isEnabled: hasMembers,
+            actionLabel: L10n.text("ios26.home.action.interpret")
+        )
+    }
+
+    @available(iOS 26.0, *)
+    private var medicationItem: IOS26HomeActionItem {
+        IOS26HomeActionItem(
+            id: .medication,
+            title: L10n.text("ios26.home.action.medication.title"),
+            subtitle: L10n.text("ios26.home.action.medication.subtitle"),
+            symbolName: "pills.fill",
+            prominence: .compact,
+            isEnabled: true,
+            actionLabel: nil
+        )
+    }
+
+    @available(iOS 26.0, *)
+    private var reportUploadItem: IOS26HomeActionItem {
+        IOS26HomeActionItem(
+            id: .reportUpload,
+            title: L10n.text("ios26.home.action.report_upload.title", fallback: "上传报告"),
+            subtitle: L10n.text("ios26.home.action.report_upload.subtitle", fallback: "直接进入报告上传与识别页面"),
+            symbolName: "square.and.arrow.up.on.square",
+            prominence: .primary,
+            isEnabled: hasMembers,
+            actionLabel: L10n.text("ios26.home.action.start")
+        )
+    }
+
+    @available(iOS 26.0, *)
+    private var familyMedicineCabinetItem: IOS26HomeActionItem {
+        IOS26HomeActionItem(
+            id: .familyMedicineCabinet,
+            title: L10n.text("ios26.home.action.family_medicine_cabinet.title"),
+            subtitle: L10n.text("ios26.home.action.family_medicine_cabinet.subtitle"),
+            symbolName: "cross.case.fill",
+            prominence: .compact,
+            isEnabled: hasMembers,
+            actionLabel: nil
+        )
+    }
+
+    @available(iOS 26.0, *)
+    private var isCreatingQuickStartConversation: Bool {
+        deepTutorChatViewModel.isCreatingConversation || chatListViewModel.isCreatingQuickStartThread
+    }
+
+    @available(iOS 26.0, *)
+    @ViewBuilder
+    private func actionCard(for item: IOS26HomeActionItem) -> some View {
+        IOS26HomeActionCard(
+            item: item,
+            isLoading: loadingAction == item.id && isCreatingQuickStartConversation,
+            action: {
+                guard item.isEnabled else { return }
+                triggerHaptic(style: .light)
+                if item.id == .checkupPlan || item.id == .reportInterpretation {
+                    loadingAction = item.id
+                }
+                actionHandler.handle(item.id)
+            }
+        )
+    }
+
+    @available(iOS 26.0, *)
+    @ViewBuilder
+    private func compactActionCard(for item: IOS26HomeActionItem) -> some View {
+        IOS26HomeActionCard(
+            item: item,
+            isLoading: false,
+            action: {
+                guard item.isEnabled else { return }
+                triggerHaptic(style: .light)
+                actionHandler.handle(item.id)
+            }
+        )
+    }
+
     private func triggerHaptic(style: UIImpactFeedbackGenerator.FeedbackStyle) {
 #if canImport(UIKit)
         UIImpactFeedbackGenerator(style: style).impactOccurred()
@@ -690,7 +901,15 @@ struct HealthHomeView: View {
                 displayName: "Spark User",
                 signedInAt: .now,
                 signInMethod: .apple
-            )
+            ),
+            taskManager: AppContainer.preview.taskManager,
+            chatListViewModel: AppContainer.preview.chatListViewModel,
+            deepTutorChatViewModel: AppContainer.preview.deepTutorChatViewModel,
+            autoSmallTaskRegistry: AutoSmallTaskRegistry(
+                aiConfigCenter: AppContainer.preview.aiConfigCenter,
+                logger: AppContainer.preview.logger
+            ),
+            autoSmallTaskIntentStore: ChatAutoSmallTaskIntentStore(logger: AppContainer.preview.logger)
         )
     }
     .preferredColorScheme(.light)
@@ -710,7 +929,15 @@ struct HealthHomeView: View {
                 displayName: "Spark User",
                 signedInAt: .now,
                 signInMethod: .apple
-            )
+            ),
+            taskManager: AppContainer.preview.taskManager,
+            chatListViewModel: AppContainer.preview.chatListViewModel,
+            deepTutorChatViewModel: AppContainer.preview.deepTutorChatViewModel,
+            autoSmallTaskRegistry: AutoSmallTaskRegistry(
+                aiConfigCenter: AppContainer.preview.aiConfigCenter,
+                logger: AppContainer.preview.logger
+            ),
+            autoSmallTaskIntentStore: ChatAutoSmallTaskIntentStore(logger: AppContainer.preview.logger)
         )
     }
     .preferredColorScheme(.dark)

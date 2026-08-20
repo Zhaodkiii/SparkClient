@@ -7,6 +7,16 @@ extension ToolHub {
     ) async -> ToolExecutionResult {       // 返回给AI的工具执行结果
         
         // MARK: 1. 解析AI传入的参数
+        // 取数前校验：成员是否绑定苹果健康设备（未选择成员时先弹选择卡片，等待用户选择后继续）；未绑定/无权限则按无数据处理并引导绑定。
+        let accessCheck = await healthDataAccessCheck(
+            invocation: invocation,
+            context: context,
+            toolName: .fetchWorkoutDetails
+        )
+        if let denied = accessCheck.denied {
+            return denied
+        }
+
         // 解析时间范围：今天/本周/本月/自定义时间
         let range = resolveHealthRange(arguments: invocation.arguments)
         // 解析运动类型：running / cycling / swimming 等
@@ -40,6 +50,7 @@ extension ToolHub {
                 outputText: outputText,
                 sensitive: healthOutputContainsUserData(outputText),
                 shouldBypassModel: true,             // 不再回传给大模型，直接展示
+                resolvedMemberID: accessCheck.resolvedMemberID,
                 sideEffects: sideEffects
             )
         } catch {

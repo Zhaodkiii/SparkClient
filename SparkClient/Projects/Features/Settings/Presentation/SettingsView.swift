@@ -5,6 +5,7 @@ struct SettingsView: View {
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     @ObservedObject var accountManagementViewModel: AccountManagementViewModel
     @ObservedObject var versionUpdateCoordinator: AppVersionUpdateCoordinator
+    @ObservedObject var memberContextStore: MemberContextStore
     let session: UserSession
     @Binding var showsDeviceAccountUpgradeSheet: Bool
 
@@ -47,6 +48,20 @@ struct SettingsView: View {
                         Text(L10n.text("settings.general.subtitle"))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            Section(L10n.text("settings.section.device", fallback: "设备")) {
+                MainNavigationLink {
+                    MyDevicesView(memberContextStore: memberContextStore)
+                } label: {
+                    HStack {
+                        Label(
+                            L10n.text("settings.my_devices", fallback: "我的设备"),
+                            systemImage: "wave.3.forward.circle"
+                        )
+                        Spacer()
                     }
                 }
             }

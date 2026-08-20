@@ -560,8 +560,51 @@ struct MemberDetailView: View {
                 ) {
                     openNutritionModuleSummary()
                 }
+                Divider()
+                dataSourceRow()
             }
         }
+    }
+
+    private func dataSourceRow() -> some View {
+        NavigationLink {
+            MyDevicesView(memberContextStore: memberContextStore)
+        } label: {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "wave.3.forward.circle")
+                    .font(.title2)
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundStyle(Color(uiColor: .systemRed))
+                    .frame(width: 32)
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(L10n.text("member.detail.data_source", fallback: "数据来源"))
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Text(deviceBindingStatusText)
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    Text(L10n.text("member.detail.data_source_summary.apple", fallback: "苹果健康"))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.top, 4)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var deviceBindingStatusText: String {
+        guard let accountID = memberContextStore.activeAccountID,
+              !DeviceBindingStorage.shared.loadBindings(accountID: accountID).isEmpty else {
+            return L10n.text("member.detail.data_source_status.unbound", fallback: "未绑定")
+        }
+        return L10n.text("member.detail.data_source_status.bound", fallback: "已绑定")
     }
 
     private func moduleRow(
