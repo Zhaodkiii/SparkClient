@@ -57,12 +57,16 @@ struct ChatMessageBubbleContentView: View {
     let onWeatherConfigCardOpen: (ChatWeatherConfigCardPayload) -> Void
     let savingStructuredHealthCardIDs: Set<UUID>
     let savingNutritionCardIDs: Set<UUID>
+    var guideSendingQuestionIDs: Set<String> = []
+    /// 引导卡片滑块 → 健康首页 destination（CHAT-000025）；nil 时滑块降级为纯展示。
+    var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
     let onStructuredHealthCardAction: (ChatStructuredHealthCardAction) -> Void
     let onStructuredHealthCardOpenPreview: (UUID, ChatStructuredHealthCardItem, ChatMessage) -> Void
     let onNutritionCardAction: (ChatNutritionCardAction) -> Void
     let onCaptureAttachmentsPicked: (ChatCaptureMessageCardPayload, [ChatComposerAttachmentPreview]) -> Void
     let onCaptureCancel: (ChatCaptureMessageCardPayload) -> Void
     let onSmallTaskCardOpen: (ChatSmallTaskMessageCardPayload) -> Void
+    let onGuideQuestionTap: (ChatGuideQuestion) -> Void
     let onPresentToolPreview: (ToolPreviewPrompt, ChatRenderContext) -> Void
     let fileTransferService: FileTransferService
     let medicalQueryAPI: SparkMedicalQueryAPI
@@ -116,6 +120,7 @@ struct ChatMessageBubbleContentView: View {
             savedKnowledgeCardIDs: savedKnowledgeCardIDs,
             savingStructuredHealthCardIDs: savingStructuredHealthCardIDs,
             savingNutritionCardIDs: savingNutritionCardIDs,
+            guideSendingQuestionIDs: guideSendingQuestionIDs,
             memberContextStore: memberContextStore,
             knowledgeDependencies: knowledgeDependencies,
             knowledgeViewModel: knowledgeViewModel,
@@ -144,6 +149,8 @@ struct ChatMessageBubbleContentView: View {
             onCaptureAttachmentsPicked: onCaptureAttachmentsPicked,
             onCaptureCancel: onCaptureCancel,
             onSmallTaskCardOpen: onSmallTaskCardOpen,
+            onGuideQuestionTap: onGuideQuestionTap,
+            guideHomeDestinationBuilder: guideHomeDestinationBuilder,
             onPresentToolPreview: onPresentToolPreview,
             fileTransferService: fileTransferService,
             medicalQueryAPI: medicalQueryAPI,
@@ -592,7 +599,7 @@ private enum ChatMessageTimelineProjector {
 
     nonisolated private static func isToolPresentationBlock(_ kind: ChatMessageBlockKind) -> Bool {
         switch kind {
-        case .tool, .text, .deepThought, .error, .assistantStatusCard:
+        case .tool, .text, .deepThought, .error, .assistantStatusCard, .chatGuideCard:
             return false
         case .imageGallery,
                 .fileAttachments,

@@ -10,6 +10,9 @@ struct ChatConversationListPage: View {
     @ObservedObject var homeViewModel: HomeViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     let pushAdapter: PushAdapter
+    /// 引导卡片滑块 → 健康首页 destination（CHAT-000025）。
+    /// 由 App 宿主注入；nil（旧宿主 / 未注入）时滑块降级为纯展示面板。
+    var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
 
     @State private var searchText = ""
     @State private var pendingThreadNavigation: UUID?
@@ -147,7 +150,8 @@ struct ChatConversationListPage: View {
                     knowledgeViewModel: knowledgeViewModel,
                     taskManager: taskManager,
                     homeViewModel: homeViewModel,
-                    aiSettingsViewModel: aiSettingsViewModel
+                    aiSettingsViewModel: aiSettingsViewModel,
+                    guideHomeDestinationBuilder: guideHomeDestinationBuilder
                 )
                 .hidesMainTabBarWhenPushed()
             }
@@ -195,7 +199,8 @@ struct ChatConversationListPage: View {
                 knowledgeViewModel: knowledgeViewModel,
                 taskManager: taskManager,
                 homeViewModel: homeViewModel,
-                aiSettingsViewModel: aiSettingsViewModel
+                aiSettingsViewModel: aiSettingsViewModel,
+                guideHomeDestinationBuilder: guideHomeDestinationBuilder
             )
         } label: {
             HStack(alignment: .center, spacing: 10) {

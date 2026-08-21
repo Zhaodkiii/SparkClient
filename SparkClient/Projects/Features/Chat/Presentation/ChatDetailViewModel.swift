@@ -46,6 +46,8 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
     @Published private(set) var savingStructuredHealthCardIDs: Set<UUID> = []
     /// 营养卡片写入 Apple 健康中（用于按钮 Progress）。
     @Published private(set) var savingNutritionCardIDs: Set<UUID> = []
+    /// 引导卡片问题发送中（用于问题按钮置灰防重入）。
+    @Published private(set) var sendingGuideQuestionIDs: Set<String> = []
 
     /// 对话场景可选模型行（远程场景 + 本地/智能体模型），供 Hanlin 输入栏展示。
     @Published private(set) var chatScenarioModels: [AIScenarioRemoteModelRow] = []
@@ -684,6 +686,26 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         }
     }
 
+    /// 引导卡片科普问题点击：程序化发送完整 prompt，绕过输入框草稿（不覆盖/清空用户已输入内容）。
+    /// 防重入：同一问题发送中忽略重复点击；已有生成任务进行中时忽略。
+    func sendGuideQuestion(_ question: ChatGuideQuestion, in threadID: UUID) {
+        guard stateStore.selectedThreadID == threadID else { return }
+        guard sendingGuideQuestionIDs.contains(question.id) == false else { return }
+        guard currentGenerationTask == nil else { return }
+
+        sendingGuideQuestionIDs.insert(question.id)
+        currentGenerationTask = Task { [weak self] in
+            await self?.sendGuideQuestionPrompt(question)
+        }
+    }
+
+    private func sendGuideQuestionPrompt(_ question: ChatGuideQuestion) async {
+        defer {
+            sendingGuideQuestionIDs.remove(question.id)
+        }
+        await sendCurrentDraft(programmaticInput: question.prompt)
+    }
+
     func startSmallTask(_ task: SmallTask, sendsOriginalImagesToAI: Bool = false) {
         guard currentGenerationTask == nil else { return }
         currentGenerationTask = Task { [weak self] in
@@ -717,33 +739,40 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
     /// 发送当前编辑框的草稿消息（主入口函数）
     func sendCurrentDraft(
         smallTask: SmallTask? = nil,
-        sendsOriginalImagesToAI: Bool = false
+        sendsOriginalImagesToAI: Bool = false,
+        programmaticInput: String? = nil
     ) async {
         // 防止重复发送：如果正在发送中，直接返回
         guard stateStore.isSending == false else { return }
         // 必须选中对话线程，否则无法发送
         guard let threadID = stateStore.selectedThreadID else { return }
 
+        // 程序化发送（引导卡片问题）：不消费草稿附件/健康资料引用，不校验草稿内容
+        let isProgrammatic = programmaticInput?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+
         // 获取当前编辑框的草稿内容
         let composer = stateStore.composerDraft(for: threadID)
-        let pendingHealthRefs = composer.pendingHealthResourceRefs
+        let pendingHealthRefs = isProgrammatic ? [] : composer.pendingHealthResourceRefs
         // 必须有内容 或 有任务，才允许发送
-        guard composer.hasVisualContent || smallTask != nil else { return }
+        guard isProgrammatic || composer.hasVisualContent || smallTask != nil else { return }
         // 附件还在准备中，阻塞发送
-        guard stateStore.hasBlockingPreparedAttachmentWork(for: threadID) == false else { return }
+        guard isProgrammatic || stateStore.hasBlockingPreparedAttachmentWork(for: threadID) == false else { return }
 
-        do {
-            try HealthResourceSendValidator.validate(
-                refs: pendingHealthRefs,
-                threadMemberID: stateStore.selectedThread?.memberID
-            )
-        } catch {
-            notificationClient.info(error.localizedDescription, title: nil, source: "chat.ask_report.send")
-            return
+        if isProgrammatic == false {
+            do {
+                try HealthResourceSendValidator.validate(
+                    refs: pendingHealthRefs,
+                    threadMemberID: stateStore.selectedThread?.memberID
+                )
+            } catch {
+                notificationClient.info(error.localizedDescription, title: nil, source: "chat.ask_report.send")
+                return
+            }
         }
 
         // 清理文本首尾空白换行
-        let draft = composer.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let draft = (isProgrammatic ? programmaticInput : composer.text)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         // 获取发送时的功能开关（工具、联网、知识库、推理等）
         let flags = composer.runtimeFlags
         // 构造AI推理选项
@@ -803,9 +832,9 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
             let snapshot = try await sendMessageUseCase.execute(
                 threadID: threadID,
                 memberID: memberContextStore.context.selectedMemberID,
-                userInput: composer.text,
-                composerAttachments: composer.attachments,
-                preparedAttachments: stateStore.preparedAttachments(for: threadID),
+                userInput: isProgrammatic ? (programmaticInput ?? "") : composer.text,
+                composerAttachments: isProgrammatic ? [] : composer.attachments,
+                preparedAttachments: isProgrammatic ? [] : stateStore.preparedAttachments(for: threadID),
                 healthResourceRefs: pendingHealthRefs,
                 selectedChatModelName: flags.selectedChatModelName,
                 assistantClientMessageID: streamingMessageID,
@@ -832,8 +861,10 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
                         if let listItem {
                             stateStore.upsertThreadListItem(listItem)
                         }
-                        // 清空发送成功的草稿
-                        stateStore.clearDraft(for: localSnapshot.thread.id)
+                        // 清空发送成功的草稿（程序化发送不触碰用户草稿）
+                        if isProgrammatic == false {
+                            stateStore.clearDraft(for: localSnapshot.thread.id)
+                        }
                     }
                 },
                 
@@ -851,8 +882,10 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
             let finalMessages = await loadChatMessagesUseCase.execute(threadID: snapshot.thread.id)
             stateStore.setMessages(finalMessages, for: snapshot.thread.id)
             maybeGenerateConversationTitle(threadID: snapshot.thread.id, isRegenerate: false)
-            // 清空已发送的文本/附件
-            stateStore.clearComposerTextAndAttachments(for: snapshot.thread.id)
+            // 清空已发送的文本/附件（程序化发送不触碰用户草稿）
+            if isProgrammatic == false {
+                stateStore.clearComposerTextAndAttachments(for: snapshot.thread.id)
+            }
             stateStore.setError(nil, for: snapshot.thread.id)
             
             // 日志：发送成功

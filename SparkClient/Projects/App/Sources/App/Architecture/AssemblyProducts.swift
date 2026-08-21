@@ -579,7 +579,15 @@ extension ChatAssembly {
             chatQueryService: chatQueryService,
             loadChatThreadsUseCase: LoadChatThreadsUseCase(queryService: chatQueryService),
             loadChatMessagesUseCase: LoadChatMessagesUseCase(queryService: chatQueryService),
-            createThreadUseCase: CreateThreadUseCase(repository: chatRepository, aiConfigCenter: ai.aiConfigCenter),
+            createThreadUseCase: CreateThreadUseCase(
+                repository: chatRepository,
+                aiConfigCenter: ai.aiConfigCenter,
+                guideCardBuilder: ChatGuideCardPayloadBuilder(
+                    medicalReader: HealthResourceRepository(medicalQueryAPI: backend.medicalQuery),
+                    logger: logger
+                ),
+                logger: logger
+            ),
             retryFailedMessageUseCase: RetryFailedMessageUseCase(
                 repository: chatRepository,
                 logger: logger

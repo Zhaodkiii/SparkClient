@@ -18,8 +18,8 @@ struct IOS26HomeView: View {
     @ObservedObject var chatListViewModel: ChatListViewModel
     @ObservedObject var deepTutorChatViewModel: DeepTutorChatViewModel
 
-    /// 首页内可左右切换的分页（参考 MyHome.Tab）。
-    enum HomeSection: CaseIterable, Identifiable {
+    /// 首页内可左右切换的分页（参考 MyHome.Tab）。rawValue 用于本地持久化。
+    enum HomeSection: String, CaseIterable, Identifiable {
         case dashboard
         case nutrition
         case fitness
@@ -149,6 +149,12 @@ private extension IOS26HomeView {
             sectionHeader(size: size)
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
+        .onAppear {
+            syncSectionSwipeOffset(size: size)
+        }
+        .onChange(of: size.width) { _, _ in
+            syncSectionSwipeOffset(size: size)
+        }
 
         // 用户快速滑动时提前解除点击态，恢复滑动跟踪（参考 MyHome.InteractionManager）
         .simultaneousGesture(
@@ -183,6 +189,11 @@ private extension IOS26HomeView {
 
     func indexOf(section: HomeSection) -> Int {
         HomeSection.allCases.firstIndex { $0 == section } ?? 0
+    }
+
+    func syncSectionSwipeOffset(size: CGSize) {
+        guard size.width > 0 else { return }
+        sectionSwipeOffset = -(size.width) * CGFloat(indexOf(section: currentSection))
     }
 
     var contentWithLifecycle: some View {

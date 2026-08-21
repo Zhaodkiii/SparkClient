@@ -51,6 +51,8 @@ struct ConversationMessageListRepresentable: UIViewControllerRepresentable {
     var isLoadingMoreMessages: Bool
     var lockBottomViewport: Bool
     var scrollToBottomRequestGeneration: UInt64
+    /// 引导卡片滑块 → 健康首页 destination（CHAT-000025）；nil 时滑块降级为纯展示。
+    var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
 
     let onCommand: (ConversationListCommand) -> Void
     let refreshHandler: any ConversationMessageListRefreshHandling
@@ -117,5 +119,6 @@ struct ConversationMessageListRepresentable: UIViewControllerRepresentable {
         vc.logger = logger
         vc.actionState = actionStateHandle.state
         vc.conversationAppearance = conversationAppearance
+        vc.guideHomeDestinationBuilder = guideHomeDestinationBuilder
     }
 }

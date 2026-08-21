@@ -59,6 +59,8 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
     var logger: Logger?
     var actionState: ChatMessageActionState?
     var conversationAppearance: ChatConversationAppearancePreferences = .default
+    /// 引导卡片滑块 → 健康首页 destination（CHAT-000025）；nil 时滑块降级为纯展示。
+    var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
     
     // MARK: - 回调
     var onCommand: ((ConversationListCommand) -> Void)?
@@ -572,6 +574,7 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
                     conversationAppearance: conversationAppearance,
                     taskManager: taskManager,
                     logger: logger,
+                    guideHomeDestinationBuilder: guideHomeDestinationBuilder,
                     onHeightChangingUpdate: { [weak self] update in
                         self?.performHeightChangingUpdate(affectedItemID: msg.clientMessageID, update)
                     }

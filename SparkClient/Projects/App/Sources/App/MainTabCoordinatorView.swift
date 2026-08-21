@@ -33,10 +33,10 @@ struct MainTabCoordinatorView: View {
     @Binding var activeHomeFullScreenCover: HomeFullScreenCover?
 
     @ObservedObject private var homeStylePreferenceStore = HomeStylePreferenceStore.shared
+    @ObservedObject private var homeSectionPreferenceStore = HomeSectionPreferenceStore.shared
     @State private var showsDeviceAccountUpgradeSheet = false
     @State private var showsChatNoModelAlert = false
     @State private var showsChatAPIKeysSettingsSheet = false
-    @State private var ios26HomeSectionIndex = 0
     @State private var homeSafeAreaRefreshRevision = 0
 
     private var destinationBuilder: MainTabRouteDestinationBuilder {
@@ -54,7 +54,8 @@ struct MainTabCoordinatorView: View {
             chatAutoSmallTaskCoordinator: chatAutoSmallTaskCoordinator,
             deepTutorChatViewModel: deepTutorChatViewModel,
             accountManagementViewModel: accountManagementViewModel,
-            aiSettingsViewModel: aiSettingsViewModel
+            aiSettingsViewModel: aiSettingsViewModel,
+            guideHomeDestinationBuilder: guideHomeDestinationBuilder
         )
     }
 
@@ -75,6 +76,35 @@ struct MainTabCoordinatorView: View {
 
     private var usesDashboardHomeStyle: Bool {
         homeStylePreferenceStore.style == .dashboard
+    }
+
+    /// 引导卡片滑块 → 模块首页 destination（CHAT-000025）：
+    /// 按类别直接 push 对应模块独立页面（运动/饮食/经典健康首页），不切主 Tab。
+    private var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder {
+        { category in
+            AnyView(
+                ChatGuideHomeDestinationView(
+                    category: category,
+                    dependencies: homeDependencies,
+                    homeViewModel: homeViewModel,
+                    taskManager: taskManager,
+                    medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
+                    externalMedicalDocumentImportCoordinator: externalMedicalDocumentImportCoordinator,
+                    launchIntentCoordinator: launchIntentCoordinator,
+                    session: session,
+                    chatListViewModel: chatListViewModel,
+                    deepTutorChatViewModel: deepTutorChatViewModel,
+                    autoSmallTaskRegistry: autoSmallTaskRegistry,
+                    autoSmallTaskIntentStore: chatAutoSmallTaskIntentStore,
+                    activeFullScreenCover: $activeHomeFullScreenCover,
+                    settingsViewModel: settingsViewModel,
+                    aiSettingsViewModel: aiSettingsViewModel,
+                    accountManagementViewModel: accountManagementViewModel,
+                    versionUpdateCoordinator: versionUpdateCoordinator,
+                    upgradeLoginViewModel: upgradeLoginViewModel
+                )
+            )
+        }
     }
 
     private var visibleTabs: Set<AppRouteStore.RootTab> {
@@ -180,7 +210,7 @@ struct MainTabCoordinatorView: View {
             actionHandler: actionHandler,
             chatListViewModel: chatListViewModel,
             deepTutorChatViewModel: deepTutorChatViewModel,
-            currentSection: ios26HomeSectionBinding,
+            currentSection: $homeSectionPreferenceStore.section,
             safeAreaRefreshRevision: homeSafeAreaRefreshRevision,
             activeFullScreenCover: $activeHomeFullScreenCover
         )
@@ -204,21 +234,6 @@ struct MainTabCoordinatorView: View {
         )
     }
 
-    private var ios26HomeSectionBinding: Binding<IOS26HomeView.HomeSection> {
-        Binding(
-            get: {
-                let sections = IOS26HomeView.HomeSection.allCases
-                guard sections.indices.contains(ios26HomeSectionIndex) else {
-                    return .dashboard
-                }
-                return sections[ios26HomeSectionIndex]
-            },
-            set: { section in
-                ios26HomeSectionIndex = IOS26HomeView.HomeSection.allCases.firstIndex(of: section) ?? 0
-            }
-        )
-    }
-
     private var chatTab: some View {
         ChatConversationListPage(
             stateStore: chatStateStore,
@@ -229,7 +244,8 @@ struct MainTabCoordinatorView: View {
             taskManager: taskManager,
             homeViewModel: homeViewModel,
             aiSettingsViewModel: aiSettingsViewModel,
-            pushAdapter: pushAdapter
+            pushAdapter: pushAdapter,
+            guideHomeDestinationBuilder: guideHomeDestinationBuilder
         )
         .tabItem {
             Label(L10n.text("tab.chat"), systemImage: "bubble.left.and.bubble.right.fill")
@@ -316,9 +332,9 @@ struct MainTabCoordinatorView: View {
 
     @ToolbarContentBuilder
     private var healthHomeTrailingToolbar: some ToolbarContent {
-        if usesDashboardHomeStyle, ios26HomeSectionIndex == 1 {
+        if usesDashboardHomeStyle, homeSectionPreferenceStore.section == .nutrition {
             nutritionToolbarItems
-        } else if usesDashboardHomeStyle, ios26HomeSectionIndex == 2 {
+        } else if usesDashboardHomeStyle, homeSectionPreferenceStore.section == .fitness {
             ToolbarItem(placement: .topBarTrailing) {
                 EmptyView()
             }

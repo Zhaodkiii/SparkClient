@@ -32,8 +32,7 @@ struct IOS26TabBarView: View {
     @Binding var activeHomeFullScreenCover: HomeFullScreenCover?
 
     @ObservedObject private var homeStylePreferenceStore = HomeStylePreferenceStore.shared
-
-    @State private var homeSection = IOS26HomeView.HomeSection.dashboard
+    @ObservedObject private var homeSectionPreferenceStore = HomeSectionPreferenceStore.shared
 
     @State private var showsDeviceAccountUpgradeSheet = false
     @State private var showsChatNoModelAlert = false
@@ -56,7 +55,8 @@ struct IOS26TabBarView: View {
             chatAutoSmallTaskCoordinator: chatAutoSmallTaskCoordinator,
             deepTutorChatViewModel: deepTutorChatViewModel,
             accountManagementViewModel: accountManagementViewModel,
-            aiSettingsViewModel: aiSettingsViewModel
+            aiSettingsViewModel: aiSettingsViewModel,
+            guideHomeDestinationBuilder: guideHomeDestinationBuilder
         )
     }
 
@@ -73,6 +73,35 @@ struct IOS26TabBarView: View {
             autoSmallTaskIntentStore: chatAutoSmallTaskIntentStore,
             ownerAccountID: session.accountID
         )
+    }
+
+    /// 引导卡片滑块 → 模块首页 destination（CHAT-000025）：
+    /// 按类别直接 push 对应模块独立页面（运动/饮食/经典健康首页），不切主 Tab。
+    private var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder {
+        { category in
+            AnyView(
+                ChatGuideHomeDestinationView(
+                    category: category,
+                    dependencies: homeDependencies,
+                    homeViewModel: homeViewModel,
+                    taskManager: taskManager,
+                    medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
+                    externalMedicalDocumentImportCoordinator: externalMedicalDocumentImportCoordinator,
+                    launchIntentCoordinator: launchIntentCoordinator,
+                    session: session,
+                    chatListViewModel: chatListViewModel,
+                    deepTutorChatViewModel: deepTutorChatViewModel,
+                    autoSmallTaskRegistry: autoSmallTaskRegistry,
+                    autoSmallTaskIntentStore: chatAutoSmallTaskIntentStore,
+                    activeFullScreenCover: $activeHomeFullScreenCover,
+                    settingsViewModel: settingsViewModel,
+                    aiSettingsViewModel: aiSettingsViewModel,
+                    accountManagementViewModel: accountManagementViewModel,
+                    versionUpdateCoordinator: versionUpdateCoordinator,
+                    upgradeLoginViewModel: upgradeLoginViewModel
+                )
+            )
+        }
     }
 
     var body: some View {
@@ -304,7 +333,7 @@ struct IOS26TabBarView: View {
 
     @ToolbarContentBuilder
     private var healthHomeTrailingToolbar: some ToolbarContent {
-        switch homeSection {
+        switch homeSectionPreferenceStore.section {
         case .dashboard:
             ToolbarItem(placement: .topBarTrailing) {
                 MainNavigationLink {
@@ -427,7 +456,7 @@ struct IOS26TabBarView: View {
             actionHandler: homeDashboardActionHandler,
             chatListViewModel: chatListViewModel,
             deepTutorChatViewModel: deepTutorChatViewModel,
-            currentSection: $homeSection,
+            currentSection: $homeSectionPreferenceStore.section,
             safeAreaRefreshRevision: homeSafeAreaRefreshRevision,
             activeFullScreenCover: $activeHomeFullScreenCover
         )
@@ -449,7 +478,8 @@ struct IOS26TabBarView: View {
                 taskManager: taskManager,
                 homeViewModel: homeViewModel,
                 aiSettingsViewModel: aiSettingsViewModel,
-                pushAdapter: pushAdapter
+                pushAdapter: pushAdapter,
+                guideHomeDestinationBuilder: guideHomeDestinationBuilder
             )
         } destination: { route in
             destinationBuilder.destination(route)

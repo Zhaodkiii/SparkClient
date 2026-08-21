@@ -212,6 +212,47 @@
 "task.notification.status.missing_time" = "缺少提醒時間";
 "task.notification.status.past" = "提醒時間已過，本次不會補發";
 
+/* 對話引導卡片（新會話首條系統訊息） */
+"chat.guide.card.accessibility.label" = "健康對話引導卡片";
+"chat.guide.carousel.empty.title" = "暫無健康資料";
+"chat.guide.section.state.unauthorized" = "未授權健康資料";
+"chat.guide.section.state.empty" = "暫無資料";
+"chat.guide.section.state.failed" = "資料載入失敗";
+"chat.guide.section.state.unavailable" = "健康資料不可用";
+"chat.guide.section.movement.title" = "運動資料";
+"chat.guide.section.movement.subtitle.today" = "今日";
+"chat.guide.section.movement.subtitle" = "今日 · 最近更新 %@";
+"chat.guide.section.body.title" = "身材管理";
+"chat.guide.section.body.subtitle" = "最近 90 天";
+"chat.guide.section.body.subtitle.with_date" = "最近記錄 %@";
+"chat.guide.section.nutrition.title" = "飲食營養";
+"chat.guide.section.nutrition.subtitle" = "今日";
+"chat.guide.section.nutrition.subtitle.with_goal" = "今日 · 目標 %@ 千卡";
+"chat.guide.section.medical.title" = "醫療資料";
+"chat.guide.section.medical.subtitle" = "當前成員 · 已同步";
+"chat.guide.section.medical.subtitle.with_date" = "當前成員 · 最近更新 %@";
+"chat.guide.item.steps" = "步數";
+"chat.guide.unit.steps" = "步";
+"chat.guide.item.calories" = "熱量消耗";
+"chat.guide.unit.kcal" = "千卡";
+"chat.guide.item.weight" = "體重";
+"chat.guide.item.body_fat" = "體脂率";
+"chat.guide.item.nutrition.eaten" = "已食用";
+"chat.guide.item.nutrition.remaining" = "剩餘";
+"chat.guide.item.nutrition.burned" = "已消耗";
+"chat.guide.item.medical.cases" = "病歷";
+"chat.guide.item.medical.exams" = "體檢";
+"chat.guide.item.medical.reports" = "檢查報告";
+"chat.guide.item.medical.medication_plans" = "服藥計畫";
+"chat.guide.unit.records" = "份";
+"chat.guide.unit.medication_plans" = "個進行中";
+"chat.guide.action.bind_health" = "去綁定";
+"chat.guide.action.open_medical" = "查看醫療資料";
+"chat.guide.question.accessibility.hint" = "發送該健康科普問題";
+"chat.guide.question.tcm_medicine_precautions.title" = "使用中成藥有哪些注意事項?";
+"chat.guide.question.astragalus_suitable_groups.title" = "黃芪適合哪些人群服用?";
+"chat.guide.question.lactose_intolerance_handling.title" = "乳糖不耐如何處理?";
+
 "api_error.msg.access_denied" = "您的帳號因違規行為已觸犯用戶協議，已被系統永久禁止登入。如有疑問請聯繫客服處理。";
 "api_error.reason.account_banned" = "您的帳號因違規行為已觸犯用戶協議，已被系統永久禁止登入。如有疑問請聯繫客服處理。";
 "api_error.code.40371" = "您的帳號因違規行為已觸犯用戶協議，已被系統永久禁止登入。如有疑問請聯繫客服處理。";

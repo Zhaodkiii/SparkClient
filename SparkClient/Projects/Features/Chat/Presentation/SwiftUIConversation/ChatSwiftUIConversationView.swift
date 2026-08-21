@@ -44,6 +44,8 @@ struct ChatSwiftUIConversationView: View {
     let isLoadingMoreMessages: Bool
     let lockBottomViewport: Bool
     let scrollToBottomRequestGeneration: UInt64
+    /// 引导卡片滑块 → 健康首页 destination（CHAT-000025）；nil 时滑块降级为纯展示。
+    var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
 
     @StateObject private var refreshCoordinator: ConversationMessageListRefreshCoordinator
     @StateObject private var streamBuffer = ChatSwiftUIStreamEventBuffer()
@@ -76,7 +78,8 @@ struct ChatSwiftUIConversationView: View {
         hasMoreMessages: Bool,
         isLoadingMoreMessages: Bool,
         lockBottomViewport: Bool,
-        scrollToBottomRequestGeneration: UInt64
+        scrollToBottomRequestGeneration: UInt64,
+        guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
     ) {
         self.threadID = threadID
         self.stateStore = stateStore
@@ -98,6 +101,7 @@ struct ChatSwiftUIConversationView: View {
         self.isLoadingMoreMessages = isLoadingMoreMessages
         self.lockBottomViewport = lockBottomViewport
         self.scrollToBottomRequestGeneration = scrollToBottomRequestGeneration
+        self.guideHomeDestinationBuilder = guideHomeDestinationBuilder
         _refreshCoordinator = StateObject(
             wrappedValue: ConversationMessageListRefreshCoordinator(
                 threadID: threadID,
@@ -147,6 +151,7 @@ struct ChatSwiftUIConversationView: View {
                             conversationAppearance: conversationAppearance,
                             taskManager: taskManager,
                             logger: logger,
+                            guideHomeDestinationBuilder: guideHomeDestinationBuilder,
                             onHeightChangingUpdate: { update in
                                 update()
                             }
@@ -335,6 +340,7 @@ private struct ChatSwiftUIConversationMessageRow: View {
     let conversationAppearance: ChatConversationAppearancePreferences
     let taskManager: TaskManager
     let logger: Logger
+    var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
     let onHeightChangingUpdate: (@escaping () -> Void) -> Void
 
     var body: some View {
@@ -355,6 +361,7 @@ private struct ChatSwiftUIConversationMessageRow: View {
             conversationAppearance: conversationAppearance,
             taskManager: taskManager,
             logger: logger,
+            guideHomeDestinationBuilder: guideHomeDestinationBuilder,
             onHeightChangingUpdate: onHeightChangingUpdate
         )
         .transaction { transaction in

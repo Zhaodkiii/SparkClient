@@ -23,6 +23,8 @@ struct ChatConversationMessageRow: View {
     let conversationAppearance: ChatConversationAppearancePreferences
     let taskManager: TaskManager
     let logger: Logger
+    /// 引导卡片滑块 → 健康首页 destination（CHAT-000025）；nil 时滑块降级为纯展示。
+    var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
     let onHeightChangingUpdate: (@escaping () -> Void) -> Void
 
     private var messageActionUseCase: any ChatMessageActionUseCase {
@@ -223,6 +225,7 @@ struct ChatConversationMessageRow: View {
             onCaptureAttachmentsPicked: { _, _ in },
             onCaptureCancel: { _ in },
             onSmallTaskCardOpen: { _ in },
+            onGuideQuestionTap: { _ in },
             onPresentToolPreview: { _, _ in },
             fileTransferService: detailViewModel.attachmentFileTransferService,
             medicalQueryAPI: detailViewModel.sparkMedicalQueryAPI,
@@ -413,6 +416,8 @@ struct ChatConversationMessageRow: View {
             },
             savingStructuredHealthCardIDs: detailViewModel.savingStructuredHealthCardIDs,
             savingNutritionCardIDs: detailViewModel.savingNutritionCardIDs,
+            guideSendingQuestionIDs: detailViewModel.sendingGuideQuestionIDs,
+            guideHomeDestinationBuilder: guideHomeDestinationBuilder,
             onStructuredHealthCardAction: handleStructuredHealthCardAction,
             onStructuredHealthCardOpenPreview: openStructuredHealthCardPreview,
             onNutritionCardAction: handleNutritionCardAction,
@@ -437,6 +442,9 @@ struct ChatConversationMessageRow: View {
             },
             onSmallTaskCardOpen: { payload in
                 navigationCoordinator.activeSmallTaskPayload = payload
+            },
+            onGuideQuestionTap: { question in
+                detailViewModel.sendGuideQuestion(question, in: threadID)
             },
             onPresentToolPreview: { prompt, renderContext in
                 detailViewModel.presentToolDetailPreview(prompt: prompt, renderContext: renderContext)

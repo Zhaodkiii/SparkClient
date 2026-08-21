@@ -1637,18 +1637,24 @@ actor CoreDataChatStore {
         }
     }
 
-    /// 远端消息覆盖本地时，保留本地独有的健康资料引用 block。
+    /// 远端消息覆盖本地时，保留本地独有的健康资料引用 / 医疗免责声明 / 系统引导卡片 block。
+    /// 引导卡片属于本地优先的系统展示块，远端回包可能暂不携带，避免卡片一闪而过。
     private static func mergeBlocksPreservingLocalHealthResources(
         local: [ChatMessageBlock],
         remote: [ChatMessageBlock]
     ) -> [ChatMessageBlock] {
+        func isLocallyPreservedKind(_ block: ChatMessageBlock) -> Bool {
+            block.kind == .healthResourceReference
+                || block.kind == .medicalDisclaimerCard
+                || block.kind == .chatGuideCard
+        }
         let remotePreservedIDs = Set(
             remote
-                .filter { $0.kind == .healthResourceReference || $0.kind == .medicalDisclaimerCard }
+                .filter { isLocallyPreservedKind($0) }
                 .map(\.id)
         )
         let preserved = local.filter { block in
-            (block.kind == .healthResourceReference || block.kind == .medicalDisclaimerCard)
+            isLocallyPreservedKind(block)
                 && remotePreservedIDs.contains(block.id) == false
         }
         guard preserved.isEmpty == false else { return remote }

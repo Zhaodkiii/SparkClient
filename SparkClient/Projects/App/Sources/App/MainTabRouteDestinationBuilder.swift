@@ -17,6 +17,8 @@ struct MainTabRouteDestinationBuilder {
     let deepTutorChatViewModel: DeepTutorChatViewModel
     let accountManagementViewModel: AccountManagementViewModel
     let aiSettingsViewModel: AISettingsViewModel
+    /// 引导卡片滑块 → 健康首页 destination（CHAT-000025）；nil 时滑块降级为纯展示。
+    var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
 
     @ViewBuilder
     func destination(_ route: AppRoute) -> some View {
@@ -32,7 +34,8 @@ struct MainTabRouteDestinationBuilder {
                 taskManager: taskManager,
                 homeViewModel: homeViewModel,
                 aiSettingsViewModel: aiSettingsViewModel,
-                autoSmallTaskCoordinator: chatAutoSmallTaskCoordinator
+                autoSmallTaskCoordinator: chatAutoSmallTaskCoordinator,
+                guideHomeDestinationBuilder: guideHomeDestinationBuilder
             )
             .task(id: threadID) {
                 await chatListViewModel.selectAndPrepare(threadID: threadID)

@@ -78,7 +78,7 @@ final class AppRouteStore: ObservableObject {
     @Published private(set) var routeStacks: [RootTab: [AppRoute]] = [:]
 
     static var defaultRootTab: RootTab {
-        .healthHome
+        .chat
     }
 
     func routes(for tab: RootTab) -> [AppRoute] {

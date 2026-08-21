@@ -21,7 +21,9 @@ struct ChatView: View {
     @ObservedObject var homeViewModel: HomeViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     let autoSmallTaskCoordinator: ChatAutoSmallTaskCoordinator?
-    
+    /// 引导卡片滑块 → 健康首页 destination（CHAT-000025）；nil 时滑块降级为纯展示。
+    var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
+
     @State private var hasLoaded = false
     @StateObject private var uiStateStore = ChatMessageUIStateStore()
     @StateObject private var messageNavigationCoordinator = ChatMessageNavigationCoordinator()
@@ -80,7 +82,8 @@ struct ChatView: View {
         taskManager: TaskManager,
         homeViewModel: HomeViewModel,
         aiSettingsViewModel: AISettingsViewModel,
-        autoSmallTaskCoordinator: ChatAutoSmallTaskCoordinator? = nil
+        autoSmallTaskCoordinator: ChatAutoSmallTaskCoordinator? = nil,
+        guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
     ) {
         self.threadID = threadID
         self.stateStore = stateStore
@@ -92,6 +95,7 @@ struct ChatView: View {
         self.homeViewModel = homeViewModel
         self.aiSettingsViewModel = aiSettingsViewModel
         self.autoSmallTaskCoordinator = autoSmallTaskCoordinator
+        self.guideHomeDestinationBuilder = guideHomeDestinationBuilder
         self.stateStore.setComposerStartupPreferences(aiSettingsViewModel.snapshot.chatComposerStartupPreferences)
     }
     
@@ -578,7 +582,8 @@ struct ChatView: View {
                 hasMoreMessages: hasMoreMessages,
                 isLoadingMoreMessages: isLoadingMoreMessages,
                 lockBottomViewport: stateStore.isBottomViewportLocked(for: threadID),
-                scrollToBottomRequestGeneration: stateStore.scrollToBottomRequestGeneration(for: threadID)
+                scrollToBottomRequestGeneration: stateStore.scrollToBottomRequestGeneration(for: threadID),
+                guideHomeDestinationBuilder: guideHomeDestinationBuilder
             )
         case .swiftUI:
             ChatSwiftUIConversationView(
@@ -601,7 +606,8 @@ struct ChatView: View {
                 hasMoreMessages: hasMoreMessages,
                 isLoadingMoreMessages: isLoadingMoreMessages,
                 lockBottomViewport: stateStore.isBottomViewportLocked(for: threadID),
-                scrollToBottomRequestGeneration: stateStore.scrollToBottomRequestGeneration(for: threadID)
+                scrollToBottomRequestGeneration: stateStore.scrollToBottomRequestGeneration(for: threadID),
+                guideHomeDestinationBuilder: guideHomeDestinationBuilder
             )
         }
     }
@@ -1001,6 +1007,7 @@ private struct ChatConversationMessageListContainer: View {
     let isLoadingMoreMessages: Bool
     let lockBottomViewport: Bool
     let scrollToBottomRequestGeneration: UInt64
+    var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
 
     @StateObject private var refreshCoordinator: ConversationMessageListRefreshCoordinator
 
@@ -1023,7 +1030,8 @@ private struct ChatConversationMessageListContainer: View {
         hasMoreMessages: Bool,
         isLoadingMoreMessages: Bool,
         lockBottomViewport: Bool,
-        scrollToBottomRequestGeneration: UInt64
+        scrollToBottomRequestGeneration: UInt64,
+        guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
     ) {
         self.threadID = threadID
         self.stateStore = stateStore
@@ -1044,6 +1052,7 @@ private struct ChatConversationMessageListContainer: View {
         self.isLoadingMoreMessages = isLoadingMoreMessages
         self.lockBottomViewport = lockBottomViewport
         self.scrollToBottomRequestGeneration = scrollToBottomRequestGeneration
+        self.guideHomeDestinationBuilder = guideHomeDestinationBuilder
         _refreshCoordinator = StateObject(
             wrappedValue: ConversationMessageListRefreshCoordinator(
                 threadID: threadID,
@@ -1073,6 +1082,7 @@ private struct ChatConversationMessageListContainer: View {
             isLoadingMoreMessages: isLoadingMoreMessages,
             lockBottomViewport: lockBottomViewport,
             scrollToBottomRequestGeneration: scrollToBottomRequestGeneration,
+            guideHomeDestinationBuilder: guideHomeDestinationBuilder,
             onCommand: { command in
                 switch command {
                 case .loadMore:

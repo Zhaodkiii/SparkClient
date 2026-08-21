@@ -16,6 +16,14 @@ struct SparkHealthToolError: Error, LocalizedError {
     var errorDescription: String? { message }
 }
 
+/// 身材管理轻量摘要（最近一次体重 / BMI / 体脂率），供对话引导卡片使用。
+nonisolated struct SparkBodyManagementSummary: Equatable, Sendable {
+    var weightKg: Double?
+    var bmi: Double?
+    var bodyFatPercentage: Double?
+    var latestSampleDate: Date?
+}
+
 /// HealthKit-backed health data tool used by AI tool calls.
 final class SparkHealthTool: @unchecked Sendable {
     static let shared = SparkHealthTool()
@@ -155,6 +163,68 @@ final class SparkHealthTool: @unchecked Sendable {
             )
         }
         return ChatHealthEnergyModel(dateRangeText: Self.dateRangeText(startDate, endDate), days: days)
+    }
+
+    /// 身材管理轻量摘要：最近一次体重 / BMI / 体脂率（引导卡片专用，不生成报告文本）。
+    /// HealthKit 不可用 / 未授权 / 无数据时返回 nil，由调用方决定空态展示。
+    func fetchBodyManagementSummary(days: Int = 90) async -> SparkBodyManagementSummary? {
+        guard HKHealthStore.isHealthDataAvailable() else { return nil }
+        guard
+            let bodyMassType = HKQuantityType.quantityType(forIdentifier: .bodyMass),
+            let bmiType = HKQuantityType.quantityType(forIdentifier: .bodyMassIndex),
+            let bodyFatType = HKQuantityType.quantityType(forIdentifier: .bodyFatPercentage)
+        else {
+            return nil
+        }
+
+        do {
+            try await requestAuthorization()
+            let calendar = Calendar.current
+            let now = Date()
+            let startDate = calendar.date(byAdding: .day, value: -max(1, days), to: now) ?? now
+
+            async let weight = latestQuantitySample(type: bodyMassType, unit: .gramUnit(with: .kilo), start: startDate, end: now)
+            async let bmi = latestQuantitySample(type: bmiType, unit: .count(), start: startDate, end: now)
+            async let bodyFat = latestQuantitySample(type: bodyFatType, unit: .percent(), start: startDate, end: now)
+            let (weightSample, bmiSample, bodyFatSample) = try await (weight, bmi, bodyFat)
+
+            guard weightSample != nil || bmiSample != nil || bodyFatSample != nil else { return nil }
+            return SparkBodyManagementSummary(
+                weightKg: weightSample?.value,
+                bmi: bmiSample?.value,
+                bodyFatPercentage: bodyFatSample?.value,
+                latestSampleDate: [weightSample?.date, bmiSample?.date, bodyFatSample?.date]
+                    .compactMap(\.self)
+                    .max()
+            )
+        } catch {
+            logger.error("身材管理摘要读取失败: \(error.localizedDescription)", module: .aiConfig)
+            return nil
+        }
+    }
+
+    private func latestQuantitySample(
+        type: HKQuantityType,
+        unit: HKUnit,
+        start: Date,
+        end: Date
+    ) async throws -> (value: Double, date: Date)? {
+        let predicate = HKQuery.predicateForSamples(withStart: start, end: end)
+        return try await withCheckedThrowingContinuation { continuation in
+            let sortDescriptor = NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)
+            let query = HKSampleQuery(sampleType: type, predicate: predicate, limit: 1, sortDescriptors: [sortDescriptor]) { _, samples, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                guard let sample = (samples as? [HKQuantitySample])?.first else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+                continuation.resume(returning: (sample.quantity.doubleValue(for: unit), sample.endDate))
+            }
+            healthStore.execute(query)
+        }
     }
 
     func fetchNutritionDetails(from startDate: Date, to endDate: Date) async -> String {
@@ -783,6 +853,15 @@ final class SparkHealthTool: @unchecked Sendable {
         }
         if let wristTemperature = HKObjectType.quantityType(forIdentifier: .appleSleepingWristTemperature) {
             readTypes.insert(wristTemperature)
+        }
+        if let bodyMass = HKObjectType.quantityType(forIdentifier: .bodyMass) {
+            readTypes.insert(bodyMass)
+        }
+        if let bodyMassIndex = HKObjectType.quantityType(forIdentifier: .bodyMassIndex) {
+            readTypes.insert(bodyMassIndex)
+        }
+        if let bodyFatPercentage = HKObjectType.quantityType(forIdentifier: .bodyFatPercentage) {
+            readTypes.insert(bodyFatPercentage)
         }
         try await requestAuthorization(readTypes: readTypes, writeTypes: [])
     }

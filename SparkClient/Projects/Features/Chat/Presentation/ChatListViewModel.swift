@@ -124,7 +124,7 @@ final class ChatListViewModel: ObservableObject {
     func createThread() async {
         let title = L10n.text("chat.default_thread_title")
         let thread = await createThreadUseCase.execute(
-            memberID: nil,
+            memberID: memberContextStore.context.selectedMemberID,
             title: title
         )
         await reloadThreads(selectFirstIfNeeded: false)
@@ -145,7 +145,7 @@ final class ChatListViewModel: ObservableObject {
         defer { isCreatingQuickStartThread = false }
 
         let thread = await createThreadUseCase.execute(
-            memberID: nil,
+            memberID: memberContextStore.context.selectedMemberID,
             title: mode.title
         )
         await reloadThreads(selectFirstIfNeeded: false)

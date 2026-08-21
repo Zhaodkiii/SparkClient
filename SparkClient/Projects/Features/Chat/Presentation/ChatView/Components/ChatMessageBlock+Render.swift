@@ -283,6 +283,15 @@ extension ChatMessageBlock {
                 ChatMedicalDisclaimerCardView(payload: payload)
             }
 
+            // 20. 新会话首条系统引导卡片（健康数据滑块 + 科普问题）
+        case .chatGuideCard(let payload):
+            ChatGuideMessageCardView(
+                payload: payload,
+                onQuestionTap: context.onGuideQuestionTap,
+                sendingQuestionIDs: context.guideSendingQuestionIDs,
+                homeDestinationBuilder: context.guideHomeDestinationBuilder
+            )
+
         }
         }
     }
@@ -377,6 +386,8 @@ extension ChatMessageBlock {
             return "正在准备天气配置卡片..."
         case .searchSummary:
             return "正在整理联网搜索参考..."
+        case .chatGuideCard:
+            return "正在准备健康引导卡片..."
         default:
             return "正在整理结果..."
         }

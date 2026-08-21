@@ -1,5 +1,10 @@
 import SwiftUI
 
+/// 引导卡片滑块 → 健康首页 destination 构造器（CHAT-000025）。
+/// 由 App 宿主注入：把滑块类别变成消息内 NavigationLink 的 destination；
+/// payload 模型与 Chat 业务层不感知首页依赖细节。
+typealias ChatGuideHomeDestinationBuilder = (ChatGuideMetricCategory) -> AnyView
+
 /// 聊天消息渲染上下文
 /// 承载渲染消息块所需的所有数据、状态、回调，统一传递给各个 UI 组件
 struct ChatRenderContext {
@@ -17,6 +22,7 @@ struct ChatRenderContext {
     let savedKnowledgeCardIDs: Set<UUID>                   // 已保存的知识库卡片 ID
     let savingStructuredHealthCardIDs: Set<UUID>           // 正在保存的结构化健康卡片 ID
     let savingNutritionCardIDs: Set<UUID>                  // 正在写入 Apple 健康的营养卡片 ID
+    let guideSendingQuestionIDs: Set<String>               // 引导卡片发送中的问题 ID（按钮置灰）
     
     // MARK: - 全局依赖
     let memberContextStore: MemberContextStore             // 成员上下文数据仓库
@@ -51,6 +57,11 @@ struct ChatRenderContext {
     let onCaptureAttachmentsPicked: (ChatCaptureMessageCardPayload, [ChatComposerAttachmentPreview]) -> Void
     let onCaptureCancel: (ChatCaptureMessageCardPayload) -> Void
     let onSmallTaskCardOpen: (ChatSmallTaskMessageCardPayload) -> Void
+    /// 引导卡片科普问题点击（上抛给 ViewModel 走当前会话发送链路）。
+    let onGuideQuestionTap: (ChatGuideQuestion) -> Void
+    /// 引导卡片滑块点击 → 健康首页 destination（CHAT-000025）。
+    /// nil（宿主未注入 / 旧宿主）时滑块降级为纯展示面板，不影响问题点击。
+    var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
     /// 展示工具详情全局 Sheet（由消息行注入，传入预览载荷与当前渲染上下文）。
     let onPresentToolPreview: (ToolPreviewPrompt, ChatRenderContext) -> Void
 
@@ -83,6 +94,7 @@ extension ChatRenderContext {
             savedKnowledgeCardIDs: savedKnowledgeCardIDs,
             savingStructuredHealthCardIDs: savingStructuredHealthCardIDs,
             savingNutritionCardIDs: savingNutritionCardIDs,
+            guideSendingQuestionIDs: guideSendingQuestionIDs,
             memberContextStore: memberContextStore,
             knowledgeDependencies: knowledgeDependencies,
             knowledgeViewModel: knowledgeViewModel,
@@ -111,6 +123,8 @@ extension ChatRenderContext {
             onCaptureAttachmentsPicked: onCaptureAttachmentsPicked,
             onCaptureCancel: onCaptureCancel,
             onSmallTaskCardOpen: onSmallTaskCardOpen,
+            onGuideQuestionTap: onGuideQuestionTap,
+            guideHomeDestinationBuilder: guideHomeDestinationBuilder,
             onPresentToolPreview: onPresentToolPreview,
             fileTransferService: fileTransferService,
             medicalQueryAPI: medicalQueryAPI,
