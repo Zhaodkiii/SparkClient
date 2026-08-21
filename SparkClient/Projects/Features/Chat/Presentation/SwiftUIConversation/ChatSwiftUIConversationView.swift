@@ -51,6 +51,10 @@ struct ChatSwiftUIConversationView: View {
     @StateObject private var scrollPolicy = ChatSwiftUIScrollAnchorPolicy()
     @State private var layoutGeneration: UInt64 = 0
     @State private var measuredContentHeight: CGFloat = 0
+    /// 当前 SwiftUI 列表已经完成首次初始化的 thread。
+    /// SwiftUI 的 `onAppear` 不只代表首次进入会话（子页面 pop 返回也会触发），
+    /// 用它区分「首次打开/切换会话」与「同 thread 导航返回」，后者不得重置滚动策略。
+    @State private var initializedThreadID: UUID?
 
     init(
         threadID: UUID,
@@ -174,13 +178,22 @@ struct ChatSwiftUIConversationView: View {
                     .onChanged { _ in scrollPolicy.markUserInteraction() }
             )
             .onAppear {
-                apply(input: input, reset: true)
+                // 导航返回（同 thread pop 回来）不等于首次打开会话：
+                // 只有尚未为当前 thread 完成初始化时才重置，避免返回后
+                // 把历史 scrollToBottomRequestGeneration 当作新请求再次触底。
+                let isThreadInitialAppearance = initializedThreadID != threadID
+                apply(input: input, reset: isThreadInitialAppearance, openReason: .firstOpen)
+                if isThreadInitialAppearance {
+                    initializedThreadID = threadID
+                }
             }
             .onChange(of: input) { _, newValue in
                 apply(input: newValue, reset: false)
             }
-            .onChange(of: threadID) { _, _ in
-                apply(input: input, reset: true)
+            .onChange(of: threadID) { _, newThreadID in
+                // 会话切换需要完整重置；这是 thread 边界而非导航返回，仍允许初始触底。
+                apply(input: input, reset: true, openReason: .threadChanged)
+                initializedThreadID = newThreadID
             }
             .onPreferenceChange(ChatSwiftUIContentHeightPreferenceKey.self) { height in
                 guard abs(height - measuredContentHeight) > 0.5 else { return }
@@ -237,10 +250,13 @@ struct ChatSwiftUIConversationView: View {
         }
     }
 
-    private func apply(input: ChatSwiftUIConversationInput, reset: Bool) {
+    private func apply(
+        input: ChatSwiftUIConversationInput,
+        reset: Bool,
+        openReason: ChatSwiftUIScrollOpenReason = .firstOpen
+    ) {
         if reset {
             streamBuffer.reset()
-            scrollPolicy.reset()
             frameScheduler.reset()
         }
 
@@ -254,6 +270,15 @@ struct ChatSwiftUIConversationView: View {
             scrollToBottomRequestGeneration: input.scrollToBottomRequestGeneration,
             streamingStates: streamingStates
         )
+        if reset {
+            // 滚动策略必须以即将提交的 frame 为基线重置，否则历史
+            // scrollToBottomRequestGeneration / 内容版本会被当作新变化重复消费。
+            scrollPolicy.reset(
+                to: nextFrame,
+                layoutGeneration: layoutGeneration,
+                reason: openReason
+            )
+        }
         let priority = reset
             ? ChatSwiftUIFramePriority.immediate
             : ChatSwiftUIConversationFrameBuilder.priority(

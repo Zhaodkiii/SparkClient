@@ -37,6 +37,7 @@ struct MainTabCoordinatorView: View {
     @State private var showsChatNoModelAlert = false
     @State private var showsChatAPIKeysSettingsSheet = false
     @State private var ios26HomeSectionIndex = 0
+    @State private var homeSafeAreaRefreshRevision = 0
 
     private var destinationBuilder: MainTabRouteDestinationBuilder {
         MainTabRouteDestinationBuilder(
@@ -94,7 +95,7 @@ struct MainTabCoordinatorView: View {
                 }
                 settingsTab
             }
-            .navigationBarTitleDisplayMode(tabTitleDisplayMode)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar { tabToolbar }
         } destination: { route in
             destinationBuilder.destination(route)
@@ -138,6 +139,10 @@ struct MainTabCoordinatorView: View {
         .onChange(of: routeStore.selectedTab) { _ in
             ensureSelectedTabIsVisible()
         }
+        .onChange(of: routeStore.routes(for: .healthHome).isEmpty) { isEmpty in
+            guard isEmpty else { return }
+            homeSafeAreaRefreshRevision += 1
+        }
         .onAppear {
             ensureSelectedTabIsVisible()
             launchIntentCoordinator.updateReadiness { $0.mainTabReady = true }
@@ -176,8 +181,10 @@ struct MainTabCoordinatorView: View {
             chatListViewModel: chatListViewModel,
             deepTutorChatViewModel: deepTutorChatViewModel,
             currentSection: ios26HomeSectionBinding,
+            safeAreaRefreshRevision: homeSafeAreaRefreshRevision,
             activeFullScreenCover: $activeHomeFullScreenCover
         )
+        
     }
 
     private var classicHomeContainer: some View {
@@ -268,9 +275,7 @@ struct MainTabCoordinatorView: View {
         .tag(AppRouteStore.RootTab.settings)
     }
 
-    private var tabTitleDisplayMode: NavigationBarItem.TitleDisplayMode {
-        .inline
-    }
+
 
     @ToolbarContentBuilder
     private var tabToolbar: some ToolbarContent {

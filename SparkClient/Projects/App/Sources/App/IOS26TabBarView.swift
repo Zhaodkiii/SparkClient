@@ -39,6 +39,7 @@ struct IOS26TabBarView: View {
     @State private var showsChatNoModelAlert = false
     @State private var showsChatAPIKeysSettingsSheet = false
     @State private var pendingKnowledgeDetailDocumentID: UUID?
+    @State private var homeSafeAreaRefreshRevision = 0
 
     private var destinationBuilder: MainTabRouteDestinationBuilder {
         MainTabRouteDestinationBuilder(
@@ -187,6 +188,10 @@ struct IOS26TabBarView: View {
                routeStore.selectedTab == .nutrition || routeStore.selectedTab == .fitness {
                 routeStore.selectedTab = .healthHome
             }
+        }
+        .onChange(of: routeStore.routes(for: .healthHome).isEmpty) { wasEmpty, isEmpty in
+            guard wasEmpty == false, isEmpty else { return }
+            homeSafeAreaRefreshRevision += 1
         }
     }
 
@@ -423,6 +428,7 @@ struct IOS26TabBarView: View {
             chatListViewModel: chatListViewModel,
             deepTutorChatViewModel: deepTutorChatViewModel,
             currentSection: $homeSection,
+            safeAreaRefreshRevision: homeSafeAreaRefreshRevision,
             activeFullScreenCover: $activeHomeFullScreenCover
         )
         // The system TabView owns the bottom safe area. Apply the policy at the

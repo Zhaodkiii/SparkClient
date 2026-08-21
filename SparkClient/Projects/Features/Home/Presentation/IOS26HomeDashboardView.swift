@@ -79,6 +79,7 @@ struct IOS26HomeDashboardView: View {
             .padding(.top, 16)
             .padding(.bottom, 32)
         }
+        .ignoresSafeArea()
         .background(Color(uiColor: .systemGroupedBackground))
         .onChange(of: deepTutorChatViewModel.isCreatingConversation) { _, isCreating in
             if isCreating == false {

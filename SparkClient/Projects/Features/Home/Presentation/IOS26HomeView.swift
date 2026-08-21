@@ -41,6 +41,7 @@ struct IOS26HomeView: View {
 
     @State private var hasLoaded = false
     @Binding var currentSection: HomeSection
+    let safeAreaRefreshRevision: Int
     /// 标记切换来自点击分段头，屏蔽滑动偏移回调与切换动画的相互干扰（参考 MyHome.isTapped）。
     @State private var isSectionTapped = false
     /// 当前分页滑动偏移，驱动分段指示器实时跟随（参考 MyHome.offset）。
@@ -79,10 +80,7 @@ private extension IOS26HomeView {
     var contentWithPresentation: some View {
         GeometryReader { proxy in
             let size = proxy.size
-            VStack(spacing: 0) {
-                sectionHeader(size: size)
-                sectionPager(size: size)
-            }
+            sectionPager(size: size)
         }
     }
 
@@ -145,7 +143,13 @@ private extension IOS26HomeView {
             .tag(HomeSection.fitness)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .ignoresSafeArea( edges: .bottom)
+        .id(safeAreaRefreshRevision)
+        .safeAreaInset(edge: .top) {
+            sectionHeader(size: size)
+        }
         .tabViewStyle(.page(indexDisplayMode: .never))
+
         // 用户快速滑动时提前解除点击态，恢复滑动跟踪（参考 MyHome.InteractionManager）
         .simultaneousGesture(
             DragGesture().onChanged { _ in
@@ -183,6 +187,7 @@ private extension IOS26HomeView {
 
     var contentWithLifecycle: some View {
         contentWithPresentation
+            .ignoresSafeArea(.all, edges: .bottom)
             .onAppear {
                 launchIntentConsumer.setHomeHostReady(true)
                 syncLaunchIntentHostState()
