@@ -40,6 +40,14 @@ struct IOS26TabBarView: View {
     @State private var pendingKnowledgeDetailDocumentID: UUID?
     @State private var homeSafeAreaRefreshRevision = 0
 
+    /// 当前布局下实际渲染的根 Tab 集合：classic 含饮食/运动独立 Tab，dashboard 含设置 Tab。
+    private var visibleTabs: Set<AppRouteStore.RootTab> {
+        if homeStylePreferenceStore.style == .classic {
+            return [.healthHome, .chat, .nutrition, .fitness]
+        }
+        return [.healthHome, .chat, .settings]
+    }
+
     private var destinationBuilder: MainTabRouteDestinationBuilder {
         MainTabRouteDestinationBuilder(
             session: session,
@@ -206,17 +214,16 @@ struct IOS26TabBarView: View {
             }
         }
         .onAppear {
+            // 持久化恢复的 tab 在当前布局不可见时兜底（IOS26-TABBAR-000007）
+            routeStore.ensureSelectedTabIsVisible(visibleTabs: visibleTabs)
             launchIntentCoordinator.updateReadiness { $0.mainTabReady = true }
         }
         .onDisappear {
             launchIntentCoordinator.updateReadiness { $0.mainTabReady = false }
         }
-        .onChange(of: homeStylePreferenceStore.style) { _, newStyle in
-            // 新款首页隐藏饮食/运动独立 Tab 后，避免选中态停留在已消失的 Tab 上
-            if newStyle == .dashboard,
-               routeStore.selectedTab == .nutrition || routeStore.selectedTab == .fitness {
-                routeStore.selectedTab = .healthHome
-            }
+        .onChange(of: homeStylePreferenceStore.style) { _, _ in
+            // 样式切换导致当前 Tab 不可见时立即兜底，并同步持久化值
+            routeStore.ensureSelectedTabIsVisible(visibleTabs: visibleTabs)
         }
         .onChange(of: routeStore.routes(for: .healthHome).isEmpty) { wasEmpty, isEmpty in
             guard wasEmpty == false, isEmpty else { return }

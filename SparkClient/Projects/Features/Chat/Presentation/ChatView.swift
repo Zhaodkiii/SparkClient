@@ -11,7 +11,14 @@ struct ChatView: View {
         case imageDeliveryMode
     }
     
+    /// 初始进入该 ChatView 时的 threadID；运行时当前会话请使用 currentThreadID（CHAT-000030）。
     let threadID: UUID
+    /// CHAT-000030：详情页内部当前会话 ID（右上角新建对话后原地切换，不经过导航栈）。
+    @State private var activeThreadID: UUID
+    /// CHAT-000030：右上角新建对话防重入标记。
+    @State private var isCreatingThreadInDetail = false
+    /// CHAT-000030：详情页内部新建对话失败提示文案（nil 表示无错误）。
+    @State private var detailThreadCreationError: String?
     @ObservedObject var stateStore: ChatStateStore
     @ObservedObject var listViewModel: ChatListViewModel
     @ObservedObject var detailViewModel: ChatDetailViewModel
@@ -47,25 +54,32 @@ struct ChatView: View {
     )
     @State private var sendsOriginalImagesToAITemporarily = false
     
-    private var reasoningRefreshId: String {
-        let name = stateStore.composerDraft(for: threadID).runtimeFlags.selectedChatModelName ?? "-"
-        return "\(threadID.uuidString)|\(name)"
+    /// CHAT-000030：详情页运行时唯一业务 thread 来源（右上角新建后原地切换）。
+    private var currentThreadID: UUID {
+        activeThreadID
     }
-    
+
+    private var reasoningRefreshId: String {
+        let name = stateStore.composerDraft(for: currentThreadID).runtimeFlags.selectedChatModelName ?? "-"
+        return "\(currentThreadID.uuidString)|\(name)"
+    }
+
     private var composerStyle: ChatComposerStyle {
         ChatComposerStyle(rawValue: composerStyleRaw) ?? .hanlin
     }
-    
+
+    /// CHAT-000030：消息列表必须按 currentThreadID 读取，不能跟随全局 selectedMessages，
+    /// 避免局部 activeThreadID 与全局 selectedThreadID 短暂不同步时显示错线程消息。
     private var visibleMessages: [ChatMessage] {
-        stateStore.selectedMessages.filter { uiStateStore.isDeleted($0.id) == false }
+        stateStore.conversationListItems(for: currentThreadID).filter { uiStateStore.isDeleted($0.id) == false }
     }
-    
+
     private var hasMoreMessages: Bool {
-        stateStore.hasMoreMessages(for: threadID)
+        stateStore.hasMoreMessages(for: currentThreadID)
     }
-    
+
     private var isLoadingMoreMessages: Bool {
-        stateStore.isLoadingMoreMessages(for: threadID)
+        stateStore.isLoadingMoreMessages(for: currentThreadID)
     }
     
     var body: some View {
@@ -86,6 +100,7 @@ struct ChatView: View {
         guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
     ) {
         self.threadID = threadID
+        _activeThreadID = State(initialValue: threadID)
         self.stateStore = stateStore
         self.listViewModel = listViewModel
         self.detailViewModel = detailViewModel
@@ -108,7 +123,7 @@ struct ChatView: View {
         switch composerStyle {
         case .signal:
             ChatComposerView(
-                threadID: threadID,
+                threadID: currentThreadID,
                 stateStore: stateStore,
                 onSend: {
                     sendCurrentDraftIfChatModelAvailable()
@@ -118,10 +133,10 @@ struct ChatView: View {
                     detailViewModel.cancelCurrentGeneration()
                 },
                 onAttachmentsPicked: { attachments in
-                    detailViewModel.enqueueComposerAttachments(attachments, for: threadID)
+                    detailViewModel.enqueueComposerAttachments(attachments, for: currentThreadID)
                 },
                 onRemoveAttachment: { attachmentID in
-                    detailViewModel.removeComposerAttachment(id: attachmentID, for: threadID)
+                    detailViewModel.removeComposerAttachment(id: attachmentID, for: currentThreadID)
                 },
                 smallTasks: composerAssociatedSmallTasks,
                 onSmallTaskTapped: { task in
@@ -134,7 +149,7 @@ struct ChatView: View {
             )
         case .hanlin:
             HanlinChatComposerView(
-                threadID: threadID,
+                threadID: currentThreadID,
                 modelReasoning: detailViewModel.reasoningToolbarContext,
                 stateStore: stateStore,
                 memberContextStore: homeViewModel.memberContextStoreForBinding,
@@ -161,22 +176,22 @@ struct ChatView: View {
                     )
                 },
                 onAttachmentsPicked: { attachments in
-                    detailViewModel.enqueueComposerAttachments(attachments, for: threadID)
+                    detailViewModel.enqueueComposerAttachments(attachments, for: currentThreadID)
                 },
                 onRemoveAttachment: { attachmentID in
-                    detailViewModel.removeComposerAttachment(id: attachmentID, for: threadID)
+                    detailViewModel.removeComposerAttachment(id: attachmentID, for: currentThreadID)
                 },
                 onSetMemberBinding: { memberID in
-                    Task { await detailViewModel.updateThreadMemberBinding(memberID, for: threadID) }
+                    Task { await detailViewModel.updateThreadMemberBinding(memberID, for: currentThreadID) }
                 },
                 onMaxHealthRefsReached: {
                     detailViewModel.notifyAskReportMaxRefsReached()
                 },
                 onPresentAskReportPicker: {
-                    detailViewModel.presentAskReportPicker(for: threadID, memberID: stateStore.selectedThread?.memberID)
+                    detailViewModel.presentAskReportPicker(for: currentThreadID, memberID: stateStore.selectedThread?.memberID)
                 },
                 onPersistSelectedChatModel: { modelName in
-                    Task { await detailViewModel.updateThreadModel(modelName, for: threadID) }
+                    Task { await detailViewModel.updateThreadModel(modelName, for: currentThreadID) }
                 }
             )
         }
@@ -186,6 +201,11 @@ struct ChatView: View {
     // MARK: - 编辑器相关计算属性
     /// 获取当前编辑器选中的模型行（优先级：草稿选中 > 会话当前模型 > 默认模型 > 第一个模型）
     private var selectedComposerModelRow: AIScenarioRemoteModelRow? {
+        selectedComposerModelRow(for: currentThreadID)
+    }
+
+    /// CHAT-000030：按 threadID 解析选中模型行（详情页内部切换 thread 后不得沿用旧 thread 的草稿/模型）。
+    private func selectedComposerModelRow(for threadID: UUID) -> AIScenarioRemoteModelRow? {
         // 1. 优先取编辑器草稿中记录的选中模型名称（去空格）
         let selectedName = stateStore.composerDraft(for: threadID).runtimeFlags.selectedChatModelName?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -197,7 +217,7 @@ struct ChatView: View {
         }
         
         // 3. 未选中则取当前会话绑定的模型名称匹配
-        if let threadModel = stateStore.selectedThread?.currentModelName?
+        if let threadModel = stateStore.threadItems.first(where: { $0.id == threadID })?.thread.currentModelName?
             .trimmingCharacters(in: .whitespacesAndNewlines),
            threadModel.isEmpty == false,
            let row = detailViewModel.chatScenarioModels.first(where: { $0.name == threadModel }) {
@@ -331,7 +351,22 @@ struct ChatView: View {
                 
             }
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
+                // CHAT-000030：新建对话按钮与设置菜单合并到同一 ToolbarItemGroup，
+                // 避免 .topBarTrailing / .navigationBarTrailing 混用在部分 iOS 版本排列不稳定。
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    // CHAT-000030：详情页右上角新建对话（当前详情内部切换 thread，不跳转）。
+                    Button {
+                        Task { await createThreadInsideCurrentChat() }
+                    } label: {
+                        if isCreatingThreadInDetail {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "plus.bubble")
+                        }
+                    }
+                    .disabled(isCreatingThreadInDetail || stateStore.isSending)
+                    .accessibilityLabel(L10n.text("chat.thread.new", fallback: "新建对话"))
+
                     Menu {
                         Menu(L10n.text("chat.settings.menu"), systemImage: "slider.horizontal.3") {
                             Button {
@@ -379,7 +414,7 @@ struct ChatView: View {
                                 Label(L10n.text("chat.management.export_records"), systemImage: "square.and.arrow.up")
                             }
                             Button {
-                                logger.warning("聊天记录导入暂未接入，thread=\(threadID.uuidString)", module: .general)
+                                logger.warning("聊天记录导入暂未接入，thread=\(currentThreadID.uuidString)", module: .general)
                             } label: {
                                 Label(L10n.text("chat.management.import_records"), systemImage: "square.and.arrow.down")
                             }
@@ -424,15 +459,13 @@ struct ChatView: View {
             .task {
                 guard hasLoaded == false else { return }
                 hasLoaded = true
-                listViewModel.selectThread(threadID)
-                await detailViewModel.loadMessagesIfNeeded(for: threadID, lockBottomViewport: true)
+                listViewModel.selectThread(currentThreadID)
                 restoreCardActionSnapshotIfNeeded(forceReload: true)
-                await trySendAutoSmallTaskIfReady()
             }
-            .onChange(of: threadID) { _ in
-                activeParameterCard = nil
-                messageNavigationCoordinator.reset()
-                restoreCardActionSnapshotIfNeeded(forceReload: true)
+            .onChange(of: threadID) { newValue in
+                // 导航栈复用同 identity 但传入不同 threadID 时同步局部 activeThreadID
+                guard newValue != activeThreadID else { return }
+                switchDetailThread(from: activeThreadID, to: newValue)
             }
     }
     
@@ -472,31 +505,46 @@ struct ChatView: View {
             .onChange(of: aiSettingsViewModel.snapshot.chatComposerStartupPreferences) { preferences in
                 stateStore.setComposerStartupPreferences(preferences)
             }
-            .task(id: threadID) {
-                if let initialModel = await detailViewModel.refreshChatModelPicker(for: threadID) {
-                    if stateStore.composerDraft(for: threadID).runtimeFlags.selectedChatModelName == nil {
-                        stateStore.setSelectedChatModelName(initialModel, for: threadID)
-                    }
-                }
-                await detailViewModel.refreshThreadImageDeliveryMode(for: threadID)
-                // CHAT-000028 3.2/3.3：页面进入不再直接承担生成启动。
-                // 新建对话（消费一次性标记）按新建链路触发一次生成；
-                // 重新进入旧对话只做 guide 卡片异常状态修复，绝不生成。
-                let threadWasJustCreated = stateStore.takeThreadWasJustCreatedMarker(threadID)
-                let didApplyDefaultBinding = await applyComposerStartupMemberBindingIfNeeded(
-                    newlyCreatedThread: threadWasJustCreated
+            // CHAT-000030：以 currentThreadID 作为生命周期 key，右上角新建后原地重启新 thread 初始化链路。
+            .task(id: currentThreadID) {
+                // 固定本轮 ID，避免 await 期间用户再次新建导致后续步骤串到别的 thread
+                let id = currentThreadID
+                logger.info(
+                    "chat.detail.thread_switch.task_start thread=\(String(id.uuidString.prefix(8))) marker=\(stateStore.isThreadMarkedAsNewlyCreated(id))",
+                    module: .general
                 )
-                if threadWasJustCreated {
-                    if didApplyDefaultBinding == false {
-                        await detailViewModel.startGuideQuestionGenerationForNewlyCreatedThread()
+                listViewModel.selectThread(id)
+                if let initialModel = await detailViewModel.refreshChatModelPicker(for: id) {
+                    if stateStore.composerDraft(for: id).runtimeFlags.selectedChatModelName == nil {
+                        stateStore.setSelectedChatModelName(initialModel, for: id)
                     }
-                } else {
-                    await detailViewModel.repairGuideQuestionsForReenteredThreadIfNeeded()
                 }
-                await trySendAutoSmallTaskIfReady()
+                await detailViewModel.refreshThreadImageDeliveryMode(for: id)
+                await detailViewModel.loadMessagesIfNeeded(for: id, lockBottomViewport: true)
+                logger.info(
+                    "chat.detail.thread_switch.messages_loaded thread=\(String(id.uuidString.prefix(8))) count=\(stateStore.persistedMessages(for: id).count)",
+                    module: .general
+                )
+                // CHAT-000029：默认绑定已在 thread 创建阶段前置完成，页面不再补绑。
+                // 新建链路：保持新建标记（阻止并发 repair）→ 幂等插入 guide card → 启动生成 → 清除标记；
+                // 重新进入旧对话：只做 guide 卡片异常状态修复，绝不生成。
+                if stateStore.isThreadMarkedAsNewlyCreated(id) {
+                    let didInsertGuideCard = await detailViewModel.ensureFirstGuideCardInsertedForNewThreadIfNeeded(threadID: id)
+                    if didInsertGuideCard {
+                        await detailViewModel.startGuideQuestionGenerationForNewlyCreatedThread(threadID: id)
+                    }
+                    stateStore.clearThreadWasJustCreatedMarker(id)
+                    logger.info(
+                        "chat.detail.thread_switch.guide_ensured thread=\(String(id.uuidString.prefix(8))) inserted=\(didInsertGuideCard)",
+                        module: .general
+                    )
+                } else {
+                    await detailViewModel.repairGuideQuestionsForReenteredThreadIfNeeded(threadID: id)
+                }
+                await trySendAutoSmallTaskIfReady(for: id)
             }
             .task(id: reasoningRefreshId) {
-                await detailViewModel.refreshReasoningToolbarContext(for: threadID)
+                await detailViewModel.refreshReasoningToolbarContext(for: currentThreadID)
             }
             .sheet(
                 item: Binding(
@@ -524,10 +572,10 @@ struct ChatView: View {
                         }
                     },
                     onAskReportAppend: { _, refs in
-                        detailViewModel.appendAskReportRefs(refs, for: threadID)
+                        detailViewModel.appendAskReportRefs(refs, for: currentThreadID)
                     },
                     onAskReportSetMemberBinding: { memberID in
-                        Task { await detailViewModel.updateThreadMemberBinding(memberID, for: threadID) }
+                        Task { await detailViewModel.updateThreadMemberBinding(memberID, for: currentThreadID) }
                     },
                     onAskReportMaxRefsReached: {
                         detailViewModel.notifyAskReportMaxRefsReached()
@@ -546,44 +594,43 @@ struct ChatView: View {
             .alert(L10n.text("chat.management.clear_confirm_title"), isPresented: $showClearChatConfirmation) {
                 Button(L10n.text("common.cancel"), role: .cancel) {}
                 Button(L10n.text("chat.management.clear_action"), role: .destructive) {
-                    Task { await detailViewModel.clearMessages(for: threadID) }
+                    Task { await detailViewModel.clearMessages(for: currentThreadID) }
                 }
             } message: {
                 Text(L10n.text("chat.management.clear_confirm_message"))
             }
+            // CHAT-000030：详情页内部新建对话失败提示（保留旧会话，不切换）
+            .alert(
+                L10n.text("chat.thread.create_failed", fallback: "新建对话失败"),
+                isPresented: Binding(
+                    get: { detailThreadCreationError != nil },
+                    set: { if $0 == false { detailThreadCreationError = nil } }
+                )
+            ) {
+                Button(L10n.text("common.ok", fallback: "好"), role: .cancel) {}
+            } message: {
+                Text(detailThreadCreationError ?? "")
+            }
     }
 
-    private func trySendAutoSmallTaskIfReady() async {
+    /// CHAT-000030：自动小任务显式按 threadID 触发，避免详情页内部切换后发送到旧 thread。
+    private func trySendAutoSmallTaskIfReady(for threadID: UUID) async {
         guard let autoSmallTaskCoordinator else { return }
-        guard selectedComposerModelRow != nil else { return }
+        guard let row = selectedComposerModelRow(for: threadID) else { return }
         await autoSmallTaskCoordinator.trySendIfNeeded(
             threadID: threadID,
-            selectedModelRow: selectedComposerModelRow,
+            selectedModelRow: row,
             stateStore: stateStore,
             detailViewModel: detailViewModel
         )
     }
 
-    @discardableResult
-    private func applyComposerStartupMemberBindingIfNeeded(newlyCreatedThread: Bool) async -> Bool {
-        let startup = aiSettingsViewModel.snapshot.chatComposerStartupPreferences
-        guard startup.memberProfileEnabled else { return false }
-        guard stateStore.selectedThread?.memberID == nil else { return false }
-        guard let selectedMemberID = homeViewModel.memberContextStoreForBinding.context.selectedMemberID else { return false }
-        await detailViewModel.updateThreadMemberBinding(
-            selectedMemberID,
-            for: threadID,
-            context: .startupDefaultBinding(isNewlyCreatedThread: newlyCreatedThread)
-        )
-        return true
-    }
-    
     @ViewBuilder
     private var messageList: some View {
         switch aiSettingsViewModel.snapshot.chatConversationUIPreferences.architecture {
         case .uiKit:
             ChatConversationMessageListContainer(
-                threadID: threadID,
+                threadID: currentThreadID,
                 stateStore: stateStore,
                 detailViewModel: detailViewModel,
                 aiSettingsViewModel: aiSettingsViewModel,
@@ -600,13 +647,13 @@ struct ChatView: View {
                 visibleMessages: visibleMessages,
                 hasMoreMessages: hasMoreMessages,
                 isLoadingMoreMessages: isLoadingMoreMessages,
-                lockBottomViewport: stateStore.isBottomViewportLocked(for: threadID),
-                scrollToBottomRequestGeneration: stateStore.scrollToBottomRequestGeneration(for: threadID),
+                lockBottomViewport: stateStore.isBottomViewportLocked(for: currentThreadID),
+                scrollToBottomRequestGeneration: stateStore.scrollToBottomRequestGeneration(for: currentThreadID),
                 guideHomeDestinationBuilder: guideHomeDestinationBuilder
             )
         case .swiftUI:
             ChatSwiftUIConversationView(
-                threadID: threadID,
+                threadID: currentThreadID,
                 stateStore: stateStore,
                 detailViewModel: detailViewModel,
                 aiSettingsViewModel: aiSettingsViewModel,
@@ -624,8 +671,8 @@ struct ChatView: View {
                 visibleMessages: visibleMessages,
                 hasMoreMessages: hasMoreMessages,
                 isLoadingMoreMessages: isLoadingMoreMessages,
-                lockBottomViewport: stateStore.isBottomViewportLocked(for: threadID),
-                scrollToBottomRequestGeneration: stateStore.scrollToBottomRequestGeneration(for: threadID),
+                lockBottomViewport: stateStore.isBottomViewportLocked(for: currentThreadID),
+                scrollToBottomRequestGeneration: stateStore.scrollToBottomRequestGeneration(for: currentThreadID),
                 guideHomeDestinationBuilder: guideHomeDestinationBuilder
             )
         }
@@ -636,7 +683,7 @@ struct ChatView: View {
     }
     
     private var cardActionSnapshotStorageKey: String {
-        Self.cardActionSnapshotStorageKeyPrefix + threadID.uuidString.lowercased()
+        Self.cardActionSnapshotStorageKeyPrefix + currentThreadID.uuidString.lowercased()
     }
     
     private func restoreCardActionSnapshotIfNeeded(forceReload: Bool = false) {
@@ -840,11 +887,12 @@ struct ChatView: View {
     
     private func presentSystemMessageSettings() {
         activeParameterCard = nil
-        let thread = stateStore.selectedThread ?? ChatThread(title: L10n.text("chat.default_thread_title"))
+        let thread = stateStore.threadItems.first(where: { $0.id == currentThreadID })?.thread
+            ?? ChatThread(title: L10n.text("chat.default_thread_title"))
         let row = selectedComposerModelRow
         let isAgent = row?.identity == AIModelIdentity.agent.rawValue
         let prompt = SystemMessageSettingsPrompt(
-            threadID: threadID,
+            threadID: currentThreadID,
             sessionPrompt: thread.rolePrompt,
             defaultPrompt: PromptLocalizer().chatSystemPrompt(),
             modelDisplayName: row?.displayTitle ?? thread.currentModelName ?? L10n.text("chat.composer.model.default"),
@@ -885,7 +933,7 @@ struct ChatView: View {
         guard next != overlaySettings else { return }
         overlaySettings = next
         Task {
-            await detailViewModel.updateThreadGenerationSettings(next, for: threadID)
+            await detailViewModel.updateThreadGenerationSettings(next, for: currentThreadID)
         }
     }
     
@@ -919,31 +967,90 @@ struct ChatView: View {
         guard next != overlaySettings else { return }
         overlaySettings = next
         Task {
-            await detailViewModel.updateThreadGenerationSettings(next, for: threadID)
+            await detailViewModel.updateThreadGenerationSettings(next, for: currentThreadID)
         }
     }
     
     private func exportChatRecordsToDebugLog() {
         logDebugInfo()
     }
+
+    // MARK: - CHAT-000030 详情页内部新建对话与 thread 切换
+
+    /// CHAT-000030：右上角新建对话入口。
+    /// 不做任何 Navigation push/pop，创建成功后在当前详情容器内部切换到新 thread。
+    @MainActor
+    private func createThreadInsideCurrentChat() async {
+        // 防重入：创建中/发送中直接忽略，避免连点产生多个 thread
+        guard isCreatingThreadInDetail == false else { return }
+        guard stateStore.isSending == false else { return }
+        let oldThreadID = currentThreadID
+        isCreatingThreadInDetail = true
+        detailThreadCreationError = nil
+        defer { isCreatingThreadInDetail = false }
+
+        logger.info(
+            "chat.detail.new_thread_button.tap current=\(String(oldThreadID.uuidString.prefix(8))) isSending=\(stateStore.isSending)",
+            module: .general
+        )
+
+        guard let newThreadID = await listViewModel.createThread() else {
+            detailThreadCreationError = L10n.text("chat.thread.create_failed", fallback: "新建对话失败，请稍后再试")
+            logger.warning(
+                "chat.detail.new_thread_button.create_failed current=\(String(oldThreadID.uuidString.prefix(8)))",
+                module: .general
+            )
+            return
+        }
+
+        logger.info(
+            "chat.detail.new_thread_button.create_success old=\(String(oldThreadID.uuidString.prefix(8))) new=\(String(newThreadID.uuidString.prefix(8)))",
+            module: .general
+        )
+        switchDetailThread(from: oldThreadID, to: newThreadID)
+    }
+
+    /// CHAT-000030：当前详情内部切换 thread（同步全局 selectedThreadID、
+    /// 持久化旧 thread 卡片动作快照并恢复新 thread 快照、清理临时 UI 状态）。
+    @MainActor
+    private func switchDetailThread(from oldThreadID: UUID, to newThreadID: UUID) {
+        guard oldThreadID != newThreadID else { return }
+        logger.info(
+            "chat.detail.thread_switch.begin old=\(String(oldThreadID.uuidString.prefix(8))) new=\(String(newThreadID.uuidString.prefix(8)))",
+            module: .general
+        )
+        // 先用旧 key 持久化当前卡片动作快照，再切 activeThreadID
+        persistCardActionSnapshot()
+        activeThreadID = newThreadID
+        stateStore.setSelectedThreadID(newThreadID)
+        logger.info(
+            "chat.detail.thread_switch.active_set old=\(String(oldThreadID.uuidString.prefix(8))) new=\(String(newThreadID.uuidString.prefix(8))) selected=\(stateStore.selectedThreadID?.uuidString.prefix(8) ?? "nil")",
+            module: .general
+        )
+        // 关闭参数弹层/重置消息内导航，避免保存或展示串到旧 thread
+        activeParameterCard = nil
+        messageNavigationCoordinator.reset()
+        // 恢复新 thread 的卡片动作快照（forceReload 清掉旧 thread 遗留 UI 状态）
+        restoreCardActionSnapshotIfNeeded(forceReload: true)
+    }
     
     private func logDebugInfo() {
-        let messages = stateStore.selectedMessages
+        let messages = stateStore.conversationListItems(for: currentThreadID)
         let userMessages = messages.filter { $0.role == .user }.count
         let assistantMessages = messages.filter { $0.role == .assistant }.count
-        let thread = stateStore.selectedThread
+        let thread = stateStore.threadItems.first(where: { $0.id == currentThreadID })?.thread
         let modelName = thread?.currentModelName?.trimmingCharacters(in: .whitespacesAndNewlines)
         let selectedModel = (modelName?.isEmpty == false) ? modelName! : "未设置"
         let summary = """
         ChatView 对话调试信息:
-        - ThreadID: \(threadID.uuidString)
+        - ThreadID: \(currentThreadID.uuidString)
         - 标题: \(thread?.listDisplayTitle ?? L10n.text("chat.default_thread_title"))
         - 选择模型: \(selectedModel)
         - 消息总数: \(messages.count) (用户: \(userMessages), 助手: \(assistantMessages))
         - 参数: temperature=\(thread?.temperature ?? 0), topP=\(thread?.topP ?? 0), maxTokens=\(thread?.maxTokens ?? 0), maxMessages=\(thread?.maxMessages ?? 0)
         - 图片送达方式(本会话): \(thread?.imageDeliveryMode.rawValue ?? "-")
         - 是否正在发送: \(stateStore.isSending)
-        - 最后错误: \(stateStore.errorMessage(for: threadID) ?? "无")
+        - 最后错误: \(stateStore.errorMessage(for: currentThreadID) ?? "无")
         """
         logger.debug(summary, module: .general)
         
@@ -983,7 +1090,7 @@ struct ChatView: View {
             return row
         }
         let exportData: [String: Any] = [
-            "thread_id": threadID.uuidString,
+            "thread_id": currentThreadID.uuidString,
             "title": thread?.listDisplayTitle ?? "",
             "debug_time": iso.string(from: Date()),
             "messages": payload

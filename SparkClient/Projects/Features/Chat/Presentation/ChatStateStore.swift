@@ -127,12 +127,10 @@ final class ChatStateStore: ObservableObject {
         newlyCreatedThreadCreatedAt(threadID) != nil
     }
 
-    /// 消费新建标记：仅当标记存在且未过期时返回 true（一次性消费，重复进入不再视为新建）。
-    @discardableResult
-    func takeThreadWasJustCreatedMarker(_ threadID: UUID) -> Bool {
-        guard newlyCreatedThreadCreatedAt(threadID) != nil else { return false }
+    /// 清除新建标记（新建链路 ensure + 生成注册完成后调用；
+    /// 保持期间可阻止并发消息加载中的 reenter repair 误修复新插入的 generating 卡片）。
+    func clearThreadWasJustCreatedMarker(_ threadID: UUID) {
         newlyCreatedThreadMarkers[threadID] = nil
-        return true
     }
 
     private func newlyCreatedThreadCreatedAt(_ threadID: UUID) -> Date? {

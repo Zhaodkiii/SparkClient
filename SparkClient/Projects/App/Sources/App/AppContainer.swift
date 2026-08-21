@@ -566,6 +566,7 @@ final class AppContainer {
             createThreadUseCase: chat.createThreadUseCase,
             deleteThreadUseCase: chat.deleteThreadUseCase,
             updateThreadMetadataUseCase: UpdateChatThreadMetadataUseCase(repository: chat.chatRepository),
+            aiSettingsRepository: ai.aiSettingsRepository,
             chatSyncSupervisor: chat.chatSyncSupervisor,
             notificationClient: notification.notificationClient
         )
@@ -580,6 +581,14 @@ final class AppContainer {
             chatRepository: chat.chatRepository,
             aiConfigCenter: ai.aiConfigCenter,
             aiSettingsRepository: ai.aiSettingsRepository,
+            logger: logger
+        )
+        let ensureGuideSystemMessageUseCase = EnsureChatGuideSystemMessageUseCase(
+            repository: chat.chatRepository,
+            guideCardBuilder: ChatGuideCardPayloadBuilder(
+                medicalReader: guideQuestionHealthRepository,
+                logger: logger
+            ),
             logger: logger
         )
         self.chatDetailViewModel = ChatDetailViewModel(
@@ -605,6 +614,7 @@ final class AppContainer {
             createKnowledgeDocumentUseCase: knowledge.createKnowledgeDocumentUseCase,
             saveTypedMedicalDocumentUseCase: medical.saveTypedMedicalDocumentUseCase,
             guideQuestionGenerationCoordinator: guideQuestionGenerationCoordinator,
+            ensureGuideSystemMessageUseCase: ensureGuideSystemMessageUseCase,
             logger: logger
         )
         self.deepTutorChatViewModel = DeepTutorChatViewModel(

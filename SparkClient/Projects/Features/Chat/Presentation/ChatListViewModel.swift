@@ -14,6 +14,7 @@ final class ChatListViewModel: ObservableObject {
     private let createThreadUseCase: CreateThreadUseCase
     private let deleteThreadUseCase: DeleteThreadUseCase
     private let updateThreadMetadataUseCase: UpdateChatThreadMetadataUseCase
+    private let aiSettingsRepository: any AISettingsRepository
     private let chatSyncSupervisor: ChatSyncSupervisor
     private let notificationClient: any NotificationClient
     private let logger: Logger
@@ -38,6 +39,7 @@ final class ChatListViewModel: ObservableObject {
         createThreadUseCase: CreateThreadUseCase,
         deleteThreadUseCase: DeleteThreadUseCase,
         updateThreadMetadataUseCase: UpdateChatThreadMetadataUseCase,
+        aiSettingsRepository: any AISettingsRepository,
         chatSyncSupervisor: ChatSyncSupervisor,
         notificationClient: any NotificationClient,
         logger: Logger = ConsoleLogger()
@@ -53,6 +55,7 @@ final class ChatListViewModel: ObservableObject {
         self.createThreadUseCase = createThreadUseCase
         self.deleteThreadUseCase = deleteThreadUseCase
         self.updateThreadMetadataUseCase = updateThreadMetadataUseCase
+        self.aiSettingsRepository = aiSettingsRepository
         self.chatSyncSupervisor = chatSyncSupervisor
         self.notificationClient = notificationClient
         self.logger = logger
@@ -121,16 +124,28 @@ final class ChatListViewModel: ObservableObject {
         await reloadThreads(selectFirstIfNeeded: false)
     }
 
-    func createThread() async {
+    /// CHAT-000029 3.1：默认绑定成员前置解析。
+    /// 偏好读取失败或无选中成员时按未绑定创建，不阻塞新建。
+    private func resolveInitialMemberIDForNewThread() async -> Int? {
+        let snapshot = await aiSettingsRepository.loadSnapshot()
+        guard snapshot.chatComposerStartupPreferences.memberProfileEnabled else { return nil }
+        return memberContextStore.context.selectedMemberID
+    }
+
+    /// CHAT-000030：返回新 threadID 供详情页内部切换使用；列表页入口可忽略返回值。
+    @discardableResult
+    func createThread() async -> UUID? {
         let title = L10n.text("chat.default_thread_title")
+        let initialMemberID = await resolveInitialMemberIDForNewThread()
         let thread = await createThreadUseCase.execute(
-            memberID: memberContextStore.context.selectedMemberID,
+            memberID: initialMemberID,
             title: title
         )
+        // 新会话元数据由 ChatSyncSupervisor 监听 threadsChanged 后台推送，不阻塞进入会话
         await reloadThreads(selectFirstIfNeeded: false)
-        // CHAT-000028 3.3：新建对话标记，进入 ChatView 时以此触发生成（而非页面进入推断）
         stateStore.markThreadAsNewlyCreated(thread.id)
         stateStore.setSelectedThreadID(thread.id)
+        return thread.id
     }
 
     @discardableResult
@@ -146,12 +161,13 @@ final class ChatListViewModel: ObservableObject {
         quickStartCreationError = nil
         defer { isCreatingQuickStartThread = false }
 
+        let initialMemberID = await resolveInitialMemberIDForNewThread()
         let thread = await createThreadUseCase.execute(
-            memberID: memberContextStore.context.selectedMemberID,
+            memberID: initialMemberID,
             title: mode.title
         )
+        // 新会话元数据由 ChatSyncSupervisor 监听 threadsChanged 后台推送，不阻塞进入会话
         await reloadThreads(selectFirstIfNeeded: false)
-        // CHAT-000028 3.3：新建对话标记，进入 ChatView 时以此触发生成（而非页面进入推断）
         stateStore.markThreadAsNewlyCreated(thread.id)
         stateStore.setSelectedThreadID(thread.id)
         stateStore.setDraft(mode.initialDraft, for: thread.id)

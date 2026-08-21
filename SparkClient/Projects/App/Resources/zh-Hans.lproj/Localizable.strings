@@ -1128,6 +1128,8 @@
 
 "chat.title" = "AI 对话";
 "chat.default_thread_title" = "健康咨询";
+"chat.thread.new" = "新建对话";
+"chat.thread.create_failed" = "新建对话失败，请稍后再试";
 "chat.input.placeholder" = "请输入你的问题";
 "chat.input.send" = "发送";
 "chat.input.stop" = "停止生成";

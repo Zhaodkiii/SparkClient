@@ -582,11 +582,6 @@ extension ChatAssembly {
             createThreadUseCase: CreateThreadUseCase(
                 repository: chatRepository,
                 aiConfigCenter: ai.aiConfigCenter,
-                guideCardBuilder: ChatGuideCardPayloadBuilder(
-                    medicalReader: HealthResourceRepository(medicalQueryAPI: backend.medicalQuery),
-                    logger: logger
-                ),
-                aiSettingsRepository: ai.aiSettingsRepository,
                 logger: logger
             ),
             retryFailedMessageUseCase: RetryFailedMessageUseCase(

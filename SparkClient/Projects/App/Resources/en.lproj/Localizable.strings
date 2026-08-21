@@ -1128,6 +1128,8 @@
 
 "chat.title" = "AI Chat";
 "chat.default_thread_title" = "Health Consultation";
+"chat.thread.new" = "New Chat";
+"chat.thread.create_failed" = "Failed to create a new chat. Please try again later.";
 "chat.input.placeholder" = "Ask a health question";
 "chat.input.send" = "Send";
 "chat.input.stop" = "Stop generating";

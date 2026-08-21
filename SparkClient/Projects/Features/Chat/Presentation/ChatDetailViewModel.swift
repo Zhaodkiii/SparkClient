@@ -7,14 +7,6 @@ import SwiftUI
 import UIKit
 #endif
 
-/// 会话成员绑定变更来源（CHAT-000028 触发边界收口）：
-/// - userSwitch：用户显式切换成员，允许触发科普问题重新生成；
-/// - startupDefaultBinding：composer 启动默认绑定，仅当本次新建对话时允许生成。
-enum ChatGuideMemberBindingContext: Sendable {
-    case userSwitch
-    case startupDefaultBinding(isNewlyCreatedThread: Bool)
-}
-
 @MainActor
 final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCardSink {
     private let stateStore: ChatStateStore
@@ -39,6 +31,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
     private let createKnowledgeDocumentUseCase: CreateKnowledgeDocumentUseCase
     private let saveTypedMedicalDocumentUseCase: SaveTypedMedicalDocumentUseCase
     private let guideQuestionGenerationCoordinator: ChatGuideQuestionGenerationCoordinator
+    private let ensureGuideSystemMessageUseCase: EnsureChatGuideSystemMessageUseCase
     private let taskManager: TaskManager
     private let logger: Logger
     private var composerAttachmentTasks: [UUID: Task<Void, Never>] = [:]
@@ -100,6 +93,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         createKnowledgeDocumentUseCase: CreateKnowledgeDocumentUseCase,
         saveTypedMedicalDocumentUseCase: SaveTypedMedicalDocumentUseCase,
         guideQuestionGenerationCoordinator: ChatGuideQuestionGenerationCoordinator,
+        ensureGuideSystemMessageUseCase: EnsureChatGuideSystemMessageUseCase,
         taskManager: TaskManager = .shared,
         logger: Logger = ConsoleLogger()
     ) {
@@ -130,6 +124,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         self.createKnowledgeDocumentUseCase = createKnowledgeDocumentUseCase
         self.saveTypedMedicalDocumentUseCase = saveTypedMedicalDocumentUseCase
         self.guideQuestionGenerationCoordinator = guideQuestionGenerationCoordinator
+        self.ensureGuideSystemMessageUseCase = ensureGuideSystemMessageUseCase
         self.taskManager = taskManager
         self.logger = logger
 
@@ -506,11 +501,9 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         }
     }
 
-    func updateThreadMemberBinding(
-        _ memberID: Int?,
-        for threadID: UUID,
-        context: ChatGuideMemberBindingContext = .userSwitch
-    ) async {
+    /// 用户显式切换当前对话绑定成员（CHAT-000029：默认绑定已前置到 thread 创建阶段，
+    /// 此入口仅剩用户切换场景，允许触发科普问题重新生成）。
+    func updateThreadMemberBinding(_ memberID: Int?, for threadID: UUID) async {
         let current = await chatRepository.loadThread(id: threadID)
         guard current?.memberID != memberID else { return }
 
@@ -525,16 +518,6 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         }
         stateStore.pruneHealthResourceRefs(matchingMemberID: memberID, for: threadID)
 
-        // 仅用户显式切换成员、或本次新建对话的默认绑定成功时，才允许触发科普问题 AI 生成；
-        // 重新进入旧对话时的默认绑定只做固定兜底修复，不生成。
-        let allowsQuestionGeneration: Bool
-        switch context {
-        case .userSwitch:
-            allowsQuestionGeneration = true
-        case .startupDefaultBinding(let isNewlyCreatedThread):
-            allowsQuestionGeneration = isNewlyCreatedThread
-        }
-
         let messages = stateStore.persistedMessages(for: threadID)
         await guideQuestionGenerationCoordinator.handleMemberBindingChanged(
             threadID: threadID,
@@ -543,8 +526,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
             stateStore: stateStore,
             resolveModelName: { [weak self] id in
                 await self?.resolvePreferredChatModelName(for: id)
-            },
-            allowGeneration: allowsQuestionGeneration
+            }
         )
     }
 
@@ -705,7 +687,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
                 stateStore.endBottomViewportLock(for: threadID)
             }
             // CHAT-000028 3.2：消息加载后不再恢复/触发科普问题生成，只做固定兜底修复
-            await repairGuideQuestionsForReenteredThreadIfNeeded()
+            await repairGuideQuestionsForReenteredThreadIfNeeded(threadID: threadID)
 
         case .loadOlderPage(let threadID, let before):
             let older = await loadChatMessagesUseCase.execute(
@@ -725,10 +707,33 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         }
     }
 
+    /// CHAT-000029 3.3：新建对话进入会话页面后幂等插入首条 system 引导卡片。
+    /// CHAT-000030：显式传入 threadID，不再依赖全局 selectedThreadID（详情页内部切换时两者可能短暂不一致）。
+    /// - 已有 guide card：no-op 返回 true；
+    /// - 插入成功：更新 stateStore 并返回 true；
+    /// - 插入失败（或无 builder）：返回 false，调用方不得启动科普问题生成。
+    @discardableResult
+    func ensureFirstGuideCardInsertedForNewThreadIfNeeded(threadID: UUID) async -> Bool {
+        let output = await ensureGuideSystemMessageUseCase.execute(threadID: threadID)
+        guard let target = output.target else {
+            return false
+        }
+        if output.didInsert {
+            let current = stateStore.persistedMessages(for: threadID)
+            if current.isEmpty {
+                stateStore.setMessages([target.message], for: threadID)
+            } else if current.contains(where: { $0.clientMessageID == target.message.clientMessageID }) == false {
+                // updateMessages 只替换不插入；guide message 为首条 system 消息，置顶合并
+                stateStore.setMessages([target.message] + current, for: threadID)
+            }
+        }
+        return true
+    }
+
     /// 新建对话首次初始化（trigger = .newlyCreatedThread）：
     /// 仅当本次会话内新建对话时调用；thread 已绑定成员时生成一次，否则落固定问题。
-    func startGuideQuestionGenerationForNewlyCreatedThread() async {
-        guard let threadID = stateStore.selectedThreadID else { return }
+    /// CHAT-000030：显式传入 threadID，避免生成写到旧 thread。
+    func startGuideQuestionGenerationForNewlyCreatedThread(threadID: UUID) async {
         let messages = stateStore.persistedMessages(for: threadID)
         await guideQuestionGenerationCoordinator.startForNewThread(
             threadID: threadID,
@@ -742,8 +747,8 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
 
     /// 重新进入已有对话：只修复异常 guide 卡片状态（generating/空问题 -> 固定问题），
     /// 绝不触发科普问题 AI 生成（CHAT-000028 3.2）。
-    func repairGuideQuestionsForReenteredThreadIfNeeded() async {
-        guard let threadID = stateStore.selectedThreadID else { return }
+    /// CHAT-000030：显式传入 threadID，避免误修复其他 thread。
+    func repairGuideQuestionsForReenteredThreadIfNeeded(threadID: UUID) async {
         // 新建对话未消费标记时不修复，由 task(id:) 的新建链路触发生成
         guard stateStore.isThreadMarkedAsNewlyCreated(threadID) == false else { return }
         let messages = stateStore.persistedMessages(for: threadID)

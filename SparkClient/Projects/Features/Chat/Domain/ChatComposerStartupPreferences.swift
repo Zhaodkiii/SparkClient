@@ -54,7 +54,7 @@ nonisolated struct ChatComposerStartupPreferences: Codable, Equatable, Sendable 
     }
 
     static let fallback = ChatComposerStartupPreferences(
-        memberProfileEnabled: false,
+        memberProfileEnabled: true,
         useTools: true,
         useKnowledgeBag: true,
         useWebSearch: true,

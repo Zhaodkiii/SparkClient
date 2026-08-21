@@ -449,8 +449,7 @@ struct MainTabCoordinatorView: View {
     }
 
     private func ensureSelectedTabIsVisible() {
-        guard visibleTabs.contains(routeStore.selectedTab) == false else { return }
-        routeStore.selectedTab = .healthHome
+        routeStore.ensureSelectedTabIsVisible(visibleTabs: visibleTabs)
     }
 
     private func routePath(_ tab: AppRouteStore.RootTab) -> Binding<[AppRoute]> {

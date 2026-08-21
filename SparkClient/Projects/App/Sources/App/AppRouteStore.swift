@@ -74,11 +74,42 @@ final class AppRouteStore: ObservableObject {
         case fitness = 9
     }
 
-    @Published var selectedTab: RootTab = AppRouteStore.defaultRootTab
+    private let preferenceStore: RootTabPreferenceStore
+
+    /// 用户/程序化路由切换根 tab 后自动持久化；下次冷启动通过 `init(storage:)` 恢复。
+    @Published var selectedTab: RootTab {
+        didSet {
+            guard selectedTab != oldValue else { return }
+            preferenceStore.selectedTab = selectedTab
+        }
+    }
+
     @Published private(set) var routeStacks: [RootTab: [AppRoute]] = [:]
 
     static var defaultRootTab: RootTab {
         .chat
+    }
+
+    init(storage: UserDefaults = .standard) {
+        let preferenceStore = RootTabPreferenceStore(userDefaults: storage)
+        self.preferenceStore = preferenceStore
+        selectedTab = preferenceStore.selectedTab
+    }
+
+    /// 从 storage 恢复上次选中的根 tab；无值或 rawValue 失效时回退默认 tab。
+    /// 使用 `object(forKey:)` 区分"未设置"与 rawValue = 0。
+    static func restoreSelectedTab(from storage: UserDefaults) -> RootTab {
+        RootTabPreferenceStore(userDefaults: storage).selectedTab
+    }
+
+    /// 当前 selectedTab 在给定容器布局中不可见时兜底：优先默认 tab（.chat），
+    /// 否则取第一个可见 tab；兜底结果会写回持久化，避免下次继续恢复非法 tab。
+    func ensureSelectedTabIsVisible(visibleTabs: Set<RootTab>) {
+        guard visibleTabs.contains(selectedTab) == false else { return }
+        let fallback = visibleTabs.contains(Self.defaultRootTab)
+            ? Self.defaultRootTab
+            : (visibleTabs.first ?? Self.defaultRootTab)
+        selectedTab = fallback
     }
 
     func routes(for tab: RootTab) -> [AppRoute] {
@@ -113,8 +144,9 @@ final class AppRouteStore: ObservableObject {
         selectedTab = tab
     }
 
+    /// 清理当前账号的导航栈，但保留设备级最后选中 Tab。
+    /// 账号切换/退出登录不应覆盖用户下次冷启动的入口偏好。
     func resetRouteGraph() {
-        selectedTab = Self.defaultRootTab
         routeStacks.removeAll()
     }
 }

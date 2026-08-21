@@ -49,8 +49,6 @@ struct ChatGuideMessageCardView: View {
                 }
             }
         }
-//        .padding(16)
-//        .background(Color(uiColor: .systemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 26, style: .continuous))
         .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 4)
         .accessibilityElement(children: .contain)
