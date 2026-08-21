@@ -569,6 +569,19 @@ final class AppContainer {
             chatSyncSupervisor: chat.chatSyncSupervisor,
             notificationClient: notification.notificationClient
         )
+        let guideQuestionHealthRepository = HealthResourceRepository(medicalQueryAPI: backend.medicalQuery)
+        let guideQuestionGenerationUseCase = ChatGuideQuestionGenerationUseCase(
+            runtime: ai.aiRuntimeService,
+            medicalReader: guideQuestionHealthRepository,
+            logger: logger
+        )
+        let guideQuestionGenerationCoordinator = ChatGuideQuestionGenerationCoordinator(
+            generationUseCase: guideQuestionGenerationUseCase,
+            chatRepository: chat.chatRepository,
+            aiConfigCenter: ai.aiConfigCenter,
+            aiSettingsRepository: ai.aiSettingsRepository,
+            logger: logger
+        )
         self.chatDetailViewModel = ChatDetailViewModel(
             stateStore: chatStateStore,
             memberContextStore: memberContextStore,
@@ -591,6 +604,7 @@ final class AppContainer {
             translateKnowledgeTextUseCase: ai.translateKnowledgeTextUseCase,
             createKnowledgeDocumentUseCase: knowledge.createKnowledgeDocumentUseCase,
             saveTypedMedicalDocumentUseCase: medical.saveTypedMedicalDocumentUseCase,
+            guideQuestionGenerationCoordinator: guideQuestionGenerationCoordinator,
             logger: logger
         )
         self.deepTutorChatViewModel = DeepTutorChatViewModel(

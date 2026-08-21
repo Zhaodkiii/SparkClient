@@ -1,12 +1,8 @@
 import SwiftUI
 
 /// 新会话首条系统引导卡片：
-/// 上半部分为可横向切换的健康数据滑块，下半部分为固定健康科普问题列表。
+/// 上半部分为可横向切换的健康数据滑块，下半部分为健康科普问题列表。
 /// 纯渲染组件：数据全部来自 payload，点击回调上抛，不直接拉取网络或写 DB。
-///
-/// 配色采用语义层级：外层容器 `systemGroupedBackground`，内嵌卡片
-/// `secondarySystemGroupedBackground`，Light 模式下近似设计稿的浅灰底 + 纯白卡片，
-/// Dark 模式下自动映射为黑底 + 深灰卡片，无需硬编码色值。
 struct ChatGuideMessageCardView: View {
     let payload: ChatGuideCardPayload
     let onQuestionTap: (ChatGuideQuestion) -> Void
@@ -15,6 +11,21 @@ struct ChatGuideMessageCardView: View {
     var sendingQuestionIDs: Set<String> = []
     /// 滑块 → 健康首页 destination（CHAT-000025）；nil 时滑块降级为纯展示面板。
     var homeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
+    /// 成员切换重新生成时使用不同 loading 文案。
+    var isRegeneratingForNewMember: Bool = false
+
+    private var loadingTitle: String {
+        if isRegeneratingForNewMember {
+            return L10n.text(
+                "chat.guide.questions.generating.new_member",
+                fallback: "正在根据新成员资料生成科普问题..."
+            )
+        }
+        return L10n.text(
+            "chat.guide.questions.generating",
+            fallback: "正在根据成员资料生成健康科普问题..."
+        )
+    }
 
     var body: some View {
         VStack(spacing: 16) {
@@ -23,13 +34,17 @@ struct ChatGuideMessageCardView: View {
                 homeDestinationBuilder: homeDestinationBuilder
             )
 
-            VStack(spacing: 12) {
-                ForEach(payload.questions, id: \.id) { question in
-                    ChatGuideQuestionRowView(
-                        question: question,
-                        isDisabled: sendingQuestionIDs.contains(question.id)
-                    ) {
-                        onQuestionTap(question)
+            if payload.isShowingQuestionLoading {
+                ChatGuideQuestionLoadingSectionView(loadingTitle: loadingTitle)
+            } else {
+                VStack(spacing: 12) {
+                    ForEach(payload.questions, id: \.id) { question in
+                        ChatGuideQuestionRowView(
+                            question: question,
+                            isDisabled: sendingQuestionIDs.contains(question.id)
+                        ) {
+                            onQuestionTap(question)
+                        }
                     }
                 }
             }
@@ -41,6 +56,14 @@ struct ChatGuideMessageCardView: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel(L10n.text("chat.guide.card.accessibility.label", fallback: "健康对话引导卡片"))
     }
+}
+
+#Preview("引导卡片-生成中") {
+    ChatGuideMessageCardView(
+        payload: ChatGuideCardPreviewFixtures.generatingPayload,
+        onQuestionTap: { _ in }
+    )
+    .padding()
 }
 
 #Preview("引导卡片-Light") {

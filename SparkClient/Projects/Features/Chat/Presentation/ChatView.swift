@@ -479,7 +479,20 @@ struct ChatView: View {
                     }
                 }
                 await detailViewModel.refreshThreadImageDeliveryMode(for: threadID)
-                await applyComposerStartupMemberBindingIfNeeded()
+                // CHAT-000028 3.2/3.3：页面进入不再直接承担生成启动。
+                // 新建对话（消费一次性标记）按新建链路触发一次生成；
+                // 重新进入旧对话只做 guide 卡片异常状态修复，绝不生成。
+                let threadWasJustCreated = stateStore.takeThreadWasJustCreatedMarker(threadID)
+                let didApplyDefaultBinding = await applyComposerStartupMemberBindingIfNeeded(
+                    newlyCreatedThread: threadWasJustCreated
+                )
+                if threadWasJustCreated {
+                    if didApplyDefaultBinding == false {
+                        await detailViewModel.startGuideQuestionGenerationForNewlyCreatedThread()
+                    }
+                } else {
+                    await detailViewModel.repairGuideQuestionsForReenteredThreadIfNeeded()
+                }
                 await trySendAutoSmallTaskIfReady()
             }
             .task(id: reasoningRefreshId) {
@@ -551,12 +564,18 @@ struct ChatView: View {
         )
     }
 
-    private func applyComposerStartupMemberBindingIfNeeded() async {
+    @discardableResult
+    private func applyComposerStartupMemberBindingIfNeeded(newlyCreatedThread: Bool) async -> Bool {
         let startup = aiSettingsViewModel.snapshot.chatComposerStartupPreferences
-        guard startup.memberProfileEnabled else { return }
-        guard stateStore.selectedThread?.memberID == nil else { return }
-        guard let selectedMemberID = homeViewModel.memberContextStoreForBinding.context.selectedMemberID else { return }
-        await detailViewModel.updateThreadMemberBinding(selectedMemberID, for: threadID)
+        guard startup.memberProfileEnabled else { return false }
+        guard stateStore.selectedThread?.memberID == nil else { return false }
+        guard let selectedMemberID = homeViewModel.memberContextStoreForBinding.context.selectedMemberID else { return false }
+        await detailViewModel.updateThreadMemberBinding(
+            selectedMemberID,
+            for: threadID,
+            context: .startupDefaultBinding(isNewlyCreatedThread: newlyCreatedThread)
+        )
+        return true
     }
     
     @ViewBuilder

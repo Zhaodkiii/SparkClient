@@ -109,6 +109,41 @@ final class ChatStateStore: ObservableObject {
         selectedThreadID = threadID
     }
 
+    // MARK: - 新建对话触发标记（CHAT-000028 3.3）
+    /// 进程内「本次新建对话」标记（threadID -> 创建时间）：
+    /// 用于区分新建对话首次初始化（可触发科普问题生成）与重新进入旧对话（只允许修复）。
+    /// 标记仅进程内有效，App 重启后自然失效（重启进入视为重新进入）。
+    private var newlyCreatedThreadMarkers: [UUID: Date] = [:]
+    /// 标记有效期：超时后进入不再视为新建链路
+    private static let newlyCreatedMarkerLifetime: TimeInterval = 120
+
+    /// 标记 thread 为本次新建对话（由创建对话编排层调用）。
+    func markThreadAsNewlyCreated(_ threadID: UUID) {
+        newlyCreatedThreadMarkers[threadID] = Date()
+    }
+
+    /// 是否仍带有未消费（且未过期）的新建标记。
+    func isThreadMarkedAsNewlyCreated(_ threadID: UUID) -> Bool {
+        newlyCreatedThreadCreatedAt(threadID) != nil
+    }
+
+    /// 消费新建标记：仅当标记存在且未过期时返回 true（一次性消费，重复进入不再视为新建）。
+    @discardableResult
+    func takeThreadWasJustCreatedMarker(_ threadID: UUID) -> Bool {
+        guard newlyCreatedThreadCreatedAt(threadID) != nil else { return false }
+        newlyCreatedThreadMarkers[threadID] = nil
+        return true
+    }
+
+    private func newlyCreatedThreadCreatedAt(_ threadID: UUID) -> Date? {
+        guard let createdAt = newlyCreatedThreadMarkers[threadID] else { return nil }
+        guard Date().timeIntervalSince(createdAt) <= Self.newlyCreatedMarkerLifetime else {
+            newlyCreatedThreadMarkers[threadID] = nil
+            return nil
+        }
+        return createdAt
+    }
+
     // MARK: - 消息数据 全量/更新/追加
     /// 全量替换指定会话的消息列表，并更新分页「是否还有更多」状态
     func setMessages(

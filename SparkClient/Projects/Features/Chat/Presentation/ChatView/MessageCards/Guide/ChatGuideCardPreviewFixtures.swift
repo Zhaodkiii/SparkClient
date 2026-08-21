@@ -81,6 +81,21 @@ enum ChatGuideCardPreviewFixtures {
         )
     }
 
+    static var generatingPayload: ChatGuideCardPayload {
+        ChatGuideCardPayload(
+            schemaVersion: 2,
+            generatedAt: Date(timeIntervalSince1970: 1_787_300_000),
+            memberID: 42,
+            metricSections: fullPayload.metricSections,
+            questions: [],
+            questionGeneration: ChatGuideQuestionGenerationMeta(
+                state: .generating,
+                source: "current_chat_ai",
+                memberID: 42
+            )
+        )
+    }
+
     static var emptyPayload: ChatGuideCardPayload {
         ChatGuideCardPayload(
             schemaVersion: 1,

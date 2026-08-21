@@ -1,8 +1,48 @@
 import Foundation
 
+/// 引导卡片科普问题生成状态。
+nonisolated enum ChatGuideQuestionGenerationState: String, Codable, Equatable, Sendable {
+    /// 固定 preset 问题（未绑定成员或兼容旧卡片）
+    case preset
+    /// AI 生成进行中
+    case generating
+    /// AI 生成成功
+    case generated
+    /// AI 失败后的 preset 兜底
+    case fallback
+    /// 生成失败（应快速转为 fallback）
+    case failed
+}
+
+/// 引导卡片科普问题生成元数据。
+nonisolated struct ChatGuideQuestionGenerationMeta: Codable, Equatable, Sendable {
+    var state: ChatGuideQuestionGenerationState
+    var source: String?
+    var memberID: Int?
+    var memberProfileDigest: String?
+    var generatedAt: Date?
+    var errorMessage: String?
+
+    nonisolated init(
+        state: ChatGuideQuestionGenerationState,
+        source: String? = nil,
+        memberID: Int? = nil,
+        memberProfileDigest: String? = nil,
+        generatedAt: Date? = nil,
+        errorMessage: String? = nil
+    ) {
+        self.state = state
+        self.source = source
+        self.memberID = memberID
+        self.memberProfileDigest = memberProfileDigest
+        self.generatedAt = generatedAt
+        self.errorMessage = errorMessage
+    }
+}
+
 /// 对话引导卡片 payload：新会话首条 system 消息的完整数据。
 /// 上半部分为可横向切换的健康数据滑块（`metricSections`），
-/// 下半部分为固定健康科普问题列表（`questions`）。
+/// 下半部分为健康科普问题列表（`questions`）。
 nonisolated struct ChatGuideCardPayload: Codable, Equatable, Sendable {
     /// payload 结构版本，用于后续结构演进时的兼容判断。
     var schemaVersion: Int
@@ -12,21 +52,53 @@ nonisolated struct ChatGuideCardPayload: Codable, Equatable, Sendable {
     var memberID: Int?
     /// 健康数据滑块 section 列表（运动/身材/饮食/医疗）。
     var metricSections: [ChatGuideMetricSection]
-    /// 固定健康科普问题列表。
+    /// 健康科普问题列表。
     var questions: [ChatGuideQuestion]
+    /// 科普问题生成状态（schema v2+）。
+    var questionGeneration: ChatGuideQuestionGenerationMeta?
 
     nonisolated init(
         schemaVersion: Int,
         generatedAt: Date,
         memberID: Int?,
         metricSections: [ChatGuideMetricSection],
-        questions: [ChatGuideQuestion]
+        questions: [ChatGuideQuestion],
+        questionGeneration: ChatGuideQuestionGenerationMeta? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.generatedAt = generatedAt
         self.memberID = memberID
         self.metricSections = metricSections
         self.questions = questions
+        self.questionGeneration = questionGeneration
+    }
+
+    /// 有效生成状态：旧 payload 无 meta 时按 questions 推断。
+    nonisolated var effectiveQuestionGenerationState: ChatGuideQuestionGenerationState {
+        if let state = questionGeneration?.state {
+            return state
+        }
+        return questions.isEmpty ? .generating : .preset
+    }
+
+    /// 是否应展示问题区 loading（覆盖旧问题，禁止点击）。
+    nonisolated var isShowingQuestionLoading: Bool {
+        switch effectiveQuestionGenerationState {
+        case .generating:
+            return true
+        case .failed:
+            return questions.isEmpty
+        case .preset, .generated, .fallback:
+            return false
+        }
+    }
+
+    /// 当前问题是否属于指定 thread 绑定成员。
+    nonisolated func questionsBelongTo(memberID: Int?) -> Bool {
+        guard let memberID else {
+            return questionGeneration?.memberID == nil
+        }
+        return questionGeneration?.memberID == memberID
     }
 }
 

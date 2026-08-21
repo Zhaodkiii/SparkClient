@@ -1349,6 +1349,8 @@
 "chat.guide.question.tcm_medicine_precautions.title" = "使用中成药有哪些注意事项?";
 "chat.guide.question.astragalus_suitable_groups.title" = "黄芪适合哪些人群服用?";
 "chat.guide.question.lactose_intolerance_handling.title" = "乳糖不耐受如何处理?";
+"chat.guide.questions.generating" = "正在根据成员资料生成健康科普问题...";
+"chat.guide.questions.generating.new_member" = "正在根据新成员资料生成科普问题...";
 "chat.status_card.interrupted.title" = "响应已停止";
 "chat.error.response_format" = "⚠️ 响应错误：%@";
 "chat.error.empty_output" = "⚠️ 生成内容为空，请重新尝试！";

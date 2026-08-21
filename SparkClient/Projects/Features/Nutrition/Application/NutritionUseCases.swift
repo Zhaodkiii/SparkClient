@@ -436,38 +436,38 @@ struct NutritionHealthKitSyncUseCase: Sendable {
         )
 
         do {
-            let intakeSamples = try await healthKitStore.fetchExternalIntakeSamples(on: date)
-            if intakeSamples.isEmpty == false {
-                let response = try await repository.importAppleHealthIntakes(
-                    SparkNutritionAPI.AppleHealthIntakeImportRequest(
-                        memberId: member.id,
-                        samples: intakeSamples
-                    )
-                )
-                logger.info(
-                    "HealthKit 外部营养摄入上报成功 samples=\(intakeSamples.count) imported=\(response.imported.count) duplicates=\(response.duplicates.count) memberID=\(member.id)",
-                    module: logModule
-                )
-            }
-
-            let burnSamples = try await healthKitStore.fetchEnergyBurnSamples(on: date)
-            if burnSamples.isEmpty == false {
-                let response = try await repository.importAppleHealthEnergyBurns(
-                    SparkNutritionAPI.AppleHealthEnergyBurnImportRequest(
-                        memberId: member.id,
-                        samples: burnSamples
-                    )
-                )
-                logger.info(
-                    "HealthKit 能量消耗上报成功 samples=\(burnSamples.count) imported=\(response.imported.count) duplicates=\(response.duplicates.count) memberID=\(member.id)",
-                    module: logModule
-                )
-            }
-
-            logger.info(
-                "HealthKit 同步完成 memberID=\(member.id) date=\(dateLabel) intakes=\(intakeSamples.count) burns=\(burnSamples.count)",
-                module: logModule
-            )
+//            let intakeSamples = try await healthKitStore.fetchExternalIntakeSamples(on: date)
+//            if intakeSamples.isEmpty == false {
+//                let response = try await repository.importAppleHealthIntakes(
+//                    SparkNutritionAPI.AppleHealthIntakeImportRequest(
+//                        memberId: member.id,
+//                        samples: intakeSamples
+//                    )
+//                )
+//                logger.info(
+//                    "HealthKit 外部营养摄入上报成功 samples=\(intakeSamples.count) imported=\(response.imported.count) duplicates=\(response.duplicates.count) memberID=\(member.id)",
+//                    module: logModule
+//                )
+//            }
+//
+//            let burnSamples = try await healthKitStore.fetchEnergyBurnSamples(on: date)
+//            if burnSamples.isEmpty == false {
+//                let response = try await repository.importAppleHealthEnergyBurns(
+//                    SparkNutritionAPI.AppleHealthEnergyBurnImportRequest(
+//                        memberId: member.id,
+//                        samples: burnSamples
+//                    )
+//                )
+//                logger.info(
+//                    "HealthKit 能量消耗上报成功 samples=\(burnSamples.count) imported=\(response.imported.count) duplicates=\(response.duplicates.count) memberID=\(member.id)",
+//                    module: logModule
+//                )
+//            }
+//
+//            logger.info(
+//                "HealthKit 同步完成 memberID=\(member.id) date=\(dateLabel) intakes=\(intakeSamples.count) burns=\(burnSamples.count)",
+//                module: logModule
+//            )
         } catch {
             logger.warning(
                 "HealthKit 同步失败 memberID=\(member.id) date=\(dateLabel) error=\(error.localizedDescription)",

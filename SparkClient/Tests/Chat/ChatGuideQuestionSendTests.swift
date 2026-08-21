@@ -7,6 +7,49 @@ import XCTest
 /// - HealthKit 不可用时各 section 降级、payload 仍生成
 /// - stub 数据齐全时 section 进入 ready 态
 final class ChatGuideQuestionSendTests: XCTestCase {
+    func testBuilderUsesPresetWhenMemberUnboundAndDefaultBindingDisabled() async {
+        let builder = ChatGuideCardPayloadBuilder(
+            healthReader: StubGuideHealthReader(healthDataAvailable: false),
+            medicalReader: StubGuideMedicalReader(),
+            logger: ConsoleLogger()
+        )
+
+        let payload = await builder.build(memberID: nil, defaultMemberBindingEnabled: false)
+
+        XCTAssertEqual(payload.schemaVersion, 2)
+        XCTAssertEqual(payload.questions, ChatGuideQuestionPreset.phaseOne)
+        XCTAssertEqual(payload.questionGeneration?.state, .preset)
+    }
+
+    func testBuilderUsesGeneratingWhenMemberBound() async {
+        let builder = ChatGuideCardPayloadBuilder(
+            healthReader: StubGuideHealthReader(healthDataAvailable: false),
+            medicalReader: StubGuideMedicalReader(),
+            logger: ConsoleLogger()
+        )
+
+        let payload = await builder.build(memberID: 42, defaultMemberBindingEnabled: false)
+
+        XCTAssertEqual(payload.schemaVersion, 2)
+        XCTAssertTrue(payload.questions.isEmpty)
+        XCTAssertEqual(payload.questionGeneration?.state, .generating)
+        XCTAssertEqual(payload.questionGeneration?.memberID, 42)
+        XCTAssertTrue(payload.isShowingQuestionLoading)
+    }
+
+    func testBuilderUsesGeneratingWhenDefaultBindingEnabledWithoutMember() async {
+        let builder = ChatGuideCardPayloadBuilder(
+            healthReader: StubGuideHealthReader(healthDataAvailable: false),
+            medicalReader: StubGuideMedicalReader(),
+            logger: ConsoleLogger()
+        )
+
+        let payload = await builder.build(memberID: nil, defaultMemberBindingEnabled: true)
+
+        XCTAssertTrue(payload.questions.isEmpty)
+        XCTAssertEqual(payload.questionGeneration?.state, .generating)
+    }
+
     func testBuilderEmbedsPresetQuestionsInPayload() async {
         let builder = ChatGuideCardPayloadBuilder(
             healthReader: StubGuideHealthReader(healthDataAvailable: false),
@@ -14,9 +57,9 @@ final class ChatGuideQuestionSendTests: XCTestCase {
             logger: ConsoleLogger()
         )
 
-        let payload = await builder.build(memberID: nil)
+        let payload = await builder.build(memberID: nil, defaultMemberBindingEnabled: false)
 
-        XCTAssertEqual(payload.schemaVersion, 1)
+        XCTAssertEqual(payload.schemaVersion, 2)
         XCTAssertEqual(payload.questions, ChatGuideQuestionPreset.phaseOne)
         XCTAssertEqual(Set(payload.questions.map(\.id)).count, payload.questions.count)
         // 每个 prompt 都可直接作为用户消息发送（非空、以标点结尾的完整问句）

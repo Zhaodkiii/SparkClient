@@ -586,6 +586,7 @@ extension ChatAssembly {
                     medicalReader: HealthResourceRepository(medicalQueryAPI: backend.medicalQuery),
                     logger: logger
                 ),
+                aiSettingsRepository: ai.aiSettingsRepository,
                 logger: logger
             ),
             retryFailedMessageUseCase: RetryFailedMessageUseCase(

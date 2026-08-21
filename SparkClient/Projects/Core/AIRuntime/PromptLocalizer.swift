@@ -609,4 +609,54 @@ nonisolated struct PromptLocalizer: Sendable {
             reason ?? defaultReason
         )
     }
+
+    /// 引导卡片科普问题生成 prompt。
+    nonisolated func chatGuideQuestionGenerationPrompt(
+        localeIdentifier: String,
+        metricSummary: String,
+        memberProfileSummary: String
+    ) -> String {
+        l10n.promptFormat(
+            "ai.prompt.chat.guide.question_generation.template",
+            fallback: """
+            你是健康科普问题生成助手。请基于成员资料摘要和当前健康数据，生成 3 个适合用户点击提问的健康科普问题。
+
+            要求:
+            1. 根节点必须是 JSON 数组，只输出 JSON 数组，不输出 Markdown，不要用对象包裹。
+            2. 每个对象必须包含 id、title、prompt、category。
+            3. id 必须是 snake_case 字符串（例如 daily_steps），禁止数字 id。
+            4. title 不超过 18 个中文字符，适合卡片展示。
+            5. prompt 可以比 title 更完整，但不能给出诊断结论。
+            6. category 固定为 popular_science。
+            7. 问题应是健康科普方向，不要生成治疗方案、处方建议、疾病确诊类问题。
+            8. 如果成员资料不足，生成通用健康科普问题。
+
+            当前语言：%@
+            健康数据摘要：
+            %@
+
+            成员资料摘要：
+            %@
+            """,
+            localeIdentifier,
+            metricSummary,
+            memberProfileSummary
+        )
+    }
+
+    /// 引导卡片科普问题 JSON 修复 prompt。
+    nonisolated func chatGuideQuestionRepairJSONPrompt(rawOutput: String) -> String {
+        l10n.promptFormat(
+            "ai.prompt.chat.guide.question_generation.repair_json",
+            fallback: """
+            下面是一段未能解析为合法 JSON 数组的模型输出。请只输出修复后的 JSON 数组，不要 Markdown，不要解释。
+            根节点必须是 JSON 数组。每个对象必须包含 id、title、prompt、category；id 必须是 snake_case 字符串，禁止数字 id；category 固定为 popular_science；数组长度必须为 3。
+            只修复 JSON 格式与 id 类型，不要改写 title、prompt 的语义内容。
+
+            原始输出：
+            %@
+            """,
+            rawOutput
+        )
+    }
 }

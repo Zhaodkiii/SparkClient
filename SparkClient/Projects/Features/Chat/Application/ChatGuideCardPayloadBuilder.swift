@@ -41,7 +41,10 @@ struct ChatGuideCardPayloadBuilder: Sendable {
         self.logger = logger
     }
 
-    func build(memberID: Int?) async -> ChatGuideCardPayload {
+    func build(
+        memberID: Int?,
+        defaultMemberBindingEnabled: Bool = false
+    ) async -> ChatGuideCardPayload {
         let calendar = Calendar.current
         let now = Date()
         let startOfToday = calendar.startOfDay(for: now)
@@ -60,12 +63,42 @@ struct ChatGuideCardPayloadBuilder: Sendable {
         async let medical = makeMedicalSection(memberID: memberID, completeData: completeData, now: now, calendar: calendar)
 
         let sections = await [movement, body, nutrition, medical]
+        let (questions, questionGeneration) = Self.initialQuestionState(
+            memberID: memberID,
+            defaultMemberBindingEnabled: defaultMemberBindingEnabled
+        )
         return ChatGuideCardPayload(
-            schemaVersion: 1,
+            schemaVersion: 2,
             generatedAt: now,
             memberID: memberID,
             metricSections: sections,
-            questions: ChatGuideQuestionPreset.phaseOne
+            questions: questions,
+            questionGeneration: questionGeneration
+        )
+    }
+
+    /// 插入引导卡片时的初始问题区状态。
+    nonisolated static func initialQuestionState(
+        memberID: Int?,
+        defaultMemberBindingEnabled: Bool
+    ) -> (questions: [ChatGuideQuestion], questionGeneration: ChatGuideQuestionGenerationMeta?) {
+        if memberID != nil || defaultMemberBindingEnabled {
+            return (
+                [],
+                ChatGuideQuestionGenerationMeta(
+                    state: .generating,
+                    source: "current_chat_ai",
+                    memberID: memberID
+                )
+            )
+        }
+        return (
+            ChatGuideQuestionPreset.phaseOne,
+            ChatGuideQuestionGenerationMeta(
+                state: .preset,
+                source: "preset",
+                memberID: nil
+            )
         )
     }
 

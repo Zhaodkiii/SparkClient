@@ -128,6 +128,8 @@ final class ChatListViewModel: ObservableObject {
             title: title
         )
         await reloadThreads(selectFirstIfNeeded: false)
+        // CHAT-000028 3.3：新建对话标记，进入 ChatView 时以此触发生成（而非页面进入推断）
+        stateStore.markThreadAsNewlyCreated(thread.id)
         stateStore.setSelectedThreadID(thread.id)
     }
 
@@ -149,6 +151,8 @@ final class ChatListViewModel: ObservableObject {
             title: mode.title
         )
         await reloadThreads(selectFirstIfNeeded: false)
+        // CHAT-000028 3.3：新建对话标记，进入 ChatView 时以此触发生成（而非页面进入推断）
+        stateStore.markThreadAsNewlyCreated(thread.id)
         stateStore.setSelectedThreadID(thread.id)
         stateStore.setDraft(mode.initialDraft, for: thread.id)
         logger.info(

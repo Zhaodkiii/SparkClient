@@ -7,6 +7,14 @@ import SwiftUI
 import UIKit
 #endif
 
+/// 会话成员绑定变更来源（CHAT-000028 触发边界收口）：
+/// - userSwitch：用户显式切换成员，允许触发科普问题重新生成；
+/// - startupDefaultBinding：composer 启动默认绑定，仅当本次新建对话时允许生成。
+enum ChatGuideMemberBindingContext: Sendable {
+    case userSwitch
+    case startupDefaultBinding(isNewlyCreatedThread: Bool)
+}
+
 @MainActor
 final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCardSink {
     private let stateStore: ChatStateStore
@@ -30,6 +38,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
     private let translateKnowledgeTextUseCase: TranslateKnowledgeTextUseCase
     private let createKnowledgeDocumentUseCase: CreateKnowledgeDocumentUseCase
     private let saveTypedMedicalDocumentUseCase: SaveTypedMedicalDocumentUseCase
+    private let guideQuestionGenerationCoordinator: ChatGuideQuestionGenerationCoordinator
     private let taskManager: TaskManager
     private let logger: Logger
     private var composerAttachmentTasks: [UUID: Task<Void, Never>] = [:]
@@ -90,6 +99,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         translateKnowledgeTextUseCase: TranslateKnowledgeTextUseCase,
         createKnowledgeDocumentUseCase: CreateKnowledgeDocumentUseCase,
         saveTypedMedicalDocumentUseCase: SaveTypedMedicalDocumentUseCase,
+        guideQuestionGenerationCoordinator: ChatGuideQuestionGenerationCoordinator,
         taskManager: TaskManager = .shared,
         logger: Logger = ConsoleLogger()
     ) {
@@ -119,6 +129,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         self.translateKnowledgeTextUseCase = translateKnowledgeTextUseCase
         self.createKnowledgeDocumentUseCase = createKnowledgeDocumentUseCase
         self.saveTypedMedicalDocumentUseCase = saveTypedMedicalDocumentUseCase
+        self.guideQuestionGenerationCoordinator = guideQuestionGenerationCoordinator
         self.taskManager = taskManager
         self.logger = logger
 
@@ -495,7 +506,11 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         }
     }
 
-    func updateThreadMemberBinding(_ memberID: Int?, for threadID: UUID) async {
+    func updateThreadMemberBinding(
+        _ memberID: Int?,
+        for threadID: UUID,
+        context: ChatGuideMemberBindingContext = .userSwitch
+    ) async {
         let current = await chatRepository.loadThread(id: threadID)
         guard current?.memberID != memberID else { return }
 
@@ -509,6 +524,28 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
             stateStore.upsertThreadListItem(item)
         }
         stateStore.pruneHealthResourceRefs(matchingMemberID: memberID, for: threadID)
+
+        // 仅用户显式切换成员、或本次新建对话的默认绑定成功时，才允许触发科普问题 AI 生成；
+        // 重新进入旧对话时的默认绑定只做固定兜底修复，不生成。
+        let allowsQuestionGeneration: Bool
+        switch context {
+        case .userSwitch:
+            allowsQuestionGeneration = true
+        case .startupDefaultBinding(let isNewlyCreatedThread):
+            allowsQuestionGeneration = isNewlyCreatedThread
+        }
+
+        let messages = stateStore.persistedMessages(for: threadID)
+        await guideQuestionGenerationCoordinator.handleMemberBindingChanged(
+            threadID: threadID,
+            newMemberID: memberID,
+            messages: messages,
+            stateStore: stateStore,
+            resolveModelName: { [weak self] id in
+                await self?.resolvePreferredChatModelName(for: id)
+            },
+            allowGeneration: allowsQuestionGeneration
+        )
     }
 
     var sparkMedicalQueryAPI: SparkMedicalQueryAPI { medicalQueryAPI }
@@ -667,6 +704,8 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
             if lockBottomViewport {
                 stateStore.endBottomViewportLock(for: threadID)
             }
+            // CHAT-000028 3.2：消息加载后不再恢复/触发科普问题生成，只做固定兜底修复
+            await repairGuideQuestionsForReenteredThreadIfNeeded()
 
         case .loadOlderPage(let threadID, let before):
             let older = await loadChatMessagesUseCase.execute(
@@ -684,6 +723,53 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         currentGenerationTask = Task { [weak self] in
             await self?.sendCurrentDraft(sendsOriginalImagesToAI: sendsOriginalImagesToAI)
         }
+    }
+
+    /// 新建对话首次初始化（trigger = .newlyCreatedThread）：
+    /// 仅当本次会话内新建对话时调用；thread 已绑定成员时生成一次，否则落固定问题。
+    func startGuideQuestionGenerationForNewlyCreatedThread() async {
+        guard let threadID = stateStore.selectedThreadID else { return }
+        let messages = stateStore.persistedMessages(for: threadID)
+        await guideQuestionGenerationCoordinator.startForNewThread(
+            threadID: threadID,
+            messages: messages,
+            stateStore: stateStore,
+            resolveModelName: { [weak self] id in
+                await self?.resolvePreferredChatModelName(for: id)
+            }
+        )
+    }
+
+    /// 重新进入已有对话：只修复异常 guide 卡片状态（generating/空问题 -> 固定问题），
+    /// 绝不触发科普问题 AI 生成（CHAT-000028 3.2）。
+    func repairGuideQuestionsForReenteredThreadIfNeeded() async {
+        guard let threadID = stateStore.selectedThreadID else { return }
+        // 新建对话未消费标记时不修复，由 task(id:) 的新建链路触发生成
+        guard stateStore.isThreadMarkedAsNewlyCreated(threadID) == false else { return }
+        let messages = stateStore.persistedMessages(for: threadID)
+        await guideQuestionGenerationCoordinator.repairGuideQuestionsForReenteredThread(
+            threadID: threadID,
+            messages: messages,
+            stateStore: stateStore
+        )
+    }
+
+    private func resolvePreferredChatModelName(for threadID: UUID) async -> String? {
+        let trimmedSelected = stateStore.composerDraft(for: threadID).runtimeFlags.selectedChatModelName?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if let trimmedSelected, trimmedSelected.isEmpty == false {
+            return trimmedSelected
+        }
+        if let thread = await chatRepository.loadThread(id: threadID),
+           let threadModel = thread.currentModelName?.trimmingCharacters(in: .whitespacesAndNewlines),
+           threadModel.isEmpty == false {
+            return threadModel
+        }
+        if let bundles = try? await aiConfigCenter.effectiveScenarioBundles(),
+           let row = bundles.resolveRow(for: .chat, preferredModelName: nil) {
+            return row.name
+        }
+        return nil
     }
 
     /// 引导卡片科普问题点击：程序化发送完整 prompt，绕过输入框草稿（不覆盖/清空用户已输入内容）。

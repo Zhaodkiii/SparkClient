@@ -79,5 +79,40 @@ final class ChatGuideCardPayloadCodableTests: XCTestCase {
             XCTAssertGreaterThan(question.prompt.count, question.title.count)
         }
     }
+
+    func testSchemaV1PayloadDecodesWithoutQuestionGenerationMeta() throws {
+        let json = """
+        {
+          "schemaVersion": 1,
+          "generatedAt": "2026-08-21T12:00:00Z",
+          "memberID": 42,
+          "metricSections": [],
+          "questions": [
+            {
+              "id": "tcm_medicine_precautions",
+              "title": "使用中成药有哪些注意事项?",
+              "prompt": "使用中成药有哪些注意事项?",
+              "category": "popular_science"
+            }
+          ]
+        }
+        """
+        let data = try XCTUnwrap(json.data(using: .utf8))
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let payload = try decoder.decode(ChatGuideCardPayload.self, from: data)
+        XCTAssertNil(payload.questionGeneration)
+        XCTAssertEqual(payload.effectiveQuestionGenerationState, .preset)
+        XCTAssertFalse(payload.isShowingQuestionLoading)
+    }
+
+    func testSchemaV2PayloadRoundTripsWithGenerationMeta() throws {
+        let payload = ChatGuideCardPreviewFixtures.generatingPayload
+        let data = try JSONEncoder.default.encode(payload)
+        let decoded = try JSONDecoder.default.decode(ChatGuideCardPayload.self, from: data)
+        XCTAssertEqual(decoded.schemaVersion, 2)
+        XCTAssertEqual(decoded.questionGeneration?.state, .generating)
+        XCTAssertTrue(decoded.isShowingQuestionLoading)
+    }
 }
 #endif

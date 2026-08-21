@@ -252,6 +252,8 @@
 "chat.guide.question.tcm_medicine_precautions.title" = "使用中成藥有哪些注意事項?";
 "chat.guide.question.astragalus_suitable_groups.title" = "黃芪適合哪些人群服用?";
 "chat.guide.question.lactose_intolerance_handling.title" = "乳糖不耐如何處理?";
+"chat.guide.questions.generating" = "正在根據成員資料生成健康科普問題...";
+"chat.guide.questions.generating.new_member" = "正在根據新成員資料生成科普問題...";
 
 "api_error.msg.access_denied" = "您的帳號因違規行為已觸犯用戶協議，已被系統永久禁止登入。如有疑問請聯繫客服處理。";
 "api_error.reason.account_banned" = "您的帳號因違規行為已觸犯用戶協議，已被系統永久禁止登入。如有疑問請聯繫客服處理。";
