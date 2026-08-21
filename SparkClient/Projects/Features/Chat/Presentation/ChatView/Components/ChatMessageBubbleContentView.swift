@@ -60,6 +60,7 @@ struct ChatMessageBubbleContentView: View {
     var guideSendingQuestionIDs: Set<String> = []
     /// 引导卡片滑块 → 健康首页 destination（CHAT-000025）；nil 时滑块降级为纯展示。
     var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
+    var guideMetricSectionsProvider: ChatGuideMetricSectionsProvider? = nil
     let onStructuredHealthCardAction: (ChatStructuredHealthCardAction) -> Void
     let onStructuredHealthCardOpenPreview: (UUID, ChatStructuredHealthCardItem, ChatMessage) -> Void
     let onNutritionCardAction: (ChatNutritionCardAction) -> Void
@@ -151,6 +152,7 @@ struct ChatMessageBubbleContentView: View {
             onSmallTaskCardOpen: onSmallTaskCardOpen,
             onGuideQuestionTap: onGuideQuestionTap,
             guideHomeDestinationBuilder: guideHomeDestinationBuilder,
+            guideMetricSectionsProvider: guideMetricSectionsProvider,
             onPresentToolPreview: onPresentToolPreview,
             fileTransferService: fileTransferService,
             medicalQueryAPI: medicalQueryAPI,

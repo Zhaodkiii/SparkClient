@@ -53,6 +53,7 @@ struct ChatView: View {
         imageDeliveryMode: .directMultimodal
     )
     @State private var sendsOriginalImagesToAITemporarily = false
+    @State private var isShowingGuideAddDevice = false
     
     /// CHAT-000030：详情页运行时唯一业务 thread 来源（右上角新建后原地切换）。
     private var currentThreadID: UUID {
@@ -583,6 +584,20 @@ struct ChatView: View {
                 )
                 .interactiveDismissDisabled(active.snapshot.requiresForcedSheetDismiss)
             }
+            .onReceive(NotificationCenter.default.publisher(for: .chatGuideBindHealthRequested)) { _ in
+                isShowingGuideAddDevice = true
+            }
+            .sheet(isPresented: $isShowingGuideAddDevice) {
+                NavigationStack {
+                    ChatGuideAddDeviceSheet(
+                        memberContextStore: homeViewModel.memberContextStoreForBinding
+                    )
+                }
+                .onDisappear {
+                    logger.info("chat.guide.metrics.binding_sheet_closed", module: .general)
+                    NotificationCenter.default.post(name: .chatGuideHealthBindingDidChange, object: nil)
+                }
+            }
             .alert(L10n.text("chat.list.no_available_model.title"), isPresented: $showNoAvailableChatModelAlert) {
                 Button(L10n.text("chat.list.no_available_model.action")) {
                     detailViewModel.toolInteractionCoordinator.presentAPIKeysSettings()
@@ -1110,6 +1125,19 @@ struct ChatView: View {
         return try? JSONSerialization.jsonObject(with: data)
     }
     
+}
+
+/// 对话列表内的健康设备管理 sheet，复用设备模块已有的成员与绑定管理流程。
+private struct ChatGuideAddDeviceSheet: View {
+    let memberContextStore: MemberContextStore
+
+    init(memberContextStore: MemberContextStore) {
+        self.memberContextStore = memberContextStore
+    }
+
+    var body: some View {
+        MyDevicesView(memberContextStore: memberContextStore)
+    }
 }
 
 /// 消息列表容器：缓存 refresh coordinator，避免 Representable 存储 async closure。

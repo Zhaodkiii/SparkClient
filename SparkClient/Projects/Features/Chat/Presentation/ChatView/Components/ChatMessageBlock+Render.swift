@@ -286,10 +286,12 @@ extension ChatMessageBlock {
             // 20. 新会话首条系统引导卡片（健康数据滑块 + 科普问题）
         case .chatGuideCard(let payload):
             ChatGuideMessageCardView(
+                threadID: context.message.threadID,
                 payload: payload,
                 onQuestionTap: context.onGuideQuestionTap,
                 sendingQuestionIDs: context.guideSendingQuestionIDs,
-                homeDestinationBuilder: context.guideHomeDestinationBuilder
+                homeDestinationBuilder: context.guideHomeDestinationBuilder,
+                metricSectionsProvider: context.guideMetricSectionsProvider
             )
 
         }

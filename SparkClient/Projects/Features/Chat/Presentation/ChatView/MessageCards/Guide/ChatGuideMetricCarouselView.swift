@@ -1,11 +1,17 @@
 import SwiftUI
 
+extension Notification.Name {
+    static let chatGuideBindHealthRequested = Notification.Name("chat.guide.bindHealthRequested")
+    static let chatGuideHealthBindingDidChange = Notification.Name("chat.guide.healthBindingDidChange")
+}
+
 /// 引导卡片数据滑块：横向分页切换四类健康数据 section，底部胶囊/圆点指示当前位置。
 /// 注入 `homeDestinationBuilder` 后滑块页主体可点击，通过消息内 NavigationLink push 健康首页
 /// 并按类别定位分段（CHAT-000025）；builder 缺失时降级为纯展示面板。
 struct ChatGuideMetricCarouselView: View {
     let sections: [ChatGuideMetricSection]
     var homeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
+    var onPageChanged: ((ChatGuideMetricSection) -> Void)? = nil
 
     @State private var selectedIndex: Int = 0
 
@@ -30,6 +36,10 @@ struct ChatGuideMetricCarouselView: View {
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 .frame(minHeight: 156)
                 .fixedSize(horizontal: false, vertical: true)
+                .onChange(of: selectedIndex) { _, newIndex in
+                    guard sections.indices.contains(newIndex) else { return }
+                    onPageChanged?(sections[newIndex])
+                }
 
                 ChatGuidePageIndicator(count: sections.count, currentIndex: displayIndex)
             }
@@ -204,7 +214,10 @@ private struct ChatGuideActionButton: View {
     let action: ChatGuideMetricAction
 
     var body: some View {
-        Button(action: {}) {
+        Button {
+            guard action.kind == .bindHealth else { return }
+            NotificationCenter.default.post(name: .chatGuideBindHealthRequested, object: nil)
+        } label: {
             Text(action.title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.white)
@@ -216,7 +229,6 @@ private struct ChatGuideActionButton: View {
                 )
         }
         .buttonStyle(.plain)
-        .allowsHitTesting(false)
     }
 }
 

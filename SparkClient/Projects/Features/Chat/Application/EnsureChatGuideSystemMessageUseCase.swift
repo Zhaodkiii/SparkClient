@@ -23,15 +23,18 @@ struct EnsureChatGuideSystemMessageUseCase: Sendable {
     let repository: any ChatRepository
     /// 引导卡片数据聚合器；nil 时不插入（测试 / 访客链路）。
     let guideCardBuilder: ChatGuideCardPayloadBuilder?
+    let accessGate: HealthDataAccessGate
     let logger: Logger
 
     init(
         repository: any ChatRepository,
         guideCardBuilder: ChatGuideCardPayloadBuilder?,
+        accessGate: HealthDataAccessGate = .shared,
         logger: Logger = ConsoleLogger()
     ) {
         self.repository = repository
         self.guideCardBuilder = guideCardBuilder
+        self.accessGate = accessGate
         self.logger = logger
     }
 
@@ -51,7 +54,15 @@ struct EnsureChatGuideSystemMessageUseCase: Sendable {
 
         // 默认绑定已在 thread 创建阶段解析完成（CHAT-000029 3.1），
         // 此处不再依赖 defaultMemberBindingEnabled 推迟初始状态。
-        let payload = await guideCardBuilder.build(memberID: thread.memberID)
+        let healthAccess = await healthDataAccessResult(memberID: thread.memberID)
+        logger.info(
+            "chat.guide.metrics.initial_access thread=\(String(threadID.uuidString.prefix(8))) member=\(thread.memberID.map(String.init) ?? "nil") granted=\(healthAccess.isGranted) reason=\(Self.logReason(for: healthAccess))",
+            module: .general
+        )
+        let payload = await guideCardBuilder.build(
+            memberID: thread.memberID,
+            healthDataAuthorized: healthAccess.isGranted
+        )
         let message = ChatGuideSystemMessageFactory.make(threadID: threadID, payload: payload)
         do {
             let inserted = try await repository.appendMessage(message)
@@ -70,6 +81,34 @@ struct EnsureChatGuideSystemMessageUseCase: Sendable {
                 module: .general
             )
             return Output(target: nil, didInsert: false)
+        }
+    }
+
+    private func healthDataAccessResult(memberID: Int?) async -> HealthDataAccessResult {
+        guard let memberID else {
+            return .noBinding(.appleHealth)
+        }
+        return await accessGate.checkAccess(for: .appleHealth, memberId: memberID)
+    }
+
+    nonisolated private static func logReason(for result: HealthDataAccessResult) -> String {
+        switch result {
+        case .granted:
+            return "granted"
+        case .noBinding:
+            return "no_binding"
+        case .authorizationRevoked:
+            return "authorization_revoked"
+        case .authorizationDenied:
+            return "authorization_denied"
+        case .partialAuthorization:
+            return "partial_authorization"
+        case .memberNotBound:
+            return "member_not_bound"
+        case .dataSourceNotAvailable:
+            return "data_source_not_available"
+        case .healthKitUnavailable:
+            return "healthkit_unavailable"
         }
     }
 }

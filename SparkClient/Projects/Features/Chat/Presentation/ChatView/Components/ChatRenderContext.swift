@@ -5,6 +5,15 @@ import SwiftUI
 /// payload 模型与 Chat 业务层不感知首页依赖细节。
 typealias ChatGuideHomeDestinationBuilder = (ChatGuideMetricCategory) -> AnyView
 
+/// 健康滑块实时刷新结果：成员上下文必须来自当前 thread，而不是消息 payload 快照。
+struct ChatGuideMetricReloadResult: Sendable {
+    let threadID: UUID
+    let memberID: Int?
+    let sections: [ChatGuideMetricSection]
+}
+
+typealias ChatGuideMetricSectionsProvider = (UUID) async -> ChatGuideMetricReloadResult?
+
 /// 聊天消息渲染上下文
 /// 承载渲染消息块所需的所有数据、状态、回调，统一传递给各个 UI 组件
 struct ChatRenderContext {
@@ -62,6 +71,7 @@ struct ChatRenderContext {
     /// 引导卡片滑块点击 → 健康首页 destination（CHAT-000025）。
     /// nil（宿主未注入 / 旧宿主）时滑块降级为纯展示面板，不影响问题点击。
     var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
+    var guideMetricSectionsProvider: ChatGuideMetricSectionsProvider? = nil
     /// 展示工具详情全局 Sheet（由消息行注入，传入预览载荷与当前渲染上下文）。
     let onPresentToolPreview: (ToolPreviewPrompt, ChatRenderContext) -> Void
 
@@ -125,6 +135,7 @@ extension ChatRenderContext {
             onSmallTaskCardOpen: onSmallTaskCardOpen,
             onGuideQuestionTap: onGuideQuestionTap,
             guideHomeDestinationBuilder: guideHomeDestinationBuilder,
+            guideMetricSectionsProvider: guideMetricSectionsProvider,
             onPresentToolPreview: onPresentToolPreview,
             fileTransferService: fileTransferService,
             medicalQueryAPI: medicalQueryAPI,

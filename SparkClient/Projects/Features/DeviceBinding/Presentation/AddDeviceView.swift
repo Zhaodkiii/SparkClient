@@ -5,8 +5,11 @@ struct AddDeviceView: View {
     @ObservedObject var viewModel: DeviceBindingUseCase
 
     @State private var pickMemberForAppleHealth = false
+    @State private var pendingAppleHealthMember: Member?
     @State private var unavailableSource: HealthDataSourceType?
     @State private var bindErrorMessage: String?
+
+    private let logger: Logger = ConsoleLogger()
 
     private let accountSources: [HealthDataSourceType] = [
         .huaweiHealth, .appleHealth, .vivoHealth, .coros,
@@ -33,14 +36,17 @@ struct AddDeviceView: View {
         .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
         .navigationTitle(L10n.text("device.add.title", fallback: "选择并添加设备"))
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $pickMemberForAppleHealth) {
+        .sheet(
+            isPresented: $pickMemberForAppleHealth,
+            onDismiss: startPendingAppleHealthBinding
+        ) {
             MemberSelectionSheet(
                 title: L10n.text("device.add.select_member", fallback: "选择绑定成员"),
                 members: viewModel.members,
                 selectedMemberID: appleHealthBinding?.memberId
             ) { member in
+                pendingAppleHealthMember = member
                 pickMemberForAppleHealth = false
-                bindAppleHealth(to: member)
             }
         }
         .alert(
@@ -117,14 +123,46 @@ struct AddDeviceView: View {
     }
 
     private func bindAppleHealth(to member: Member) {
+        logger.info(
+            "device.healthkit.binding_start member=\(member.id)",
+            module: .general
+        )
         Task {
             do {
                 try await viewModel.bindAppleHealth(to: member)
+                logger.info(
+                    "device.healthkit.binding_success member=\(member.id)",
+                    module: .general
+                )
             } catch let error as DeviceBindingError {
+                logger.error(
+                    "device.healthkit.binding_failed member=\(member.id) error=\(error.localizedDescription)",
+                    module: .general
+                )
                 bindErrorMessage = error.errorDescription
             } catch {
+                logger.error(
+                    "device.healthkit.binding_failed member=\(member.id) error=\(error.localizedDescription)",
+                    module: .general
+                )
                 bindErrorMessage = error.localizedDescription
             }
+        }
+    }
+
+    /// 成员选择 sheet 必须先完成退出，HealthKit 才能从当前页面层级安全呈现系统授权页。
+    private func startPendingAppleHealthBinding() {
+        guard let member = pendingAppleHealthMember else { return }
+        pendingAppleHealthMember = nil
+        logger.info(
+            "device.healthkit.member_sheet_dismissed member=\(member.id)",
+            module: .general
+        )
+
+        Task { @MainActor in
+            // 等待 SwiftUI 完成 sheet 的 presentation transaction，避免授权页挂在已失效的 hosting controller 上。
+            await Task.yield()
+            bindAppleHealth(to: member)
         }
     }
 }

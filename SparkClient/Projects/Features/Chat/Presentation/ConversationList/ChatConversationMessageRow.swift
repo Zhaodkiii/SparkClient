@@ -219,6 +219,9 @@ struct ChatConversationMessageRow: View {
             onWeatherConfigCardOpen: { _ in },
             savingStructuredHealthCardIDs: [],
             savingNutritionCardIDs: [],
+            guideMetricSectionsProvider: { threadID in
+                await detailViewModel.loadGuideMetricSections(threadID: threadID)
+            },
             onStructuredHealthCardAction: { _ in },
             onStructuredHealthCardOpenPreview: { _, _, _ in },
             onNutritionCardAction: { _ in },
@@ -418,6 +421,9 @@ struct ChatConversationMessageRow: View {
             savingNutritionCardIDs: detailViewModel.savingNutritionCardIDs,
             guideSendingQuestionIDs: detailViewModel.sendingGuideQuestionIDs,
             guideHomeDestinationBuilder: guideHomeDestinationBuilder,
+            guideMetricSectionsProvider: { threadID in
+                await detailViewModel.loadGuideMetricSections(threadID: threadID)
+            },
             onStructuredHealthCardAction: handleStructuredHealthCardAction,
             onStructuredHealthCardOpenPreview: openStructuredHealthCardPreview,
             onNutritionCardAction: handleNutritionCardAction,

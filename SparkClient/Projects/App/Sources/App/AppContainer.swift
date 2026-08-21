@@ -583,12 +583,14 @@ final class AppContainer {
             aiSettingsRepository: ai.aiSettingsRepository,
             logger: logger
         )
+        let guideCardPayloadBuilder = ChatGuideCardPayloadBuilder(
+            medicalReader: guideQuestionHealthRepository,
+            logger: logger
+        )
         let ensureGuideSystemMessageUseCase = EnsureChatGuideSystemMessageUseCase(
             repository: chat.chatRepository,
-            guideCardBuilder: ChatGuideCardPayloadBuilder(
-                medicalReader: guideQuestionHealthRepository,
-                logger: logger
-            ),
+            guideCardBuilder: guideCardPayloadBuilder,
+            accessGate: .shared,
             logger: logger
         )
         self.chatDetailViewModel = ChatDetailViewModel(
@@ -615,6 +617,8 @@ final class AppContainer {
             saveTypedMedicalDocumentUseCase: medical.saveTypedMedicalDocumentUseCase,
             guideQuestionGenerationCoordinator: guideQuestionGenerationCoordinator,
             ensureGuideSystemMessageUseCase: ensureGuideSystemMessageUseCase,
+            guideCardPayloadBuilder: guideCardPayloadBuilder,
+            healthDataAccessGate: .shared,
             logger: logger
         )
         self.deepTutorChatViewModel = DeepTutorChatViewModel(

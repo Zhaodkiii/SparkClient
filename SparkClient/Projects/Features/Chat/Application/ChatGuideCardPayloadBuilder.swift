@@ -43,22 +43,34 @@ struct ChatGuideCardPayloadBuilder: Sendable {
 
     func build(
         memberID: Int?,
-        defaultMemberBindingEnabled: Bool = false
+        defaultMemberBindingEnabled: Bool = false,
+        healthDataAuthorized: Bool = true
     ) async -> ChatGuideCardPayload {
         let calendar = Calendar.current
         let now = Date()
         let startOfToday = calendar.startOfDay(for: now)
         let weekAgo = calendar.date(byAdding: .day, value: -6, to: startOfToday) ?? startOfToday
 
-        async let movement = makeMovementSection(weekAgo: weekAgo, today: startOfToday, now: now, calendar: calendar)
-        async let body = makeBodyManagementSection(now: now, calendar: calendar)
+        async let movement = makeMovementSection(
+            weekAgo: weekAgo,
+            today: startOfToday,
+            now: now,
+            calendar: calendar,
+            healthDataAuthorized: healthDataAuthorized
+        )
+        async let body = makeBodyManagementSection(
+            now: now,
+            calendar: calendar,
+            healthDataAuthorized: healthDataAuthorized
+        )
 
         let completeData = await fetchCompleteData(memberID: memberID)
         async let nutrition = makeNutritionSection(
             today: startOfToday,
             now: now,
             calendar: calendar,
-            completeData: completeData
+            completeData: completeData,
+            healthDataAuthorized: healthDataAuthorized
         )
         async let medical = makeMedicalSection(memberID: memberID, completeData: completeData, now: now, calendar: calendar)
 
@@ -108,9 +120,20 @@ struct ChatGuideCardPayloadBuilder: Sendable {
         weekAgo: Date,
         today: Date,
         now: Date,
-        calendar: Calendar
+        calendar: Calendar,
+        healthDataAuthorized: Bool
     ) async -> ChatGuideMetricSection {
         let title = L10n.text("chat.guide.section.movement.title", fallback: "运动数据")
+
+        guard healthDataAuthorized else {
+            return ChatGuideMetricSection(
+                id: "movement",
+                category: .movement,
+                title: title,
+                action: Self.bindHealthAction(),
+                state: .unauthorized
+            )
+        }
 
         guard healthReader.isHealthDataAvailable() else {
             return ChatGuideMetricSection(
@@ -189,8 +212,23 @@ struct ChatGuideCardPayloadBuilder: Sendable {
 
     // MARK: - 身材管理
 
-    private func makeBodyManagementSection(now: Date, calendar: Calendar) async -> ChatGuideMetricSection {
+    private func makeBodyManagementSection(
+        now: Date,
+        calendar: Calendar,
+        healthDataAuthorized: Bool
+    ) async -> ChatGuideMetricSection {
         let title = L10n.text("chat.guide.section.body.title", fallback: "身材管理")
+
+        guard healthDataAuthorized else {
+            return ChatGuideMetricSection(
+                id: "body",
+                category: .bodyManagement,
+                title: title,
+                subtitle: L10n.text("chat.guide.section.body.subtitle", fallback: "最近 90 天"),
+                action: Self.bindHealthAction(),
+                state: .unauthorized
+            )
+        }
 
         guard let summary = await healthReader.fetchBodyManagementSummary(days: 90) else {
             return ChatGuideMetricSection(
@@ -257,12 +295,23 @@ struct ChatGuideCardPayloadBuilder: Sendable {
         today: Date,
         now: Date,
         calendar: Calendar,
-        completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
+        completeData: SparkMedicalSyncAPI.RemoteMemberCompleteData?,
+        healthDataAuthorized: Bool
     ) async -> ChatGuideMetricSection {
         let title = L10n.text("chat.guide.section.nutrition.title", fallback: "饮食营养")
 
         // 目标能量：优先取成员已确认目标，缺失时不展示"剩余"
         let goalKcal = completeData?.nutritionGoalState?.goal?.dailyEnergyTargetKcal
+
+        guard healthDataAuthorized else {
+            return ChatGuideMetricSection(
+                id: "nutrition",
+                category: .nutrition,
+                title: title,
+                action: Self.bindHealthAction(),
+                state: .unauthorized
+            )
+        }
 
         guard healthReader.isHealthDataAvailable() else {
             return ChatGuideMetricSection(

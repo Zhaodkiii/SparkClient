@@ -73,6 +73,29 @@ nonisolated struct ChatGuideCardPayload: Codable, Equatable, Sendable {
         self.questionGeneration = questionGeneration
     }
 
+    /// 健康滑块是页面实时数据，不属于消息快照。
+    nonisolated init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodableKey.self)
+        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .key("schemaVersion")) ?? 1
+        generatedAt = try container.decodeIfPresent(Date.self, forKey: .key("generatedAt")) ?? Date()
+        memberID = try container.decodeIfPresent(Int.self, forKey: .key("memberID"))
+        questions = try container.decodeIfPresent([ChatGuideQuestion].self, forKey: .key("questions")) ?? []
+        questionGeneration = try container.decodeIfPresent(
+            ChatGuideQuestionGenerationMeta.self,
+            forKey: .key("questionGeneration")
+        )
+        metricSections = []
+    }
+
+    nonisolated func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodableKey.self)
+        try container.encode(schemaVersion, forKey: .key("schemaVersion"))
+        try container.encode(generatedAt, forKey: .key("generatedAt"))
+        try container.encodeIfPresent(memberID, forKey: .key("memberID"))
+        try container.encode(questions, forKey: .key("questions"))
+        try container.encodeIfPresent(questionGeneration, forKey: .key("questionGeneration"))
+    }
+
     /// 有效生成状态：旧 payload 无 meta 时按 questions 推断。
     nonisolated var effectiveQuestionGenerationState: ChatGuideQuestionGenerationState {
         if let state = questionGeneration?.state {

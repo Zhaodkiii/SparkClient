@@ -13,9 +13,14 @@ final class HealthKitAuthorizationStore: @unchecked Sendable {
     let healthStore = HKHealthStore()
 
     private let readTypes = HealthKitAuthorizationStore.requiredReadTypes()
+    private let logger: Logger
 
     /// 单飞保护：并发点击「绑定」时同一时刻只允许一个授权请求在途，避免系统回调丢失导致挂起。
     private let requestGate = RequestGate()
+
+    init(logger: Logger = ConsoleLogger()) {
+        self.logger = logger
+    }
 
     /// 设备是否支持 HealthKit。
     var isHealthDataAvailable: Bool {
@@ -27,28 +32,46 @@ final class HealthKitAuthorizationStore: @unchecked Sendable {
     /// 若已授权（`.unnecessary`），不会再次弹系统授权框，直接返回 `.authorized`，避免重复请求导致回调挂起。
     func requestAuthorization(writeTypes: Set<HKSampleType> = []) async throws -> HealthAuthorizationStatus {
         guard isHealthDataAvailable else {
+            logger.warning("device.healthkit.authorization_unavailable", module: .general)
             return .denied
         }
 
         // 已授权或无需请求 → 直接判定为已授权，跳过系统授权请求。
-        if await currentRequestStatus(writeTypes: writeTypes) == .unnecessary {
+        let requestStatus = await currentRequestStatus(writeTypes: writeTypes)
+        logger.info(
+            "device.healthkit.authorization_request_status status=\(String(describing: requestStatus))",
+            module: .general
+        )
+        if requestStatus == .unnecessary {
+            logger.info("device.healthkit.authorization_already_authorized", module: .general)
             return .authorized
         }
 
         // 已有授权请求在途，本次直接重新确认状态即可。
         guard await requestGate.tryBegin() else {
+            logger.warning("device.healthkit.authorization_request_coalesced", module: .general)
             return await checkAuthorizationStatus()
         }
 
         do {
+            logger.info("device.healthkit.authorization_request_start", module: .general)
             try await requestAuthorization(toShare: writeTypes, read: readTypes)
         } catch {
             await requestGate.end()
+            logger.error(
+                "device.healthkit.authorization_request_failed error=\(error.localizedDescription)",
+                module: .general
+            )
             throw error
         }
 
         await requestGate.end()
-        return await checkAuthorizationStatus()
+        let finalStatus = await checkAuthorizationStatus()
+        logger.info(
+            "device.healthkit.authorization_request_finished status=\(finalStatus.rawValue)",
+            module: .general
+        )
+        return finalStatus
     }
 
     /// 实时检查当前读取授权状态。

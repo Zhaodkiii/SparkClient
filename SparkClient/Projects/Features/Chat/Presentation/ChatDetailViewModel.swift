@@ -32,6 +32,8 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
     private let saveTypedMedicalDocumentUseCase: SaveTypedMedicalDocumentUseCase
     private let guideQuestionGenerationCoordinator: ChatGuideQuestionGenerationCoordinator
     private let ensureGuideSystemMessageUseCase: EnsureChatGuideSystemMessageUseCase
+    private let guideCardPayloadBuilder: ChatGuideCardPayloadBuilder
+    private let healthDataAccessGate: HealthDataAccessGate
     private let taskManager: TaskManager
     private let logger: Logger
     private var composerAttachmentTasks: [UUID: Task<Void, Never>] = [:]
@@ -94,6 +96,8 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         saveTypedMedicalDocumentUseCase: SaveTypedMedicalDocumentUseCase,
         guideQuestionGenerationCoordinator: ChatGuideQuestionGenerationCoordinator,
         ensureGuideSystemMessageUseCase: EnsureChatGuideSystemMessageUseCase,
+        guideCardPayloadBuilder: ChatGuideCardPayloadBuilder,
+        healthDataAccessGate: HealthDataAccessGate = .shared,
         taskManager: TaskManager = .shared,
         logger: Logger = ConsoleLogger()
     ) {
@@ -125,6 +129,8 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         self.saveTypedMedicalDocumentUseCase = saveTypedMedicalDocumentUseCase
         self.guideQuestionGenerationCoordinator = guideQuestionGenerationCoordinator
         self.ensureGuideSystemMessageUseCase = ensureGuideSystemMessageUseCase
+        self.guideCardPayloadBuilder = guideCardPayloadBuilder
+        self.healthDataAccessGate = healthDataAccessGate
         self.taskManager = taskManager
         self.logger = logger
 
@@ -536,6 +542,60 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
 
     func updateCachedMemberCompleteData(_ data: SparkMedicalSyncAPI.RemoteMemberCompleteData?) {
         cachedMemberCompleteData = data
+    }
+
+    /// 引导卡片健康滑块只读当前线程成员的实时缓存，不依赖消息 payload，也不回写消息。
+    func loadGuideMetricSections(threadID: UUID) async -> ChatGuideMetricReloadResult? {
+        guard let thread = await chatRepository.loadThread(id: threadID) else {
+            logger.info(
+                "chat.guide.metrics.member_resolved thread=\(shortID(threadID)) member=nil source=thread_repository result=unavailable",
+                module: .general
+            )
+            return nil
+        }
+        let memberID = thread.memberID
+        logger.info(
+            "chat.guide.metrics.member_resolved thread=\(shortID(threadID)) member=\(memberID.map(String.init) ?? "nil") source=thread_repository",
+            module: .general
+        )
+        let healthAccess = await guideHealthDataAccessResult(memberID: memberID)
+        logger.info(
+            "chat.guide.metrics.page_access thread=\(shortID(threadID)) member=\(memberID.map(String.init) ?? "nil") granted=\(healthAccess.isGranted) reason=\(Self.healthAccessLogReason(for: healthAccess))",
+            module: .general
+        )
+        let sections = await guideCardPayloadBuilder.build(
+            memberID: memberID,
+            healthDataAuthorized: healthAccess.isGranted
+        ).metricSections
+        return ChatGuideMetricReloadResult(threadID: threadID, memberID: memberID, sections: sections)
+    }
+
+    private func guideHealthDataAccessResult(memberID: Int?) async -> HealthDataAccessResult {
+        guard let memberID else {
+            return .noBinding(.appleHealth)
+        }
+        return await healthDataAccessGate.checkAccess(for: .appleHealth, memberId: memberID)
+    }
+
+    nonisolated private static func healthAccessLogReason(for result: HealthDataAccessResult) -> String {
+        switch result {
+        case .granted:
+            return "granted"
+        case .noBinding:
+            return "no_binding"
+        case .authorizationRevoked:
+            return "authorization_revoked"
+        case .authorizationDenied:
+            return "authorization_denied"
+        case .partialAuthorization:
+            return "partial_authorization"
+        case .memberNotBound:
+            return "member_not_bound"
+        case .dataSourceNotAvailable:
+            return "data_source_not_available"
+        case .healthKitUnavailable:
+            return "healthkit_unavailable"
+        }
     }
 
     func fetchMemberCompleteData(memberID: Int) async throws -> SparkMedicalSyncAPI.RemoteMemberCompleteData {
