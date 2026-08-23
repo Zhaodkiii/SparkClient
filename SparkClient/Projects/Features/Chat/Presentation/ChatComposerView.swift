@@ -451,6 +451,9 @@ private struct ChatComposerTextView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UITextView, context: Context) {
+        // CHAT-000035：详情页原地切换 Thread 后 UIKit Coordinator 可能被复用；
+        // 先更新当前 Binding，确保输入回写到当前 Thread 的草稿。
+        context.coordinator.parent = self
         if uiView.text != text {
             uiView.text = text
         }
@@ -477,7 +480,7 @@ private struct ChatComposerTextView: UIViewRepresentable {
     }
 
     final class Coordinator: NSObject, UITextViewDelegate {
-        private let parent: ChatComposerTextView
+        var parent: ChatComposerTextView
 
         init(_ parent: ChatComposerTextView) {
             self.parent = parent

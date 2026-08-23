@@ -623,6 +623,10 @@ private struct HanlinChatTextUIKitView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UITextView, context: Context) {
+        // CHAT-000035：ChatView 在详情页内切换 Thread 时 SwiftUI 可能复用
+        // UITextView/Coordinator；必须先把当前 Thread 的 Binding 同步给代理，
+        // 否则输入会继续写入旧 Thread，并被当前 Thread 的草稿回刷覆盖。
+        context.coordinator.parent = self
         if uiView.text != text {
             uiView.text = text
         }
@@ -652,7 +656,7 @@ private struct HanlinChatTextUIKitView: UIViewRepresentable {
     }
 
     final class Coordinator: NSObject, UITextViewDelegate {
-        private let parent: HanlinChatTextUIKitView
+        var parent: HanlinChatTextUIKitView
 
         init(_ parent: HanlinChatTextUIKitView) {
             self.parent = parent
