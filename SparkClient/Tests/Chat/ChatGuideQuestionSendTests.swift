@@ -33,7 +33,7 @@ final class ChatGuideQuestionSendTests: XCTestCase {
         XCTAssertEqual(payload.schemaVersion, 2)
         XCTAssertTrue(payload.questions.isEmpty)
         XCTAssertEqual(payload.questionGeneration?.state, .generating)
-        XCTAssertEqual(payload.questionGeneration?.memberID, 42)
+        XCTAssertEqual(payload.questionGeneration?.memberId, 42)
         XCTAssertTrue(payload.isShowingQuestionLoading)
     }
 

@@ -18,7 +18,7 @@ nonisolated enum ChatGuideQuestionGenerationState: String, Codable, Equatable, S
 nonisolated struct ChatGuideQuestionGenerationMeta: Codable, Equatable, Sendable {
     var state: ChatGuideQuestionGenerationState
     var source: String?
-    var memberID: Int?
+    var memberId: Int?
     var memberProfileDigest: String?
     var generatedAt: Date?
     var errorMessage: String?
@@ -26,14 +26,14 @@ nonisolated struct ChatGuideQuestionGenerationMeta: Codable, Equatable, Sendable
     nonisolated init(
         state: ChatGuideQuestionGenerationState,
         source: String? = nil,
-        memberID: Int? = nil,
+        memberId: Int? = nil,
         memberProfileDigest: String? = nil,
         generatedAt: Date? = nil,
         errorMessage: String? = nil
     ) {
         self.state = state
         self.source = source
-        self.memberID = memberID
+        self.memberId = memberId
         self.memberProfileDigest = memberProfileDigest
         self.generatedAt = generatedAt
         self.errorMessage = errorMessage
@@ -49,7 +49,7 @@ nonisolated struct ChatGuideCardPayload: Codable, Equatable, Sendable {
     /// payload 构建时间（引导卡片生成时刻）。
     var generatedAt: Date
     /// 构建时选中的成员 ID（nil 表示未指定成员）。
-    var memberID: Int?
+    var memberId: Int?
     /// 健康数据滑块 section 列表（运动/身材/饮食/医疗）。
     var metricSections: [ChatGuideMetricSection]
     /// 健康科普问题列表。
@@ -60,14 +60,14 @@ nonisolated struct ChatGuideCardPayload: Codable, Equatable, Sendable {
     nonisolated init(
         schemaVersion: Int,
         generatedAt: Date,
-        memberID: Int?,
+        memberId: Int?,
         metricSections: [ChatGuideMetricSection],
         questions: [ChatGuideQuestion],
         questionGeneration: ChatGuideQuestionGenerationMeta? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.generatedAt = generatedAt
-        self.memberID = memberID
+        self.memberId = memberId
         self.metricSections = metricSections
         self.questions = questions
         self.questionGeneration = questionGeneration
@@ -78,7 +78,7 @@ nonisolated struct ChatGuideCardPayload: Codable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: CodableKey.self)
         schemaVersion = try container.decodeIfPresent(Int.self, forKey: .key("schemaVersion")) ?? 1
         generatedAt = try container.decodeIfPresent(Date.self, forKey: .key("generatedAt")) ?? Date()
-        memberID = try container.decodeIfPresent(Int.self, forKey: .key("memberID"))
+        memberId = try container.decodeIfPresent(Int.self, forKey: .key("memberId"))
         questions = try container.decodeIfPresent([ChatGuideQuestion].self, forKey: .key("questions")) ?? []
         questionGeneration = try container.decodeIfPresent(
             ChatGuideQuestionGenerationMeta.self,
@@ -91,7 +91,7 @@ nonisolated struct ChatGuideCardPayload: Codable, Equatable, Sendable {
         var container = encoder.container(keyedBy: CodableKey.self)
         try container.encode(schemaVersion, forKey: .key("schemaVersion"))
         try container.encode(generatedAt, forKey: .key("generatedAt"))
-        try container.encodeIfPresent(memberID, forKey: .key("memberID"))
+        try container.encodeIfPresent(memberId, forKey: .key("memberId"))
         try container.encode(questions, forKey: .key("questions"))
         try container.encodeIfPresent(questionGeneration, forKey: .key("questionGeneration"))
     }
@@ -119,9 +119,9 @@ nonisolated struct ChatGuideCardPayload: Codable, Equatable, Sendable {
     /// 当前问题是否属于指定 thread 绑定成员。
     nonisolated func questionsBelongTo(memberID: Int?) -> Bool {
         guard let memberID else {
-            return questionGeneration?.memberID == nil
+            return questionGeneration?.memberId == nil
         }
-        return questionGeneration?.memberID == memberID
+        return questionGeneration?.memberId == memberID
     }
 }
 
@@ -259,12 +259,21 @@ nonisolated struct ChatGuideQuestion: Identifiable, Codable, Equatable, Sendable
     var prompt: String
     /// 问题分类标识（如 `popular_science`）。
     var category: String
+    /// 服务端登记后返回的问题 ID，用于点击统计上送；固定兜底问题恒为 nil。
+    var serverQuestionId: Int?
 
-    nonisolated init(id: String, title: String, prompt: String, category: String) {
+    nonisolated init(
+        id: String,
+        title: String,
+        prompt: String,
+        category: String,
+        serverQuestionId: Int? = nil
+    ) {
         self.id = id
         self.title = title
         self.prompt = prompt
         self.category = category
+        self.serverQuestionId = serverQuestionId
     }
 }
 

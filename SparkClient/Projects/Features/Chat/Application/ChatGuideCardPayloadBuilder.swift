@@ -82,7 +82,7 @@ struct ChatGuideCardPayloadBuilder: Sendable {
         return ChatGuideCardPayload(
             schemaVersion: 2,
             generatedAt: now,
-            memberID: memberID,
+            memberId: memberID,
             metricSections: sections,
             questions: questions,
             questionGeneration: questionGeneration
@@ -100,7 +100,7 @@ struct ChatGuideCardPayloadBuilder: Sendable {
                 ChatGuideQuestionGenerationMeta(
                     state: .generating,
                     source: "current_chat_ai",
-                    memberID: memberID
+                    memberId: memberID
                 )
             )
         }
@@ -109,7 +109,7 @@ struct ChatGuideCardPayloadBuilder: Sendable {
             ChatGuideQuestionGenerationMeta(
                 state: .preset,
                 source: "preset",
-                memberID: nil
+                memberId: nil
             )
         )
     }

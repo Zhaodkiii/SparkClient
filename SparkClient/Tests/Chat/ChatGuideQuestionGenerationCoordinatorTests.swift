@@ -115,7 +115,7 @@ final class ChatGuideQuestionGenerationCoordinatorTests: XCTestCase {
         XCTAssertEqual(runtime.callCount, 2)
         let lastPayload = await repository.lastPayload
         XCTAssertEqual(lastPayload?.effectiveQuestionGenerationState, .generated)
-        XCTAssertEqual(lastPayload?.questionGeneration?.memberID, 11)
+        XCTAssertEqual(lastPayload?.questionGeneration?.memberId, 11)
     }
 
     func testMemberSwitchToNilAppliesPresetWithoutAI() async {
@@ -312,13 +312,13 @@ final class ChatGuideQuestionGenerationCoordinatorTests: XCTestCase {
             ChatGuideCardPayload(
                 schemaVersion: 2,
                 generatedAt: Date(),
-                memberID: 10,
+                memberId: 10,
                 metricSections: [],
                 questions: [],
                 questionGeneration: ChatGuideQuestionGenerationMeta(
                     state: .generating,
                     source: "current_chat_ai",
-                    memberID: nil
+                    memberId: nil
                 )
             ),
             for: threadID
@@ -328,7 +328,7 @@ final class ChatGuideQuestionGenerationCoordinatorTests: XCTestCase {
         let lastPayload = await repository.lastPayload
         XCTAssertEqual(lastPayload?.effectiveQuestionGenerationState, .generated)
         // generated payload 补齐 memberID
-        XCTAssertEqual(lastPayload?.questionGeneration?.memberID, 10)
+        XCTAssertEqual(lastPayload?.questionGeneration?.memberId, 10)
         XCTAssertEqual(lastPayload?.questions.count, 3)
     }
 
@@ -361,7 +361,7 @@ final class ChatGuideQuestionGenerationCoordinatorTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 600_000_000)
         let lastPayload = await repository.lastPayload
         XCTAssertNotEqual(lastPayload?.effectiveQuestionGenerationState, .generated)
-        XCTAssertNotEqual(lastPayload?.questionGeneration?.memberID, 10)
+        XCTAssertNotEqual(lastPayload?.questionGeneration?.memberId, 10)
     }
 
     func testFallbackRejectedWhenThreadMemberChanged() async {
@@ -391,7 +391,7 @@ final class ChatGuideQuestionGenerationCoordinatorTests: XCTestCase {
 
         try? await Task.sleep(nanoseconds: 500_000_000)
         let lastPayload = await repository.lastPayload
-        XCTAssertNotEqual(lastPayload?.questionGeneration?.memberID, 10)
+        XCTAssertNotEqual(lastPayload?.questionGeneration?.memberId, 10)
         XCTAssertNotEqual(lastPayload?.effectiveQuestionGenerationState, .fallback)
     }
 
@@ -430,11 +430,11 @@ final class ChatGuideQuestionGenerationCoordinatorTests: XCTestCase {
 
     private func generatingPayload(memberID: Int?) -> ChatGuideCardPayload {
         var payload = ChatGuideCardPreviewFixtures.generatingPayload
-        payload.memberID = memberID
+        payload.memberId = memberID
         payload.questionGeneration = ChatGuideQuestionGenerationMeta(
             state: .generating,
             source: "current_chat_ai",
-            memberID: memberID
+            memberId: memberID
         )
         return payload
     }
@@ -443,13 +443,13 @@ final class ChatGuideQuestionGenerationCoordinatorTests: XCTestCase {
         ChatGuideCardPayload(
             schemaVersion: 2,
             generatedAt: Date(),
-            memberID: memberID,
+            memberId: memberID,
             metricSections: [],
             questions: Array(ChatGuideQuestionPreset.phaseOne.prefix(3)),
             questionGeneration: ChatGuideQuestionGenerationMeta(
                 state: .generated,
                 source: "current_chat_ai",
-                memberID: memberID,
+                memberId: memberID,
                 generatedAt: Date()
             )
         )
@@ -459,13 +459,13 @@ final class ChatGuideQuestionGenerationCoordinatorTests: XCTestCase {
         ChatGuideCardPayload(
             schemaVersion: 2,
             generatedAt: Date(),
-            memberID: memberID,
+            memberId: memberID,
             metricSections: [],
             questions: ChatGuideQuestionPreset.phaseOne,
             questionGeneration: ChatGuideQuestionGenerationMeta(
                 state: .fallback,
                 source: "preset",
-                memberID: memberID,
+                memberId: memberID,
                 errorMessage: "ai_generation_failed"
             )
         )
@@ -475,13 +475,13 @@ final class ChatGuideQuestionGenerationCoordinatorTests: XCTestCase {
         ChatGuideCardPayload(
             schemaVersion: 2,
             generatedAt: Date(),
-            memberID: nil,
+            memberId: nil,
             metricSections: [],
             questions: ChatGuideQuestionPreset.phaseOne,
             questionGeneration: ChatGuideQuestionGenerationMeta(
                 state: .preset,
                 source: "preset",
-                memberID: nil
+                memberId: nil
             )
         )
     }

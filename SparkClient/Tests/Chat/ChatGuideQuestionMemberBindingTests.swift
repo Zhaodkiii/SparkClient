@@ -23,7 +23,7 @@ final class ChatGuideQuestionMemberBindingTests: XCTestCase {
 
     func testQuestionsBelongToMemberID() {
         var payload = ChatGuideCardPreviewFixtures.generatingPayload
-        payload.questionGeneration?.memberID = 42
+        payload.questionGeneration?.memberId = 42
         XCTAssertTrue(payload.questionsBelongTo(memberID: 42))
         XCTAssertFalse(payload.questionsBelongTo(memberID: 7))
     }

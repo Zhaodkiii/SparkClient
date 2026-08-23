@@ -7,7 +7,7 @@ final class ChatGuideQuestionGenerationRaceTests: XCTestCase {
         let payload = ChatGuideCardPayload(
             schemaVersion: 1,
             generatedAt: Date(),
-            memberID: nil,
+            memberId: nil,
             metricSections: [],
             questions: ChatGuideQuestionPreset.phaseOne,
             questionGeneration: nil
@@ -20,13 +20,13 @@ final class ChatGuideQuestionGenerationRaceTests: XCTestCase {
         let payload = ChatGuideCardPayload(
             schemaVersion: 2,
             generatedAt: Date(),
-            memberID: 42,
+            memberId: 42,
             metricSections: [],
             questions: [],
             questionGeneration: ChatGuideQuestionGenerationMeta(
                 state: .generating,
                 source: "current_chat_ai",
-                memberID: 42
+                memberId: 42
             )
         )
         XCTAssertTrue(payload.isShowingQuestionLoading)
@@ -37,7 +37,7 @@ final class ChatGuideQuestionGenerationRaceTests: XCTestCase {
         payload.questionGeneration = ChatGuideQuestionGenerationMeta(
             state: .generated,
             source: "current_chat_ai",
-            memberID: 1,
+            memberId: 1,
             generatedAt: Date()
         )
         XCTAssertFalse(payload.questionsBelongTo(memberID: 2))

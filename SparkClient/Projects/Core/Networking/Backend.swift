@@ -18,6 +18,7 @@ final class Backend {
     let medicalResources: SparkMedicalWorkflowAPI
     let medicalWorkflow: SparkMedicalWorkflowAPI
     let medicalCombinedCreate: SparkCombinedMedicalCreateAPI
+    let chatGuideQuestion: SparkChatGuideQuestionAPI
     let files: SparkFileAPI
     let oss: SparkOSSAPI
     let ocr: SparkOCRAPI
@@ -66,6 +67,7 @@ final class Backend {
         self.medicalResources = SparkMedicalWorkflowAPI(configuration: configuration)
         self.medicalWorkflow = SparkMedicalWorkflowAPI(configuration: configuration)
         self.medicalCombinedCreate = SparkCombinedMedicalCreateAPI(configuration: configuration)
+        self.chatGuideQuestion = SparkChatGuideQuestionAPI(configuration: configuration)
         self.files = SparkFileAPI(configuration: configuration)
         self.oss = SparkOSSAPI(configuration: configuration)
         self.ocr = SparkOCRAPI(configuration: configuration)
@@ -92,6 +94,7 @@ final class Backend {
         self.medicalResources = SparkMedicalWorkflowAPI(configuration: configuration)
         self.medicalWorkflow = SparkMedicalWorkflowAPI(configuration: configuration)
         self.medicalCombinedCreate = SparkCombinedMedicalCreateAPI(configuration: configuration)
+        self.chatGuideQuestion = SparkChatGuideQuestionAPI(configuration: configuration)
         self.files = SparkFileAPI(configuration: configuration)
         self.oss = SparkOSSAPI(configuration: configuration)
         self.ocr = SparkOCRAPI(configuration: configuration)

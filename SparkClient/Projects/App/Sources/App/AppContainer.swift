@@ -581,6 +581,7 @@ final class AppContainer {
             chatRepository: chat.chatRepository,
             aiConfigCenter: ai.aiConfigCenter,
             aiSettingsRepository: ai.aiSettingsRepository,
+            registrationReporter: backend.chatGuideQuestion,
             logger: logger
         )
         let guideCardPayloadBuilder = ChatGuideCardPayloadBuilder(
@@ -619,6 +620,7 @@ final class AppContainer {
             ensureGuideSystemMessageUseCase: ensureGuideSystemMessageUseCase,
             guideCardPayloadBuilder: guideCardPayloadBuilder,
             healthDataAccessGate: .shared,
+            guideQuestionClickReporter: backend.chatGuideQuestion,
             logger: logger
         )
         self.deepTutorChatViewModel = DeepTutorChatViewModel(

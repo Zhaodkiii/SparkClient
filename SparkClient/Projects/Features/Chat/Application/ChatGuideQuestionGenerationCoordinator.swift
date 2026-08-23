@@ -107,6 +107,8 @@ final class ChatGuideQuestionGenerationCoordinator {
     private let aiConfigCenter: AIConfigCenter
     /// AI 设置仓库
     private let aiSettingsRepository: any AISettingsRepository
+    /// 生成问题登记上送（后台异步 best-effort；nil 表示不登记，测试/预览场景可省略）
+    private let registrationReporter: (any ChatGuideQuestionRegistrationReporting)?
     /// 日志记录器
     private let logger: Logger
     /// 当前活跃的生成任务字典，Key 为任务定位键，Value 为任务上下文
@@ -128,12 +130,14 @@ final class ChatGuideQuestionGenerationCoordinator {
         chatRepository: any ChatRepository,
         aiConfigCenter: AIConfigCenter,
         aiSettingsRepository: any AISettingsRepository,
+        registrationReporter: (any ChatGuideQuestionRegistrationReporting)? = nil,
         logger: Logger = ConsoleLogger()
     ) {
         self.generationUseCase = generationUseCase
         self.chatRepository = chatRepository
         self.aiConfigCenter = aiConfigCenter
         self.aiSettingsRepository = aiSettingsRepository
+        self.registrationReporter = registrationReporter
         self.logger = logger
     }
 
@@ -267,7 +271,7 @@ final class ChatGuideQuestionGenerationCoordinator {
         }
 
         logger.info(
-            "chat.guide.questions.member_changed thread=\(shortID(threadID)) old=\(target.payload.questionGeneration?.memberID.map(String.init) ?? "nil") new=\(newMemberID.map(String.init) ?? "nil") allowGeneration=\(allowGeneration)",
+            "chat.guide.questions.member_changed thread=\(shortID(threadID)) old=\(target.payload.questionGeneration?.memberId.map(String.init) ?? "nil") new=\(newMemberID.map(String.init) ?? "nil") allowGeneration=\(allowGeneration)",
             module: .general
         )
 
@@ -544,6 +548,13 @@ final class ChatGuideQuestionGenerationCoordinator {
                     "chat.guide.questions.generation_success thread=\(shortID(token.threadID)) block=\(shortID(token.blockID)) member=\(token.memberID) durationMs=\(durationMs)",
                     module: .general
                 )
+                // 生成结果已回写：后台异步登记问题，成功后把 server_question_id 回填到卡片（失败不阻断）。
+                registerGeneratedQuestionsInBackground(
+                    token: token,
+                    memberID: output.memberID,
+                    questions: output.questions,
+                    stateStore: stateStore
+                )
             }
         } catch ChatGuideQuestionGenerationUseCaseError.cancelled {
             logger.info(
@@ -615,11 +626,11 @@ final class ChatGuideQuestionGenerationCoordinator {
     ) async {
         var payload = target.payload
         payload.questions = []
-        payload.memberID = token.memberID
+        payload.memberId = token.memberID
         payload.questionGeneration = ChatGuideQuestionGenerationMeta(
             state: .generating,
             source: "current_chat_ai",
-            memberID: token.memberID
+            memberId: token.memberID
         )
         await persistPayloadUpdate(
             target: target,
@@ -648,7 +659,7 @@ final class ChatGuideQuestionGenerationCoordinator {
         payload.questionGeneration = ChatGuideQuestionGenerationMeta(
             state: state,
             source: "preset",
-            memberID: nil,
+            memberId: nil,
             errorMessage: errorMessage
         )
         await persistPayloadUpdate(
@@ -710,15 +721,114 @@ final class ChatGuideQuestionGenerationCoordinator {
             stateStore: stateStore
         ) { payload in
             payload.questions = output.questions
-            payload.memberID = output.memberID
+            payload.memberId = output.memberID
             payload.questionGeneration = ChatGuideQuestionGenerationMeta(
                 state: .generated,
                 source: output.source,
-                memberID: output.memberID,
+                memberId: output.memberID,
                 memberProfileDigest: output.memberProfileDigest,
                 generatedAt: output.generatedAt
             )
         }
+    }
+
+    /// 后台异步登记 AI 生成问题，成功后把 server_question_id 回填到卡片（best-effort，失败不阻断主流程）。
+    private func registerGeneratedQuestionsInBackground(
+        token: ChatGuideQuestionGenerationToken,
+        memberID: Int,
+        questions: [ChatGuideQuestion],
+        stateStore: ChatStateStore
+    ) {
+        guard let reporter = registrationReporter else {
+            logger.warning(
+                "[CHATGUIDE-DEBUG][coordinator] registrationReporter is nil, skip register thread=\(shortID(token.threadID))",
+                module: .general
+            )
+            return
+        }
+        logger.info(
+            "[CHATGUIDE-DEBUG][coordinator] register start thread=\(shortID(token.threadID)) memberID=\(memberID) count=\(questions.count) ids=\(questions.map(\.id).joined(separator: ","))",
+            module: .general
+        )
+        Task {
+            let mapping = await reporter.registerGeneratedQuestions(memberID: memberID, questions: questions)
+            logger.info(
+                "[CHATGUIDE-DEBUG][coordinator] register mapping=\(mapping) thread=\(shortID(token.threadID))",
+                module: .general
+            )
+            guard mapping.isEmpty == false else {
+                logger.warning(
+                    "[CHATGUIDE-DEBUG][coordinator] register mapping empty, skip backfill thread=\(shortID(token.threadID))",
+                    module: .general
+                )
+                return
+            }
+            await persistServerQuestionIDs(mapping, token: token, stateStore: stateStore)
+        }
+    }
+
+    /// 把登记返回的 clientQuestionID → serverQuestionID 映射回填到当前引导卡片（不经过 token 校验，做防御性校验后直接持久化）。
+    private func persistServerQuestionIDs(
+        _ mapping: [String: Int],
+        token: ChatGuideQuestionGenerationToken,
+        stateStore: ChatStateStore
+    ) async {
+        guard await chatRepository.loadThread(id: token.threadID) != nil else {
+            logger.warning(
+                "[CHATGUIDE-DEBUG][coordinator] persist skip: thread missing thread=\(shortID(token.threadID))",
+                module: .general
+            )
+            return
+        }
+        let messages = await chatRepository.loadMessages(threadID: token.threadID, limit: 50, before: nil)
+        guard let target = ChatGuideGuideCardLocator.locateFirstGuideCard(in: messages),
+              target.message.clientMessageID == token.messageID,
+              target.block.id == token.blockID else {
+            logger.warning(
+                "[CHATGUIDE-DEBUG][coordinator] persist skip: guide card not found thread=\(shortID(token.threadID))",
+                module: .general
+            )
+            return
+        }
+        // 仅当卡片仍停留在本次生成的终态时才回填，避免覆盖更新的结果。
+        guard target.payload.effectiveQuestionGenerationState == .generated,
+              target.payload.questionGeneration?.memberId == token.memberID else {
+            logger.warning(
+                "[CHATGUIDE-DEBUG][coordinator] persist skip: state/member mismatch thread=\(shortID(token.threadID)) state=\(target.payload.effectiveQuestionGenerationState.rawValue) payloadMember=\(target.payload.questionGeneration?.memberId.map(String.init) ?? "nil") tokenMember=\(token.memberID)",
+                module: .general
+            )
+            return
+        }
+
+        var payload = target.payload
+        var changed = false
+        for index in payload.questions.indices {
+            guard let serverID = mapping[payload.questions[index].id],
+                  payload.questions[index].serverQuestionId != serverID else { continue }
+            logger.info(
+                "[CHATGUIDE-DEBUG][coordinator] persist backfill questionId=\(payload.questions[index].id) serverId=\(serverID)",
+                module: .general
+            )
+            payload.questions[index].serverQuestionId = serverID
+            changed = true
+        }
+        guard changed else {
+            logger.info(
+                "[CHATGUIDE-DEBUG][coordinator] persist skip: no changed server ids thread=\(shortID(token.threadID))",
+                module: .general
+            )
+            return
+        }
+        let didPersist = await persistPayloadUpdate(
+            target: target,
+            payload: payload,
+            threadID: token.threadID,
+            stateStore: stateStore
+        )
+        logger.info(
+            "[CHATGUIDE-DEBUG][coordinator] persist done thread=\(shortID(token.threadID)) didPersist=\(didPersist)",
+            module: .general
+        )
     }
 
     /// 应用生成失败的兜底结果：写入固定预设问题
@@ -745,7 +855,7 @@ final class ChatGuideQuestionGenerationCoordinator {
             payload.questionGeneration = ChatGuideQuestionGenerationMeta(
                 state: .fallback,
                 source: "preset",
-                memberID: token.memberID,
+                memberId: token.memberID,
                 errorMessage: errorCategory
             )
         }
@@ -815,7 +925,7 @@ final class ChatGuideQuestionGenerationCoordinator {
         let updatedBlock = target.block.replacingPayload(.chatGuideCard(payload), status: .ready)
         let state = payload.effectiveQuestionGenerationState
         logger.info(
-            "chat.guide.questions.persist_attempt thread=\(shortID(threadID)) message=\(shortID(target.message.clientMessageID)) block=\(shortID(target.block.id)) state=\(state.rawValue) member=\(payload.questionGeneration?.memberID.map(String.init) ?? "nil") questionsCount=\(payload.questions.count) oldRevision=\(target.block.revision) newRevision=\(updatedBlock.revision) markPendingForSync=true",
+            "chat.guide.questions.persist_attempt thread=\(shortID(threadID)) message=\(shortID(target.message.clientMessageID)) block=\(shortID(target.block.id)) state=\(state.rawValue) member=\(payload.questionGeneration?.memberId.map(String.init) ?? "nil") questionsCount=\(payload.questions.count) oldRevision=\(target.block.revision) newRevision=\(updatedBlock.revision) markPendingForSync=true",
             module: .general
         )
         // 写入本地仓库
@@ -941,7 +1051,7 @@ final class ChatGuideQuestionGenerationCoordinator {
             )
         }
 
-        let payloadMemberID = target.payload.questionGeneration?.memberID
+        let payloadMemberID = target.payload.questionGeneration?.memberId
         let state = target.payload.effectiveQuestionGenerationState
         var result = GuideTokenValidationResult(
             failure: nil,

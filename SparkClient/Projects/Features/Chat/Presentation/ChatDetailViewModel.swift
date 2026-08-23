@@ -35,6 +35,8 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
     private let guideCardPayloadBuilder: ChatGuideCardPayloadBuilder
     private let healthDataAccessGate: HealthDataAccessGate
     private let taskManager: TaskManager
+    /// 已登记引导问题点击上送（后台异步 best-effort；nil 表示不上送点击统计）。
+    private let guideQuestionClickReporter: (any ChatGuideQuestionClickReporting)?
     private let logger: Logger
     private var composerAttachmentTasks: [UUID: Task<Void, Never>] = [:]
     private var currentGenerationTask: Task<Void, Never>?
@@ -99,6 +101,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         guideCardPayloadBuilder: ChatGuideCardPayloadBuilder,
         healthDataAccessGate: HealthDataAccessGate = .shared,
         taskManager: TaskManager = .shared,
+        guideQuestionClickReporter: (any ChatGuideQuestionClickReporting)? = nil,
         logger: Logger = ConsoleLogger()
     ) {
         self.stateStore = stateStore
@@ -132,6 +135,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         self.guideCardPayloadBuilder = guideCardPayloadBuilder
         self.healthDataAccessGate = healthDataAccessGate
         self.taskManager = taskManager
+        self.guideQuestionClickReporter = guideQuestionClickReporter
         self.logger = logger
 
         NotificationCenter.default.publisher(for: .sparkChatDatabaseDidChange)
@@ -840,13 +844,63 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
     /// 引导卡片科普问题点击：程序化发送完整 prompt，绕过输入框草稿（不覆盖/清空用户已输入内容）。
     /// 防重入：同一问题发送中忽略重复点击；已有生成任务进行中时忽略。
     func sendGuideQuestion(_ question: ChatGuideQuestion, in threadID: UUID) {
-        guard stateStore.selectedThreadID == threadID else { return }
-        guard sendingGuideQuestionIDs.contains(question.id) == false else { return }
-        guard currentGenerationTask == nil else { return }
+        guard stateStore.selectedThreadID == threadID else {
+            logger.warning(
+                "[CHATGUIDE-DEBUG][vm] sendGuideQuestion skip: thread mismatch selected=\(stateStore.selectedThreadID?.uuidString ?? "nil") tap=\(threadID.uuidString)",
+                module: .general
+            )
+            return
+        }
+        guard sendingGuideQuestionIDs.contains(question.id) == false else {
+            logger.info(
+                "[CHATGUIDE-DEBUG][vm] sendGuideQuestion skip: already sending questionId=\(question.id)",
+                module: .general
+            )
+            return
+        }
+        guard currentGenerationTask == nil else {
+            logger.info(
+                "[CHATGUIDE-DEBUG][vm] sendGuideQuestion skip: generation in progress questionId=\(question.id)",
+                module: .general
+            )
+            return
+        }
+
+        logger.info(
+            "[CHATGUIDE-DEBUG][vm] sendGuideQuestion enter questionId=\(question.id) title=\(question.title) serverQuestionId=\(question.serverQuestionId.map(String.init) ?? "nil")",
+            module: .general
+        )
 
         sendingGuideQuestionIDs.insert(question.id)
+        // 仅对已登记的 AI 生成问题（含 server_question_id）上送点击统计，固定兜底问题不上送。
+        if let serverQuestionId = question.serverQuestionId {
+            reportGuideQuestionClick(serverQuestionId: serverQuestionId)
+        } else {
+            logger.info(
+                "[CHATGUIDE-DEBUG][vm] sendGuideQuestion skip click report: serverQuestionId is nil questionId=\(question.id)",
+                module: .general
+            )
+        }
         currentGenerationTask = Task { [weak self] in
             await self?.sendGuideQuestionPrompt(question)
+        }
+    }
+
+    /// 后台异步上送点击统计（best-effort，失败不阻断主流程）。
+    private func reportGuideQuestionClick(serverQuestionId: Int) {
+        guard let clickReporter = guideQuestionClickReporter else {
+            logger.warning(
+                "[CHATGUIDE-DEBUG][vm] reportGuideQuestionClick skip: clickReporter is nil serverQuestionId=\(serverQuestionId)",
+                module: .general
+            )
+            return
+        }
+        logger.info(
+            "[CHATGUIDE-DEBUG][vm] reportGuideQuestionClick start serverQuestionId=\(serverQuestionId)",
+            module: .general
+        )
+        Task {
+            await clickReporter.reportClick(serverQuestionId: serverQuestionId)
         }
     }
 

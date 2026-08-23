@@ -74,10 +74,10 @@ final class CreateThreadGuideMessageTests: XCTestCase {
 
         let target = try XCTUnwrap(output.target)
         XCTAssertEqual(target.message.clientMessageID, guide.clientMessageID)
-        XCTAssertEqual(target.payload.memberID, 7)
+        XCTAssertEqual(target.payload.memberId, 7)
         XCTAssertEqual(target.payload.questions.isEmpty, true)
         XCTAssertEqual(target.payload.effectiveQuestionGenerationState, .generating)
-        XCTAssertEqual(target.payload.questionGeneration?.memberID, 7)
+        XCTAssertEqual(target.payload.questionGeneration?.memberId, 7)
     }
 
     func testEnsureInsertsPresetGuideCardWithoutMember() async throws {
