@@ -10,6 +10,7 @@ struct HomeMedicalDashboardGridSection: View {
 
     private let columns = [
         GridItem(.flexible()),
+        GridItem(.flexible()),
         GridItem(.flexible())
     ]
 
@@ -22,7 +23,7 @@ struct HomeMedicalDashboardGridSection: View {
                 headerActions
             }
 
-            LazyVGrid(columns: columns, spacing: 12) {
+            LazyVGrid(columns: columns, spacing: 10) {
                 ForEach(cards, id: \.id) { card in
                     Button {
                         onSelect(card.id)
@@ -97,46 +98,42 @@ struct HomeMedicalDashboardCard: View {
     let isEnabled: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Image(systemName: card.symbol)
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(isEnabled ? Color.accentColor : .secondary)
-
-                Spacer()
-
-                Text("\(card.count)")
-                    .font(.subheadline.weight(.semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(isEnabled ? Color.accentColor : .secondary)
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            Image(systemName: card.symbol)
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 40, height: 40)
+                .background {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(isEnabled ? Color.accentColor : Color.secondary.opacity(0.5))
+                }
 
             Text(card.title)
-                .font(.headline)
+                .font(.callout.weight(.semibold))
                 .foregroundStyle(isEnabled ? .primary : .secondary)
                 .lineLimit(1)
-                .minimumScaleFactor(0.86)
+                .minimumScaleFactor(0.7)
 
-            Text(card.subtitle)
+            Text(L10n.text("home.medical.card.count", fallback: "共\(card.count)份"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
+                .lineLimit(1)
 
             if isEnabled == false {
                 Text(L10n.text("ios26.home.action.requires_member"))
                     .font(.caption)
                     .foregroundStyle(.tertiary)
+                    .lineLimit(1)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(18)
+        .padding(14)
         .background {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground))
         }
         .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
                 .strokeBorder(.quaternary, lineWidth: 1)
         }
         .accessibilityElement(children: .combine)

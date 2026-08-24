@@ -85,7 +85,8 @@ struct SignedInMainTabHostView: View {
                 pushAdapter: mainTab.pushAdapter,
                 externalMedicalDocumentImportCoordinator: mainTab.externalMedicalDocumentImportCoordinator,
                 launchIntentCoordinator: mainTab.launchIntentCoordinator,
-                activeHomeFullScreenCover: $activeHomeFullScreenCover
+                activeHomeFullScreenCover: $activeHomeFullScreenCover,
+                guideHomeDestinationBuilder: guideHomeDestinationBuilder
             )
         } else {
             MainTabCoordinatorView(
@@ -114,7 +115,8 @@ struct SignedInMainTabHostView: View {
                 pushAdapter: mainTab.pushAdapter,
                 externalMedicalDocumentImportCoordinator: mainTab.externalMedicalDocumentImportCoordinator,
                 launchIntentCoordinator: mainTab.launchIntentCoordinator,
-                activeHomeFullScreenCover: $activeHomeFullScreenCover
+                activeHomeFullScreenCover: $activeHomeFullScreenCover,
+                guideHomeDestinationBuilder: guideHomeDestinationBuilder
             )
         }
     }
@@ -254,6 +256,7 @@ private extension SignedInMainTabHostView {
                 homeViewModel: mainTab.homeViewModel,
                 aiSettingsViewModel: mainTab.aiSettingsViewModel,
                 autoSmallTaskCoordinator: mainTab.chatAutoSmallTaskCoordinator,
+                guideHomeDestinationBuilder: guideHomeDestinationBuilder,
                 leadingAction: source.isAutomatic ? .home : .close,
                 onClose: {
                     if source.isAutomatic {
@@ -270,6 +273,37 @@ private extension SignedInMainTabHostView {
                     lockBottomViewport: true
                 )
             }
+        }
+    }
+
+    /// 引导卡片滑块 → 当前 Chat 导航栈内的模块 destination。
+    ///
+    /// fullScreenCover 与普通 Tab Chat 共用同一目标页构造逻辑；点击目标页只触发
+    /// NavigationLink push，不关闭 Cover，也不修改根 Tab。
+    private var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder {
+        { category in
+            AnyView(
+                ChatGuideHomeDestinationView(
+                    category: category,
+                    dependencies: mainTab.homeDependencies,
+                    homeViewModel: mainTab.homeViewModel,
+                    taskManager: mainTab.taskManager,
+                    medicalDocumentUploadViewModel: mainTab.medicalDocumentUploadViewModel,
+                    externalMedicalDocumentImportCoordinator: mainTab.externalMedicalDocumentImportCoordinator,
+                    launchIntentCoordinator: mainTab.launchIntentCoordinator,
+                    session: session,
+                    chatListViewModel: mainTab.chatListViewModel,
+                    deepTutorChatViewModel: mainTab.deepTutorChatViewModel,
+                    autoSmallTaskRegistry: mainTab.autoSmallTaskRegistry,
+                    autoSmallTaskIntentStore: mainTab.chatAutoSmallTaskIntentStore,
+                    activeFullScreenCover: $activeHomeFullScreenCover,
+                    settingsViewModel: mainTab.settingsViewModel,
+                    aiSettingsViewModel: mainTab.aiSettingsViewModel,
+                    accountManagementViewModel: mainTab.accountManagementViewModel,
+                    versionUpdateCoordinator: mainTab.versionUpdateCoordinator,
+                    upgradeLoginViewModel: mainTab.upgradeLoginViewModel
+                )
+            )
         }
     }
 

@@ -30,6 +30,7 @@ struct IOS26TabBarView: View {
     @ObservedObject var externalMedicalDocumentImportCoordinator: ExternalMedicalDocumentImportCoordinator
     @ObservedObject var launchIntentCoordinator: LaunchIntentCoordinator
     @Binding var activeHomeFullScreenCover: HomeFullScreenCover?
+    let guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder
 
     @ObservedObject private var homeStylePreferenceStore = HomeStylePreferenceStore.shared
     @ObservedObject private var homeSectionPreferenceStore = HomeSectionPreferenceStore.shared
@@ -81,35 +82,6 @@ struct IOS26TabBarView: View {
             autoSmallTaskIntentStore: chatAutoSmallTaskIntentStore,
             ownerAccountID: session.accountID
         )
-    }
-
-    /// 引导卡片滑块 → 模块首页 destination（CHAT-000025）：
-    /// 按类别直接 push 对应模块独立页面（运动/饮食/经典健康首页），不切主 Tab。
-    private var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder {
-        { category in
-            AnyView(
-                ChatGuideHomeDestinationView(
-                    category: category,
-                    dependencies: homeDependencies,
-                    homeViewModel: homeViewModel,
-                    taskManager: taskManager,
-                    medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
-                    externalMedicalDocumentImportCoordinator: externalMedicalDocumentImportCoordinator,
-                    launchIntentCoordinator: launchIntentCoordinator,
-                    session: session,
-                    chatListViewModel: chatListViewModel,
-                    deepTutorChatViewModel: deepTutorChatViewModel,
-                    autoSmallTaskRegistry: autoSmallTaskRegistry,
-                    autoSmallTaskIntentStore: chatAutoSmallTaskIntentStore,
-                    activeFullScreenCover: $activeHomeFullScreenCover,
-                    settingsViewModel: settingsViewModel,
-                    aiSettingsViewModel: aiSettingsViewModel,
-                    accountManagementViewModel: accountManagementViewModel,
-                    versionUpdateCoordinator: versionUpdateCoordinator,
-                    upgradeLoginViewModel: upgradeLoginViewModel
-                )
-            )
-        }
     }
 
     var body: some View {
