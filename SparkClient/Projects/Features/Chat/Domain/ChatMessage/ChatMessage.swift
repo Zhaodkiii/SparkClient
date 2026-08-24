@@ -1161,6 +1161,10 @@ struct ChatThreadListItem: Identifiable, Equatable, Sendable {
     let latestMessageAt: Date
     let unreadCount: Int
     let latestListImageAttachment: ChatAttachment?
+    /// 当前 Thread 下是否存在未删除的 user role 持久化消息。
+    /// - Note: 用于判定“未开始会话”。只由持久化事实（role == user && isTombstone == false）推导，
+    ///   不依赖预览文案、标题或引导卡片类型。
+    let hasUserMessage: Bool
 }
 
 enum ChatFeatureError: LocalizedError {

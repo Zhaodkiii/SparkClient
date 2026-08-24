@@ -22,6 +22,33 @@ final class ChatListViewModel: ObservableObject {
     private var didAttemptEmptyListRemoteRefresh = false
     private var cancellables = Set<AnyCancellable>()
 
+    /// 公共“获取可复用 Thread，必要时创建”编排器（CHAT-000041）。
+    /// - Note: 单飞门在 account 级共享实例上保持，账号切换由 `resetForSessionSwitch()` 清空。
+    private lazy var threadAcquisitionCoordinator: ChatThreadAcquisitionCoordinator = {
+        ChatThreadAcquisitionCoordinator(
+            stateStore: stateStore,
+            createThread: { [weak self] memberID in
+                guard let self else { return nil }
+                if let memberID {
+                    return await self.createThread(
+                        memberID: memberID,
+                        title: L10n.text("chat.default_thread_title")
+                    )
+                }
+                return await self.createThread()
+            },
+            reloadThreads: { [weak self] in
+                await self?.reloadThreads(selectFirstIfNeeded: false)
+            },
+            isAccountActive: { [weak self] accountID in
+                guard let self else { return false }
+                guard case .signedIn(let session) = self.sessionStore.state else { return false }
+                return session.accountID == accountID
+            },
+            logger: logger
+        )
+    }()
+
     @Published private(set) var hasFinishedInitialLocalLoad = false
     @Published private(set) var isRefreshingEmptyListFallback = false
     @Published private(set) var isCreatingQuickStartThread = false
@@ -154,6 +181,24 @@ final class ChatListViewModel: ObservableObject {
         return thread.id
     }
 
+    /// 获取可复用 Thread（近期活跃或最近未开始会话），必要时创建（CHAT-000041）。
+    /// - Parameters:
+    ///   - memberID: nil 为全局范围（对话 Tab），非 nil 为严格同成员（医疗资料入口）。
+    ///   - hasAvailableChatModel: 可用模型校验；仅在必须新建时调用。
+    func acquireReusableThreadOrCreate(
+        memberID: Int? = nil,
+        hasAvailableChatModel: @escaping @MainActor () async -> Bool
+    ) async -> ChatThreadAcquisitionResult {
+        guard case .signedIn(let session) = sessionStore.state else {
+            return .requiresAISettings
+        }
+        return await threadAcquisitionCoordinator.acquire(
+            accountID: session.accountID,
+            memberID: memberID,
+            hasAvailableChatModel: hasAvailableChatModel
+        )
+    }
+
     @discardableResult
     func createQuickStartThread(
         mode: ChatQuickStartMode,
@@ -241,6 +286,7 @@ final class ChatListViewModel: ObservableObject {
         isRefreshingEmptyListFallback = false
         isCreatingQuickStartThread = false
         quickStartCreationError = nil
+        threadAcquisitionCoordinator.reset()
     }
 
     private func reloadThreads(selectFirstIfNeeded: Bool) async {

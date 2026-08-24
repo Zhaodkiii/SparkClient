@@ -2,6 +2,7 @@ import SwiftUI
 
 enum ChatPresentationSource: String, Equatable, Sendable {
     case automaticRecentThread
+    case automaticLatestUnstartedThread
     case automaticNewThread
     case manualThreadRow
     case manualNewThread
@@ -10,7 +11,7 @@ enum ChatPresentationSource: String, Equatable, Sendable {
 
     var isAutomatic: Bool {
         switch self {
-        case .automaticRecentThread, .automaticNewThread:
+        case .automaticRecentThread, .automaticLatestUnstartedThread, .automaticNewThread:
             return true
         case .manualThreadRow, .manualNewThread, .manualEmptyState, .healthResourceDetail:
             return false
@@ -482,34 +483,43 @@ struct ChatConversationListPage: View {
 
     /// 处理应用启动时的自动导航逻辑（仅执行一次）
     ///
-    /// 策略：
+    /// 策略（CHAT-000041）：
     /// - 如果当前已有选中会话且有未发送草稿：不自动导航，保留用户编辑状态
-    /// - 否则查找 5 分钟内有最新消息的活跃会话，自动进入
-    /// - 没有最近活跃会话：自动创建新会话并进入
+    /// - 否则走公共决策：优先复用 5 分钟内活跃会话；无活跃时仅当最近 Thread 尚未开始才复用
+    /// - 命中复用直接进入，不调用 `createThread`
+    /// - 最近 Thread 已开始或不存在任何 Thread 时，才检查模型并新建
     private func handleInitialAutoNavigationIfNeeded() async {
         guard hasHandledInitialAutoNavigation == false else { return }
         hasHandledInitialAutoNavigation = true
         // 有草稿时跳过自动导航，避免打断用户
         guard shouldSkipInitialAutoNavigation == false else { return }
 
-        // 优先恢复最近 5 分钟内活跃的会话
-        if let activeThreadID = mostRecentActiveThreadID(within: 5 * 60) {
-            await navigateToThread(activeThreadID, source: .automaticRecentThread)
-            return
+        let result = await listViewModel.acquireReusableThreadOrCreate(
+            hasAvailableChatModel: { await detailViewModel.hasAvailableChatModel() }
+        )
+        switch result {
+        case .reuse(let threadID, let reason):
+            await navigateToThread(
+                threadID,
+                source: presentationSource(for: reason)
+            )
+        case .created(let threadID):
+            pushAdapter?.requestAuthorizationIfNotDetermined()
+            await navigateToThread(threadID, source: .automaticNewThread)
+        case .requiresAISettings:
+            showNoAvailableChatModelAlert = true
         }
-
-        // 无最近活跃会话：自动创建新会话
-        await createThreadIfAvailable(source: .automaticNewThread)
     }
 
-    /// 查找指定时间间隔内有最新消息的最近活跃会话 ID
-    /// - Parameter interval: 时间间隔（秒），如 5*60 表示 5 分钟
-    /// - Returns: 最近活跃会话 ID，无则返回 nil
-    private func mostRecentActiveThreadID(within interval: TimeInterval) -> UUID? {
-        RecentActiveChatThreadSelector.mostRecentActiveThreadID(
-            in: stateStore.threadItems,
-            within: interval
-        )
+    private func presentationSource(
+        for reason: ChatThreadReuseReason
+    ) -> ChatPresentationSource {
+        switch reason {
+        case .recentActive, .joinedCreation:
+            return .automaticRecentThread
+        case .latestUnstarted:
+            return .automaticLatestUnstartedThread
+        }
     }
 
     /// 是否应该跳过启动自动导航

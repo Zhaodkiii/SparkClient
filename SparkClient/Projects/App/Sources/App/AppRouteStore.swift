@@ -87,7 +87,7 @@ final class AppRouteStore: ObservableObject {
     @Published private(set) var routeStacks: [RootTab: [AppRoute]] = [:]
 
     static var defaultRootTab: RootTab {
-        .chat
+        .healthHome
     }
 
     init(storage: UserDefaults = .standard) {

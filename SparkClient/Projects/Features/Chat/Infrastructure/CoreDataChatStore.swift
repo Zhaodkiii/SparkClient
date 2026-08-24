@@ -1958,6 +1958,18 @@ actor CoreDataChatStore {
         ])
         let unreadCount = try context.count(for: unreadRequest)
 
+        // CHAT-000041：用户消息存在性投影（fetchLimit = 1）。
+        // 仅当存在未删除 user role 消息时视为“已开始会话”，用于复用空白会话判定。
+        let userMessageRequest = NSFetchRequest<NSManagedObject>(entityName: EntityName.message)
+        userMessageRequest.fetchLimit = 1
+        userMessageRequest.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+            ownerPredicate(ownerAccountID),
+            NSPredicate(format: "threadID == %@", threadID as CVarArg),
+            NSPredicate(format: "isTombstone == NO"),
+            NSPredicate(format: "role == %@", ChatMessageRole.user.rawValue),
+        ])
+        let hasUserMessage = !(try context.fetch(userMessageRequest)).isEmpty
+
         let previewRaw = latestMessage?
             .blocks
             .compactMap(\.text)
@@ -1972,7 +1984,8 @@ actor CoreDataChatStore {
             latestMessagePreview: preview,
             latestMessageAt: latestMessage?.createdAt ?? thread.updatedAt,
             unreadCount: unreadCount,
-            latestListImageAttachment: Self.firstListThumbnailAttachment(from: latestMessage)
+            latestListImageAttachment: Self.firstListThumbnailAttachment(from: latestMessage),
+            hasUserMessage: hasUserMessage
         )
     }
 

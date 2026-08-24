@@ -49,34 +49,32 @@ final class HealthResourceConversationCoordinator {
             typeBadge: request.typeBadge
         )
 
-        if let reusableThreadID = RecentActiveChatThreadSelector.mostRecentActiveThreadID(
-            in: stateStore.threadItems,
-            within: RecentActiveChatThreadSelector.defaultActiveInterval,
-            memberID: request.identity.memberID
-        ) {
+        // CHAT-000041：与对话 Tab 共用同一套“复用/创建”决策与单飞门，
+        // 保持严格同成员候选范围，避免两处规则漂移。
+        let acquisition = await listViewModel.acquireReusableThreadOrCreate(
+            memberID: request.identity.memberID,
+            hasAvailableChatModel: { [weak detailViewModel] in
+                await detailViewModel?.hasAvailableChatModel() ?? false
+            }
+        )
+        switch acquisition {
+        case .reuse(let threadID, _):
             return await prepareReference(
                 ref,
                 request: request,
-                threadID: reusableThreadID,
+                threadID: threadID,
                 createdByThisRequest: false
             )
-        }
-
-        guard await detailViewModel.hasAvailableChatModel() else {
+        case .created(let threadID):
+            return await prepareReference(
+                ref,
+                request: request,
+                threadID: threadID,
+                createdByThisRequest: true
+            )
+        case .requiresAISettings:
             return .requiresAISettings
         }
-
-        let title = L10n.text("chat.default_thread_title")
-        let threadID = await listViewModel.createThread(
-            memberID: request.identity.memberID,
-            title: title
-        )
-        return await prepareReference(
-            ref,
-            request: request,
-            threadID: threadID,
-            createdByThisRequest: true
-        )
     }
 
     private func prepareReference(
