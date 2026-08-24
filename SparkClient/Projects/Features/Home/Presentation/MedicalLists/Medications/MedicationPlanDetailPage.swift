@@ -45,6 +45,23 @@ struct MedicationPlanDetailPage: View {
     @State private var isPreparingShare = false
     @State private var attachmentUploadTask: Task<Void, Never>?
 
+    private var healthResourceConversationRequest: HealthResourceConversationRequest {
+        HealthResourceConversationRequest(
+            identity: HealthResourceIdentity(
+                type: .medicationPlan,
+                resourceID: currentPlan.id,
+                memberID: memberID ?? currentPlan.member
+            ),
+            displayTitle: currentPlan.drugName.nilIfBlank
+                ?? L10n.text("chat.ask_report.resource_type.medication_plan", fallback: "用药计划"),
+            displaySubtitle: currentPlan.frequencyText.nilIfBlank
+                ?? currentPlan.instructions.nilIfBlank
+                ?? "",
+            typeBadge: L10n.text("chat.ask_report.resource_type.medication_plan", fallback: "用药计划"),
+            source: "medication_plan_detail"
+        )
+    }
+
     init(
         mode: MedicationPlanDetailMode = .server,
         plan: SparkMedicalSyncAPI.RemoteMedicationPlan,
@@ -307,6 +324,10 @@ struct MedicationPlanDetailPage: View {
             }
             }
         }
+        .healthResourceConversationOverlay(
+            healthResourceConversationRequest,
+            isEnabled: mode == .server && currentPlan.id > 0 && (memberID ?? currentPlan.member) > 0
+        )
         .refreshable {
             await loadPlanRecords()
         }

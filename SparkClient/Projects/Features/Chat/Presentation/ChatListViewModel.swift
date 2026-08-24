@@ -137,11 +137,17 @@ final class ChatListViewModel: ObservableObject {
     func createThread() async -> UUID? {
         let title = L10n.text("chat.default_thread_title")
         let initialMemberID = await resolveInitialMemberIDForNewThread()
+        return await createThread(memberID: initialMemberID, title: title)
+    }
+
+    /// 从医疗详情等外部上下文新建会话时使用显式成员，避免沿用首页当前成员。
+    /// 新会话元数据由 ChatSyncSupervisor 后台同步，不阻塞进入会话。
+    @discardableResult
+    func createThread(memberID: Int?, title: String) async -> UUID {
         let thread = await createThreadUseCase.execute(
-            memberID: initialMemberID,
+            memberID: memberID,
             title: title
         )
-        // 新会话元数据由 ChatSyncSupervisor 监听 threadsChanged 后台推送，不阻塞进入会话
         await reloadThreads(selectFirstIfNeeded: false)
         stateStore.markThreadAsNewlyCreated(thread.id)
         stateStore.setSelectedThreadID(thread.id)

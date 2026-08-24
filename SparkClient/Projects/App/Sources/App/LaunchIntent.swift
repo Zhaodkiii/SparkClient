@@ -221,6 +221,7 @@ enum HomeSheetKind: String, Sendable {
     case memberModuleSetup
     case share
     case taskCenter
+    case apiKeysSettings
 }
 
 /// 首页全屏 Cover 轻量类型
@@ -228,6 +229,7 @@ enum HomeFullScreenCoverKind: String, Sendable {
     case medicalDocumentUpload
     case customCamera
     case memberDetail
+    case chat
 }
 
 /// 首页宿主展示状态，由 HealthHomeView / IOS26HomeView 上报给调度器

@@ -32,6 +32,23 @@ struct MedicineBoxDetailPage: View {
     @State private var shareErrorMessage: String?
     @State private var isPreparingShare = false
 
+    private var healthResourceConversationRequest: HealthResourceConversationRequest {
+        HealthResourceConversationRequest(
+            identity: HealthResourceIdentity(
+                type: .medicineBox,
+                resourceID: currentBox.id,
+                memberID: resolvedEntryMemberID
+            ),
+            displayTitle: currentBox.medicineName.nilIfBlank
+                ?? L10n.text("chat.ask_report.resource_type.medicine_box", fallback: "药箱详情"),
+            displaySubtitle: [currentBox.brandName, currentBox.strength]
+                .compactMap { $0.nilIfBlank }
+                .joined(separator: " · "),
+            typeBadge: L10n.text("chat.ask_report.resource_type.medicine_box", fallback: "药箱"),
+            source: "medicine_box_detail"
+        )
+    }
+
     init(
         mode: MedicineBoxDetailMode = .server,
         box: SparkMedicalSyncAPI.RemoteMedicineBox,
@@ -127,6 +144,10 @@ struct MedicineBoxDetailPage: View {
                 }
             }
         }
+        .healthResourceConversationOverlay(
+            healthResourceConversationRequest,
+            isEnabled: mode == .server && currentBox.id > 0 && resolvedEntryMemberID > 0
+        )
         .navigationTitle(currentBox.medicineName.nilIfBlank ?? L10n.text("home.medical.medicine_box.detail_title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

@@ -139,7 +139,7 @@ struct MedicalCaseDetailPage: View {
             }
             .background(Color(uiColor: .systemGroupedBackground))
 
-            addRecordFloatingButton
+            detailActionStack
         }
         .navigationTitle(currentItem.title?.nonEmpty ?? L10n.text("home.medical.list.medical_cases.title"))
         .navigationBarTitleDisplayMode(.inline)
@@ -341,6 +341,66 @@ struct MedicalCaseDetailPage: View {
         .buttonStyle(.plain)
         .padding(.trailing, 20)
         .padding(.bottom, 28)
+    }
+
+    /// 病历详情页的公共快捷操作栈：对话位于新增记录上方，避免两个 bottomTrailing overlay 互相覆盖。
+    private var detailActionStack: some View {
+        VStack(alignment: .trailing, spacing: 12) {
+            Button {
+                triggerAddRecordHaptic()
+                requestConversationForCurrentCase()
+            } label: {
+                Image(systemName: "message.circle.fill")
+                    .font(.system(size: 56))
+                    .foregroundStyle(Color.accentColor)
+                    .background(
+                        Circle()
+                            .fill(Color(uiColor: .systemBackground))
+                    )
+                    .shadow(color: .black.opacity(0.18), radius: 4, y: 2)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(
+                L10n.text(
+                    "chat.health_resource_conversation.open",
+                    fallback: "咨询当前病历"
+                )
+            )
+            .accessibilityHint(
+                L10n.text(
+                    "chat.health_resource_conversation.open.hint",
+                    fallback: "打开新对话并带入当前病历"
+                )
+            )
+            .disabled(isDeleting || isExporting || isPreparingShare || isUpdatingArchiveState)
+
+            addRecordFloatingButton
+        }
+        .padding(.trailing, 20)
+        .padding(.bottom, 28)
+    }
+
+    private func requestConversationForCurrentCase() {
+        let title = currentItem.title?.nonEmpty
+            ?? L10n.text("chat.ask_report.resource_type.medical_case")
+        let subtitle = currentItem.diagnosisSummary?.nonEmpty
+            ?? currentItem.hospitalName?.nonEmpty
+            ?? ""
+        let request = HealthResourceConversationRequest(
+            identity: HealthResourceIdentity(
+                type: .medicalCase,
+                resourceID: currentItem.id,
+                memberID: currentItem.member
+            ),
+            displayTitle: title,
+            displaySubtitle: subtitle,
+            typeBadge: L10n.text("chat.ask_report.resource_type.medical_case"),
+            source: "medical_case_detail"
+        )
+        NotificationCenter.default.post(
+            name: .healthResourceConversationRequested,
+            object: request
+        )
     }
 
     @ViewBuilder

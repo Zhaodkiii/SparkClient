@@ -425,15 +425,39 @@ struct ExaminationReportCategoryDetailPage: View {
     let report: SparkMedicalSyncAPI.RemoteExaminationReportWithAttachments
     var navigationTitleOverride: String? = nil
 
+    private var healthResourceConversationRequest: HealthResourceConversationRequest {
+        HealthResourceConversationRequest(
+            identity: HealthResourceIdentity(
+                type: .examinationReport,
+                resourceID: report.id,
+                memberID: report.member
+            ),
+            displayTitle: navigationTitleOverride
+                ?? report.itemName.flatMap { $0.nilIfBlank }
+                ?? L10n.text("chat.ask_report.resource_type.examination_report", fallback: "检查报告"),
+            displaySubtitle: report.impression.flatMap { $0.nilIfBlank }
+                ?? report.findings.flatMap { $0.nilIfBlank }
+                ?? "",
+            typeBadge: L10n.text("chat.ask_report.resource_type.examination_report", fallback: "检查"),
+            source: "examination_report_category_detail"
+        )
+    }
+
     var body: some View {
-        switch category {
-//        case .laboratory:
-//            LaboratoryReportDetailPage(report: report, navigationTitleOverride: navigationTitleOverride)
-        case .imaging,.laboratory:
-            ImagingReportDetailPage(report: report, navigationTitleOverride: navigationTitleOverride)
-        case .pathology:
-            PathologyReportDetailPage(report: report, navigationTitleOverride: navigationTitleOverride)
+        Group {
+            switch category {
+    //        case .laboratory:
+    //            LaboratoryReportDetailPage(report: report, navigationTitleOverride: navigationTitleOverride)
+            case .imaging,.laboratory:
+                ImagingReportDetailPage(report: report, navigationTitleOverride: navigationTitleOverride)
+            case .pathology:
+                PathologyReportDetailPage(report: report, navigationTitleOverride: navigationTitleOverride)
+            }
         }
+        .healthResourceConversationOverlay(
+            healthResourceConversationRequest,
+            isEnabled: report.id > 0 && report.member > 0
+        )
     }
 }
 

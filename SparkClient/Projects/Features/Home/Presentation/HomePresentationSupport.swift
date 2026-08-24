@@ -7,6 +7,7 @@ enum HomeSheet: Identifiable {
     case memberModuleSetup(Member)
     case share(Member)
     case taskCenter
+    case apiKeysSettings
 
     var id: String {
         switch self {
@@ -20,6 +21,8 @@ enum HomeSheet: Identifiable {
             return "share-\(member.id)"
         case .taskCenter:
             return "taskCenter"
+        case .apiKeysSettings:
+            return "apiKeysSettings"
         }
     }
 }
@@ -29,6 +32,7 @@ enum HomeFullScreenCover: Identifiable, Equatable {
     case medicalDocumentUpload
     case customCamera
     case memberDetail(memberID: Int)
+    case chat(threadID: UUID)
 
     var id: String {
         switch self {
@@ -38,6 +42,8 @@ enum HomeFullScreenCover: Identifiable, Equatable {
             return "customCamera"
         case .memberDetail(let memberID):
             return "memberDetail-\(memberID)"
+        case .chat(let threadID):
+            return "chat-\(threadID.uuidString)"
         }
     }
 }
@@ -56,6 +62,8 @@ extension HomeSheetKind {
             self = .share
         case .taskCenter:
             self = .taskCenter
+        case .apiKeysSettings:
+            self = .apiKeysSettings
         }
     }
 }
@@ -70,6 +78,8 @@ extension HomeFullScreenCoverKind {
             self = .customCamera
         case .memberDetail:
             self = .memberDetail
+        case .chat:
+            self = .chat
         }
     }
 }

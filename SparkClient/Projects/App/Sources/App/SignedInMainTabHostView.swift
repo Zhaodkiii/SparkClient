@@ -8,6 +8,9 @@ struct SignedInMainTabHostView: View {
 
     @State private var activeHomeFullScreenCover: HomeFullScreenCover?
     @State private var addMemberNearbyTransport = NearbyShareTransport()
+    @State private var pendingHealthResourceConversationRequest: HealthResourceConversationRequest?
+    @State private var showNoAvailableHealthChatModelAlert = false
+    @State private var isPreparingHealthResourceConversation = false
     
     init(session: UserSession, mainTab: MainTabDependencies) {
         self.session = session
@@ -22,6 +25,27 @@ struct SignedInMainTabHostView: View {
             }
             .fullScreenCover(item: $activeHomeFullScreenCover) { cover in
                 homeFullScreenCoverContent(cover)
+            }
+            .onReceive(
+                NotificationCenter.default.publisher(for: .healthResourceConversationRequested)
+            ) { notification in
+                guard let request = notification.object as? HealthResourceConversationRequest else {
+                    return
+                }
+                handleHealthResourceConversationRequest(request)
+            }
+            .alert(
+                L10n.text("chat.list.no_available_model.title"),
+                isPresented: $showNoAvailableHealthChatModelAlert
+            ) {
+                Button(L10n.text("chat.list.no_available_model.action")) {
+                    homeViewModel.activeSheet = .apiKeysSettings
+                }
+                Button(L10n.text("common.cancel"), role: .cancel) {
+                    pendingHealthResourceConversationRequest = nil
+                }
+            } message: {
+                Text(L10n.text("chat.list.no_available_model.message"))
             }
     }
 
@@ -168,6 +192,22 @@ private extension SignedInMainTabHostView {
                     knowledgeViewModel: mainTab.knowledgeViewModel
                 )
             }
+
+        case .apiKeysSettings:
+            CompatibleNavigationContainer {
+                APIKeysSettingsView(viewModel: mainTab.aiSettingsViewModel)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button(L10n.text("common.done")) {
+                                homeViewModel.activeSheet = nil
+                            }
+                        }
+                    }
+            }
+            .onDisappear {
+                guard pendingHealthResourceConversationRequest != nil else { return }
+                Task { await preparePendingHealthResourceConversation() }
+            }
         }
     }
 
@@ -189,6 +229,74 @@ private extension SignedInMainTabHostView {
 
         case .memberDetail(let memberID):
             memberDetailFullScreenCover(memberID: memberID)
+
+        case .chat(let threadID):
+            chatFullScreenCover(threadID: threadID)
+        }
+    }
+
+    @ViewBuilder
+    private func chatFullScreenCover(threadID: UUID) -> some View {
+        CompatibleNavigationContainer {
+            ChatView(
+                threadID: threadID,
+                stateStore: mainTab.chatStateStore,
+                listViewModel: mainTab.chatListViewModel,
+                detailViewModel: mainTab.chatDetailViewModel,
+                knowledgeDependencies: mainTab.knowledgeDependencies,
+                knowledgeViewModel: mainTab.knowledgeViewModel,
+                taskManager: mainTab.taskManager,
+                homeViewModel: mainTab.homeViewModel,
+                aiSettingsViewModel: mainTab.aiSettingsViewModel,
+                autoSmallTaskCoordinator: mainTab.chatAutoSmallTaskCoordinator,
+                onClose: {
+                    activeHomeFullScreenCover = nil
+                }
+            )
+            .task(id: threadID) {
+                await mainTab.chatListViewModel.selectAndPrepare(threadID: threadID)
+                await mainTab.chatDetailViewModel.loadMessagesIfNeeded(
+                    for: threadID,
+                    lockBottomViewport: true
+                )
+            }
+        }
+    }
+
+    private var healthResourceConversationCoordinator: HealthResourceConversationCoordinator {
+        HealthResourceConversationCoordinator(
+            stateStore: mainTab.chatStateStore,
+            listViewModel: mainTab.chatListViewModel,
+            detailViewModel: mainTab.chatDetailViewModel
+        )
+    }
+
+    private func handleHealthResourceConversationRequest(
+        _ request: HealthResourceConversationRequest
+    ) {
+        guard activeHomeFullScreenCover == nil,
+              isPreparingHealthResourceConversation == false else { return }
+        pendingHealthResourceConversationRequest = request
+        Task { await preparePendingHealthResourceConversation() }
+    }
+
+    private func preparePendingHealthResourceConversation() async {
+        guard let request = pendingHealthResourceConversationRequest,
+              activeHomeFullScreenCover == nil,
+              isPreparingHealthResourceConversation == false else { return }
+        isPreparingHealthResourceConversation = true
+        defer { isPreparingHealthResourceConversation = false }
+
+        let result = await healthResourceConversationCoordinator.prepare(request)
+        switch result {
+        case .ready(let threadID):
+            pendingHealthResourceConversationRequest = nil
+            activeHomeFullScreenCover = .chat(threadID: threadID)
+        case .requiresAISettings:
+            showNoAvailableHealthChatModelAlert = true
+        case .failed(let message):
+            pendingHealthResourceConversationRequest = nil
+            mainTab.chatDetailViewModel.notifyHealthResourceConversationError(message)
         }
     }
 

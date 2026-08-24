@@ -408,6 +408,15 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         return true
     }
 
+    /// 健康资源详情快捷进入 Chat 的准备失败提示。
+    func notifyHealthResourceConversationError(_ message: String) {
+        notificationClient.error(
+            message,
+            title: L10n.text("common.error"),
+            source: "chat.health_resource_conversation"
+        )
+    }
+
 
     /// 将所选模型立即写入线程并尝试上送同步（不等待发送消息）。
     func updateThreadModel(_ preferredModelName: String?, for threadID: UUID) async {

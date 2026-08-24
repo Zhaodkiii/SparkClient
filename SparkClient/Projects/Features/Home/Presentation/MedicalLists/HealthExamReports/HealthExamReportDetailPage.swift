@@ -11,6 +11,22 @@ struct HealthExamReportDetailPage: View {
     var onArchiveStateChanged: ((Int, Bool) -> Void)? = nil
     var archiveMode: MedicalArchiveListMode = .active
 
+    private var healthResourceConversationRequest: HealthResourceConversationRequest {
+        HealthResourceConversationRequest(
+            identity: HealthResourceIdentity(
+                type: .healthExamReport,
+                resourceID: item.id,
+                memberID: item.member
+            ),
+            displayTitle: item.institutionName.flatMap { $0.nilIfBlank }
+                ?? item.reportNo.flatMap { $0.nilIfBlank }
+                ?? L10n.text("chat.ask_report.resource_type.health_exam_report", fallback: "体检报告"),
+            displaySubtitle: item.summary.flatMap { $0.nilIfBlank } ?? "",
+            typeBadge: L10n.text("chat.ask_report.resource_type.health_exam_report", fallback: "体检"),
+            source: "health_exam_report_detail"
+        )
+    }
+
     var body: some View {
         HealthExamRecognitionResultView(
             item: item,
@@ -21,6 +37,10 @@ struct HealthExamReportDetailPage: View {
             onDeleted: onDeleted,
             onArchiveStateChanged: onArchiveStateChanged,
             archiveMode: archiveMode
+        )
+        .healthResourceConversationOverlay(
+            healthResourceConversationRequest,
+            isEnabled: item.id > 0 && item.member > 0
         )
     }
 }

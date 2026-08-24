@@ -51,6 +51,24 @@ struct MedicationPrescriptionDetailPage: View {
     @State private var shareErrorMessage: String?
     @State private var isPreparingShare = false
 
+    private var healthResourceConversationRequest: HealthResourceConversationRequest {
+        let prescription = currentPrescription
+        return HealthResourceConversationRequest(
+            identity: HealthResourceIdentity(
+                type: .prescription,
+                resourceID: prescription?.id ?? 0,
+                memberID: memberID ?? prescription?.member ?? 0
+            ),
+            displayTitle: prescription?.institutionName.nilIfBlank
+                ?? L10n.text("chat.ask_report.resource_type.prescription", fallback: "处方"),
+            displaySubtitle: prescription?.diagnosis.nilIfBlank
+                ?? prescription?.prescriberName.nilIfBlank
+                ?? "",
+            typeBadge: L10n.text("chat.ask_report.resource_type.prescription", fallback: "处方"),
+            source: "prescription_detail"
+        )
+    }
+
     init(
         mode: MedicationPrescriptionDetailMode = .server,
         prescription: SparkMedicalSyncAPI.RemotePrescription?,
@@ -132,6 +150,10 @@ struct MedicationPrescriptionDetailPage: View {
             .padding(.bottom, 24)
         }
         .background(Color(uiColor: .systemGroupedBackground))
+        .healthResourceConversationOverlay(
+            healthResourceConversationRequest,
+            isEnabled: mode == .server && (currentPrescription?.id ?? 0) > 0 && (memberID ?? currentPrescription?.member ?? 0) > 0
+        )
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
         // 右上角更多操作菜单：编辑、删除

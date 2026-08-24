@@ -74,6 +74,25 @@ struct ExaminationReportDetailPage: View {
         workflowAPI.map { ExaminationReportServerMutationService(resources: $0) }
     }
 
+    private var healthResourceConversationRequest: HealthResourceConversationRequest {
+        HealthResourceConversationRequest(
+            identity: HealthResourceIdentity(
+                type: .examinationReport,
+                resourceID: report.id,
+                memberID: report.member
+            ),
+            displayTitle: report.itemName.flatMap { $0.nilIfBlank }
+                ?? report.category.flatMap { $0.nilIfBlank }
+                ?? L10n.text("chat.ask_report.resource_type.examination_report", fallback: "检查报告"),
+            displaySubtitle: report.impression.flatMap { $0.nilIfBlank }
+                ?? report.findings.flatMap { $0.nilIfBlank }
+                ?? report.organizationName.flatMap { $0.nilIfBlank }
+                ?? "",
+            typeBadge: L10n.text("chat.ask_report.resource_type.examination_report", fallback: "检查"),
+            source: "examination_report_detail"
+        )
+    }
+
     var body: some View {
         ExaminationReportSummaryDetailPage(
             report: $report,
@@ -109,6 +128,10 @@ struct ExaminationReportDetailPage: View {
                 }
             }
         }
+        .healthResourceConversationOverlay(
+            healthResourceConversationRequest,
+            isEnabled: mode == .server && report.id > 0 && report.member > 0
+        )
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {

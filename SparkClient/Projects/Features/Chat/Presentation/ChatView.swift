@@ -28,6 +28,8 @@ struct ChatView: View {
     @ObservedObject var homeViewModel: HomeViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     let autoSmallTaskCoordinator: ChatAutoSmallTaskCoordinator?
+    /// 仅 fullScreenCover 场景注入；普通 NavigationStack 场景保持系统返回按钮。
+    let onClose: (() -> Void)?
     /// 引导卡片滑块 → 健康首页 destination（CHAT-000025）；nil 时滑块降级为纯展示。
     var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
 
@@ -38,6 +40,7 @@ struct ChatView: View {
     @StateObject private var speechHelper = ChatSpeechHelper()
     @State private var showClearChatConfirmation = false
     @State private var showNoAvailableChatModelAlert = false
+    @State private var showCloseChatConfirmation = false
     @AppStorage(ChatComposerStyle.appStorageKey) private var composerStyleRaw = ChatComposerStyle.hanlin.rawValue
     private let logger: Logger = ConsoleLogger()
     private static let cardActionSnapshotStorageKeyPrefix = "chat.view.card_action_snapshot."
@@ -98,7 +101,8 @@ struct ChatView: View {
         homeViewModel: HomeViewModel,
         aiSettingsViewModel: AISettingsViewModel,
         autoSmallTaskCoordinator: ChatAutoSmallTaskCoordinator? = nil,
-        guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
+        guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil,
+        onClose: (() -> Void)? = nil
     ) {
         self.threadID = threadID
         _activeThreadID = State(initialValue: threadID)
@@ -112,6 +116,7 @@ struct ChatView: View {
         self.aiSettingsViewModel = aiSettingsViewModel
         self.autoSmallTaskCoordinator = autoSmallTaskCoordinator
         self.guideHomeDestinationBuilder = guideHomeDestinationBuilder
+        self.onClose = onClose
         self.stateStore.setComposerStartupPreferences(aiSettingsViewModel.snapshot.chatComposerStartupPreferences)
     }
     
@@ -352,6 +357,27 @@ struct ChatView: View {
                 
             }
             .toolbar {
+                if let onClose {
+                    ToolbarItem(placement: .topBarLeading) {
+                        Button {
+                            if stateStore.isSending {
+                                showCloseChatConfirmation = true
+                            } else {
+                                onClose()
+                            }
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                        }
+                        .accessibilityLabel(L10n.text("common.close", fallback: "关闭"))
+                        .accessibilityHint(
+                            L10n.text(
+                                "chat.health_resource_conversation.close.hint",
+                                fallback: "关闭当前全屏对话"
+                            )
+                        )
+                    }
+                }
+
                 // CHAT-000030：新建对话按钮与设置菜单合并到同一 ToolbarItemGroup，
                 // 避免 .topBarTrailing / .navigationBarTrailing 混用在部分 iOS 版本排列不稳定。
                 ToolbarItemGroup(placement: .topBarTrailing) {
@@ -451,6 +477,7 @@ struct ChatView: View {
                     } label: {
                         Label(L10n.text("chat.settings.menu"), systemImage: "slider.horizontal.3")
                     }
+
                 }
             }
     }
@@ -605,6 +632,38 @@ struct ChatView: View {
                 Button(L10n.text("common.cancel"), role: .cancel) {}
             } message: {
                 Text(L10n.text("chat.list.no_available_model.message"))
+            }
+            .alert(
+                L10n.text(
+                    "chat.health_resource_conversation.close.title",
+                    fallback: "关闭对话？"
+                ),
+                isPresented: $showCloseChatConfirmation
+            ) {
+                Button(
+                    L10n.text(
+                        "chat.health_resource_conversation.close.continue",
+                        fallback: "继续对话"
+                    ),
+                    role: .cancel
+                ) {}
+                Button(
+                    L10n.text(
+                        "chat.health_resource_conversation.close.stop",
+                        fallback: "停止并关闭"
+                    ),
+                    role: .destructive
+                ) {
+                    detailViewModel.cancelCurrentGeneration()
+                    onClose?()
+                }
+            } message: {
+                Text(
+                    L10n.text(
+                        "chat.health_resource_conversation.close.message",
+                        fallback: "当前回答仍在生成，停止后将关闭全屏对话。"
+                    )
+                )
             }
             .alert(L10n.text("chat.management.clear_confirm_title"), isPresented: $showClearChatConfirmation) {
                 Button(L10n.text("common.cancel"), role: .cancel) {}
