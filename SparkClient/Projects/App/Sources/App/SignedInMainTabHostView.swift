@@ -2,11 +2,16 @@ import SwiftUI
 
 /// 已登录主界面中间页：集中选择 iOS 26 / 经典 Tab，并统一承载首页 sheet 与 fullScreenCover。
 struct SignedInMainTabHostView: View {
+    private enum FullScreenDismissIntent {
+        case goHome
+    }
+
     let session: UserSession
     let mainTab: MainTabDependencies
     @ObservedObject private var homeViewModel: HomeViewModel
 
     @State private var activeHomeFullScreenCover: HomeFullScreenCover?
+    @State private var pendingFullScreenDismissIntent: FullScreenDismissIntent?
     @State private var addMemberNearbyTransport = NearbyShareTransport()
     @State private var pendingHealthResourceConversationRequest: HealthResourceConversationRequest?
     @State private var showNoAvailableHealthChatModelAlert = false
@@ -23,7 +28,7 @@ struct SignedInMainTabHostView: View {
             .sheet(item: $homeViewModel.activeSheet) { sheet in
                 homeSheetContent(sheet)
             }
-            .fullScreenCover(item: $activeHomeFullScreenCover) { cover in
+            .fullScreenCover(item: $activeHomeFullScreenCover, onDismiss: handleFullScreenCoverDismissed) { cover in
                 homeFullScreenCoverContent(cover)
             }
             .onReceive(
@@ -230,13 +235,13 @@ private extension SignedInMainTabHostView {
         case .memberDetail(let memberID):
             memberDetailFullScreenCover(memberID: memberID)
 
-        case .chat(let threadID):
-            chatFullScreenCover(threadID: threadID)
+        case .chat(let threadID, let source):
+            chatFullScreenCover(threadID: threadID, source: source)
         }
     }
 
     @ViewBuilder
-    private func chatFullScreenCover(threadID: UUID) -> some View {
+    private func chatFullScreenCover(threadID: UUID, source: ChatPresentationSource) -> some View {
         CompatibleNavigationContainer {
             ChatView(
                 threadID: threadID,
@@ -249,10 +254,15 @@ private extension SignedInMainTabHostView {
                 homeViewModel: mainTab.homeViewModel,
                 aiSettingsViewModel: mainTab.aiSettingsViewModel,
                 autoSmallTaskCoordinator: mainTab.chatAutoSmallTaskCoordinator,
+                leadingAction: source.isAutomatic ? .home : .close,
                 onClose: {
+                    if source.isAutomatic {
+                        pendingFullScreenDismissIntent = .goHome
+                    }
                     activeHomeFullScreenCover = nil
                 }
             )
+            .interactiveDismissDisabled(mainTab.chatStateStore.isSending)
             .task(id: threadID) {
                 await mainTab.chatListViewModel.selectAndPrepare(threadID: threadID)
                 await mainTab.chatDetailViewModel.loadMessagesIfNeeded(
@@ -260,6 +270,16 @@ private extension SignedInMainTabHostView {
                     lockBottomViewport: true
                 )
             }
+        }
+    }
+
+    private func handleFullScreenCoverDismissed() {
+        guard let intent = pendingFullScreenDismissIntent else { return }
+        pendingFullScreenDismissIntent = nil
+
+        switch intent {
+        case .goHome:
+            mainTab.routeStore.route(to: .home, replaceStack: true)
         }
     }
 
@@ -291,7 +311,10 @@ private extension SignedInMainTabHostView {
         switch result {
         case .ready(let threadID):
             pendingHealthResourceConversationRequest = nil
-            activeHomeFullScreenCover = .chat(threadID: threadID)
+            activeHomeFullScreenCover = .chat(
+                threadID: threadID,
+                source: .healthResourceDetail
+            )
         case .requiresAISettings:
             showNoAvailableHealthChatModelAlert = true
         case .failed(let message):

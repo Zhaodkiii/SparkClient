@@ -1,5 +1,30 @@
 import SwiftUI
 
+enum ChatPresentationSource: String, Equatable, Sendable {
+    case automaticRecentThread
+    case automaticNewThread
+    case manualThreadRow
+    case manualNewThread
+    case manualEmptyState
+    case healthResourceDetail
+
+    var isAutomatic: Bool {
+        switch self {
+        case .automaticRecentThread, .automaticNewThread:
+            return true
+        case .manualThreadRow, .manualNewThread, .manualEmptyState, .healthResourceDetail:
+            return false
+        }
+    }
+}
+
+struct ChatPresentationRequest: Identifiable, Equatable, Sendable {
+    let threadID: UUID
+    let source: ChatPresentationSource
+
+    var id: String { "\(source.rawValue)-\(threadID.uuidString)" }
+}
+
 /// 聊天会话列表页面
 ///
 /// 核心功能：
@@ -26,14 +51,20 @@ struct ChatConversationListPage: View {
     /// AI 设置 ViewModel，管理模型和 API Key 配置
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     /// 推送适配器，处理通知权限申请
-    let pushAdapter: PushAdapter
+    let pushAdapter: PushAdapter?
     /// 引导卡片滑块跳转健康首页的构造器（CHAT-000025）
     /// - Note: 由 App 宿主注入；nil（旧宿主 / 未注入）时滑块降级为纯展示面板，不响应点击跳转
     var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
 
+    /// 会话选择回调。非 nil 时页面作为 Sheet 内的会话选择器使用：
+    /// 隐藏普通列表页头部，点击卡片仅回传 threadID，不执行 NavigationDestination。
+    var onThreadSelected: ((UUID) -> Void)? = nil
+
     /// 搜索框输入文本
     @State private var searchText = ""
-    /// 待导航的会话 ID，用于控制 NavigationLink 自动跳转
+    /// 请求根宿主呈现自动进入的全屏会话；手动入口继续使用本页 NavigationDestination
+    let onPresentChat: (ChatPresentationRequest) -> Void
+    /// 手动入口待导航的会话 ID
     @State private var pendingThreadNavigation: UUID?
     /// 页面是否已完成首次加载，防止重复执行 onAppear 逻辑
     @State private var hasLoaded = false
@@ -62,71 +93,20 @@ struct ChatConversationListPage: View {
         listViewModel.search(text: searchText)
     }
 
+    private var isThreadSelectionMode: Bool {
+        onThreadSelected != nil
+    }
+
     var body: some View {
-        List {
-            if itemsToDisplay.isEmpty {
-                // 空状态视图
-                emptyState
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
-            } else {
-                // 会话列表行
-                ForEach(itemsToDisplay) { item in
-                    threadRow(item)
-                }
-            }
-        }
-        .listStyle(.plain)
-        // 对齐主流聊天应用交互：列表滚动时交互式收起键盘
-        .chatScrollDismissesKeyboardInteractively()
-        .navigationTitle(L10n.text("chat.title"))
-        .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $searchText, prompt: L10n.text("chat.list.search.placeholder"))
-        // 自定义拖拽手势：拖拽开始时立即收起键盘，参考 Signal 交互设计
-        // 使用 simultaneousGesture 保证不影响列表本身的滚动手势
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 3)
-                .onChanged { _ in
-                    guard hasDismissedKeyboardInCurrentDrag == false else { return }
-                    hasDismissedKeyboardInCurrentDrag = true
-                    KeyboardDismissHelper.dismissKeyboard()
-                }
-                .onEnded { _ in
-                    hasDismissedKeyboardInCurrentDrag = false
-                }
-        )
-        .toolbar {
-            // 左侧导航栏按钮：知识库入口
-            ToolbarItem(placement: .navigationBarLeading) {
-                MainNavigationLink {
-                    KnowledgeLibraryView(
-                        dependencies: knowledgeDependencies,
-                        viewModel: knowledgeViewModel
-                    )
-                } label: {
-                    Image(systemName: "backpack.fill")
-                }
-                .accessibilityLabel(L10n.text("knowledge.library.title"))
-            }
-            // 右侧导航栏按钮：新建会话
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    Task {
-                        await createThreadIfAvailable()
-                    }
-                } label: {
-                    Image(systemName: "plus.bubble")
-                }
-                .accessibilityLabel(L10n.text("chat.thread.new", fallback: "新建对话"))
-            }
-        }
+        listWithPresentationChrome
         // 首次加载任务：只执行一次
         .task {
             guard hasLoaded == false else { return }
             hasLoaded = true
             // 加载列表数据
             await listViewModel.loadForListIfNeeded()
-            // 处理启动自动导航
+            // Sheet 选择模式只负责展示和回传，不触发列表页启动自动导航。
+            guard isThreadSelectionMode == false else { return }
             await handleInitialAutoNavigationIfNeeded()
         }
         // 下拉刷新
@@ -175,10 +155,9 @@ struct ChatConversationListPage: View {
                 onCancel: {}
             )
         }
-        // 自动导航到会话详情：通过 pendingThreadNavigation 控制
-        // 使用 navigationDestination 匹配编程式导航，避免列表中每个 NavigationLink 都提前初始化 ChatView
+        // 手动进入会话继续使用对话 Tab 自身的 NavigationDestination。
         .navigationDestination(isPresented: Binding(
-            get: { pendingThreadNavigation != nil },
+            get: { isThreadSelectionMode == false && pendingThreadNavigation != nil },
             set: { isPresented in
                 if isPresented == false {
                     pendingThreadNavigation = nil
@@ -198,9 +177,78 @@ struct ChatConversationListPage: View {
                     aiSettingsViewModel: aiSettingsViewModel,
                     guideHomeDestinationBuilder: guideHomeDestinationBuilder
                 )
-                // 进入聊天页时隐藏底部 TabBar
                 .hidesMainTabBarWhenPushed()
             }
+        }
+    }
+
+    private var conversationList: some View {
+        List {
+            if itemsToDisplay.isEmpty {
+                // 空状态视图
+                emptyState
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
+            } else {
+                // 会话列表行
+                ForEach(itemsToDisplay) { item in
+                    threadRow(item)
+                }
+            }
+        }
+        .listStyle(.plain)
+        // 对齐主流聊天应用交互：列表滚动时交互式收起键盘
+        .chatScrollDismissesKeyboardInteractively()
+        // 自定义拖拽手势：拖拽开始时立即收起键盘，参考 Signal 交互设计
+        // 使用 simultaneousGesture 保证不影响列表本身的滚动手势
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 3)
+                .onChanged { _ in
+                    guard hasDismissedKeyboardInCurrentDrag == false else { return }
+                    hasDismissedKeyboardInCurrentDrag = true
+                    KeyboardDismissHelper.dismissKeyboard()
+                }
+                .onEnded { _ in
+                    hasDismissedKeyboardInCurrentDrag = false
+                }
+        )
+    }
+
+    @ViewBuilder
+    private var listWithPresentationChrome: some View {
+        if isThreadSelectionMode {
+            conversationList
+                .toolbar(.hidden, for: .navigationBar)
+        } else {
+            conversationList
+                .navigationTitle(L10n.text("chat.title"))
+                .navigationBarTitleDisplayMode(.inline)
+                .searchable(text: $searchText, prompt: L10n.text("chat.list.search.placeholder"))
+                .toolbar {
+                    // 左侧导航栏按钮：知识库入口
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        MainNavigationLink {
+                            KnowledgeLibraryView(
+                                dependencies: knowledgeDependencies,
+                                viewModel: knowledgeViewModel
+                            )
+                        } label: {
+                            Image(systemName: "backpack.fill")
+                        }
+                        .accessibilityLabel(L10n.text("knowledge.library.title"))
+                    }
+                    // 右侧导航栏按钮：新建会话
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button {
+                            Task {
+                                await createThreadIfAvailable(source: .manualNewThread)
+                            }
+                        } label: {
+                            Image(systemName: "plus.bubble")
+                        }
+                        .accessibilityLabel(L10n.text("chat.thread.new", fallback: "新建对话"))
+                    }
+                }
         }
     }
 
@@ -226,14 +274,16 @@ struct ChatConversationListPage: View {
                 Text(L10n.text("chat.list.empty.title"))
                     .font(.headline)
                     .foregroundColor(.secondary)
-                Button {
-                    Task {
-                        await createThreadIfAvailable()
+                if isThreadSelectionMode == false {
+                    Button {
+                        Task {
+                            await createThreadIfAvailable(source: .manualEmptyState)
+                        }
+                    } label: {
+                        Text(L10n.text("chat.list.empty.create"))
                     }
-                } label: {
-                    Text(L10n.text("chat.list.empty.create"))
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
             }
         }
         .frame(maxWidth: .infinity, alignment: .center)
@@ -251,49 +301,31 @@ struct ChatConversationListPage: View {
     /// - Parameter item: 会话列表项数据
     @ViewBuilder
     private func threadRow(_ item: ChatThreadListItem) -> some View {
-        MainNavigationLink {
-            ChatView(
-                threadID: item.id,
-                stateStore: stateStore,
-                listViewModel: listViewModel,
-                detailViewModel: detailViewModel,
-                knowledgeDependencies: knowledgeDependencies,
-                knowledgeViewModel: knowledgeViewModel,
-                taskManager: taskManager,
-                homeViewModel: homeViewModel,
-                aiSettingsViewModel: aiSettingsViewModel,
-                guideHomeDestinationBuilder: guideHomeDestinationBuilder
-            )
-        } label: {
-            HStack(alignment: .center, spacing: 10) {
-                // 会话图标
-                threadIcon(item.thread)
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 8) {
-                        Text(item.thread.listDisplayTitle)
-                            .font(.headline)
-                            .lineLimit(1)
-                        // 置顶标记
-                        if item.thread.isPinned {
-                            Image(systemName: "pin.fill")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        // 最新消息时间
-                        Text(formattedDate(item.latestMessageAt))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    // 最新消息预览，最多两行
-                    Text(item.latestMessagePreview)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+        Group {
+            if let onThreadSelected {
+                Button {
+                    onThreadSelected(item.id)
+                } label: {
+                    threadRowLabel(item)
+                }
+            } else {
+                MainNavigationLink {
+                    ChatView(
+                        threadID: item.id,
+                        stateStore: stateStore,
+                        listViewModel: listViewModel,
+                        detailViewModel: detailViewModel,
+                        knowledgeDependencies: knowledgeDependencies,
+                        knowledgeViewModel: knowledgeViewModel,
+                        taskManager: taskManager,
+                        homeViewModel: homeViewModel,
+                        aiSettingsViewModel: aiSettingsViewModel,
+                        guideHomeDestinationBuilder: guideHomeDestinationBuilder
+                    )
+                } label: {
+                    threadRowLabel(item)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 6)
         }
         // 扩展点击区域到整个行
         .contentShape(Rectangle())
@@ -361,6 +393,38 @@ struct ChatConversationListPage: View {
 
     }
 
+    private func threadRowLabel(_ item: ChatThreadListItem) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            // 会话图标
+            threadIcon(item.thread)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text(item.thread.listDisplayTitle)
+                        .font(.headline)
+                        .lineLimit(1)
+                    // 置顶标记
+                    if item.thread.isPinned {
+                        Image(systemName: "pin.fill")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    // 最新消息时间
+                    Text(formattedDate(item.latestMessageAt))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                // 最新消息预览，最多两行
+                Text(item.latestMessagePreview)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 6)
+    }
+
     /// 会话自定义图标视图
     ///
     /// 支持用户自定义图标名称和颜色，未自定义时使用默认气泡图标和主题色
@@ -401,19 +465,19 @@ struct ChatConversationListPage: View {
     /// 2. 请求推送权限（如果还未确定）
     /// 3. 调用 ViewModel 创建新会话
     /// 4. 自动导航到新创建的会话
-    private func createThreadIfAvailable() async {
+    private func createThreadIfAvailable(source: ChatPresentationSource) async {
         // 模型可用性检查
         guard await detailViewModel.hasAvailableChatModel() else {
             showNoAvailableChatModelAlert = true
             return
         }
         // 异步请求推送权限，不阻塞流程
-        pushAdapter.requestAuthorizationIfNotDetermined()
+        pushAdapter?.requestAuthorizationIfNotDetermined()
         // 创建新会话
         await listViewModel.createThread()
         guard let threadID = stateStore.selectedThreadID else { return }
         // 导航到新会话
-        await navigateToThread(threadID)
+        await navigateToThread(threadID, source: source)
     }
 
     /// 处理应用启动时的自动导航逻辑（仅执行一次）
@@ -430,21 +494,22 @@ struct ChatConversationListPage: View {
 
         // 优先恢复最近 5 分钟内活跃的会话
         if let activeThreadID = mostRecentActiveThreadID(within: 5 * 60) {
-            await navigateToThread(activeThreadID)
+            await navigateToThread(activeThreadID, source: .automaticRecentThread)
             return
         }
 
         // 无最近活跃会话：自动创建新会话
-        await createThreadIfAvailable()
+        await createThreadIfAvailable(source: .automaticNewThread)
     }
 
     /// 查找指定时间间隔内有最新消息的最近活跃会话 ID
     /// - Parameter interval: 时间间隔（秒），如 5*60 表示 5 分钟
     /// - Returns: 最近活跃会话 ID，无则返回 nil
     private func mostRecentActiveThreadID(within interval: TimeInterval) -> UUID? {
-        let cutoff = Date().addingTimeInterval(-interval)
-        // 列表按最新消息排序，第一个满足时间条件的就是最近活跃的
-        return stateStore.threadItems.first(where: { $0.latestMessageAt >= cutoff })?.id
+        RecentActiveChatThreadSelector.mostRecentActiveThreadID(
+            in: stateStore.threadItems,
+            within: interval
+        )
     }
 
     /// 是否应该跳过启动自动导航
@@ -462,12 +527,16 @@ struct ChatConversationListPage: View {
     /// 流程：
     /// 1. 在列表中选中该会话
     /// 2. 预加载消息数据，锁定底部视口保证打开时滚动到底部
-    /// 3. 设置 pendingThreadNavigation 触发 NavigationLink 跳转
+    /// 3. 向根宿主发出全屏 Chat presentation request
     /// - Parameter threadID: 要导航到的会话 ID
-    private func navigateToThread(_ threadID: UUID) async {
+    private func navigateToThread(_ threadID: UUID, source: ChatPresentationSource) async {
         listViewModel.selectThread(threadID)
         await detailViewModel.loadMessagesIfNeeded(for: threadID, lockBottomViewport: true)
-        pendingThreadNavigation = threadID
+        if source.isAutomatic {
+            onPresentChat(ChatPresentationRequest(threadID: threadID, source: source))
+        } else {
+            pendingThreadNavigation = threadID
+        }
     }
 
     /// 格式化消息时间显示

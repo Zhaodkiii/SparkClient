@@ -255,6 +255,25 @@
 "chat.guide.questions.generating" = "正在根據成員資料生成健康科普問題...";
 "chat.guide.questions.generating.new_member" = "正在根據新成員資料生成科普問題...";
 
+"chat.home.return" = "返回首頁";
+"chat.home.return.hint" = "關閉目前對話並返回健康首頁";
+"chat.health_resource_conversation.close.hint" = "關閉目前全螢幕對話";
+"chat.health_resource_conversation.close.title" = "關閉對話？";
+"chat.health_resource_conversation.close.continue" = "繼續對話";
+"chat.health_resource_conversation.close.stop" = "停止並關閉";
+"chat.health_resource_conversation.close.message" = "目前回答仍在產生，請停止產生後再關閉全螢幕對話。";
+"chat.health_resource_conversation.action" = "諮詢目前資料";
+"chat.health_resource_conversation.action.hint" = "開啟對話並自動帶入目前健康資料";
+"chat.health_resource_conversation.invalid_resource" = "目前健康資料暫時無法開啟對話。";
+"chat.health_resource_conversation.prepare_failed" = "對話準備失敗，請稍後再試。";
+"chat.ask_report.toast.max_refs" = "最多選擇 5 份資料";
+"chat.ask_report.resource_type.health_exam_report" = "體檢報告";
+"chat.ask_report.resource_type.examination_report" = "檢查報告";
+"chat.ask_report.resource_type.medical_case" = "病歷";
+"chat.ask_report.resource_type.medicine_box" = "藥箱";
+"chat.ask_report.resource_type.prescription" = "處方";
+"chat.ask_report.resource_type.medication_plan" = "用藥計畫";
+
 "api_error.msg.access_denied" = "您的帳號因違規行為已觸犯用戶協議，已被系統永久禁止登入。如有疑問請聯繫客服處理。";
 "api_error.reason.account_banned" = "您的帳號因違規行為已觸犯用戶協議，已被系統永久禁止登入。如有疑問請聯繫客服處理。";
 "api_error.code.40371" = "您的帳號因違規行為已觸犯用戶協議，已被系統永久禁止登入。如有疑問請聯繫客服處理。";

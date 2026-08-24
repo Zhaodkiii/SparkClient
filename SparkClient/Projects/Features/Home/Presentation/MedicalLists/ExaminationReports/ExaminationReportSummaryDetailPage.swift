@@ -42,6 +42,25 @@ struct ExaminationReportSummaryDetailPage: View {
             .joined(separator: " · ")
     }
 
+    private var healthResourceConversationRequest: HealthResourceConversationRequest {
+        HealthResourceConversationRequest(
+            identity: HealthResourceIdentity(
+                type: .examinationReport,
+                resourceID: report.id,
+                memberID: report.member
+            ),
+            displayTitle: report.itemName.flatMap { $0.nilIfBlank }
+                ?? report.category.flatMap { $0.nilIfBlank }
+                ?? L10n.text("chat.ask_report.resource_type.examination_report", fallback: "检查报告"),
+            displaySubtitle: report.impression.flatMap { $0.nilIfBlank }
+                ?? report.findings.flatMap { $0.nilIfBlank }
+                ?? report.organizationName.flatMap { $0.nilIfBlank }
+                ?? "",
+            typeBadge: L10n.text("chat.ask_report.resource_type.examination_report", fallback: "检查"),
+            source: "examination_report_detail"
+        )
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
@@ -54,6 +73,10 @@ struct ExaminationReportSummaryDetailPage: View {
             .padding(.bottom, 24)
         }
         .background(Color(uiColor: .systemGroupedBackground))
+        .healthResourceConversationOverlay(
+            healthResourceConversationRequest,
+            isEnabled: workflowAPI != nil && report.id > 0 && report.member > 0
+        )
         .navigationTitle(navigationTitleText)
         .navigationBarTitleDisplayMode(.inline)
         .alert(L10n.text("common.operation_failed"), isPresented: Binding(

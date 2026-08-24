@@ -245,7 +245,13 @@ struct MainTabCoordinatorView: View {
             homeViewModel: homeViewModel,
             aiSettingsViewModel: aiSettingsViewModel,
             pushAdapter: pushAdapter,
-            guideHomeDestinationBuilder: guideHomeDestinationBuilder
+            guideHomeDestinationBuilder: guideHomeDestinationBuilder,
+            onPresentChat: { request in
+                activeHomeFullScreenCover = .chat(
+                    threadID: request.threadID,
+                    source: request.source
+                )
+            }
         )
         .tabItem {
             Label(L10n.text("tab.chat"), systemImage: "bubble.left.and.bubble.right.fill")

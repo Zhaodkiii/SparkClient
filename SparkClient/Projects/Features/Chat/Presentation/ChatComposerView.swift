@@ -119,8 +119,12 @@ struct ChatComposerView: View {
                 boundMemberID: nil,
                 isSending: stateStore.isSending,
                 smallTasks: smallTasks,
+                healthResourceRefs: [],
                 onAskReport: {},
-                onSmallTaskTapped: onSmallTaskTapped
+                onSmallTaskTapped: onSmallTaskTapped,
+                onHealthResourceTapped: { _ in },
+                onRemoveHealthResourceRef: { _ in },
+                onClearHealthResourceRefs: {}
             )
 
             if composerDraft.attachments.isEmpty == false {

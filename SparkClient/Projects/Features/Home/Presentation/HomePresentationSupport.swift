@@ -32,7 +32,7 @@ enum HomeFullScreenCover: Identifiable, Equatable {
     case medicalDocumentUpload
     case customCamera
     case memberDetail(memberID: Int)
-    case chat(threadID: UUID)
+    case chat(threadID: UUID, source: ChatPresentationSource)
 
     var id: String {
         switch self {
@@ -42,8 +42,8 @@ enum HomeFullScreenCover: Identifiable, Equatable {
             return "customCamera"
         case .memberDetail(let memberID):
             return "memberDetail-\(memberID)"
-        case .chat(let threadID):
-            return "chat-\(threadID.uuidString)"
+        case .chat(let threadID, let source):
+            return "chat-\(source.rawValue)-\(threadID.uuidString)"
         }
     }
 }

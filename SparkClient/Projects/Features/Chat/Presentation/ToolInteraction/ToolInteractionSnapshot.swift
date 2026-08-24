@@ -15,11 +15,19 @@ enum ToolInteractionSnapshot: Codable, Equatable, Sendable {
     case askReportPicker(AskReportPickerPrompt)
     /// API Keys / Provider 设置（只展示，不阻塞工具执行队列）。
     case apiKeysSettings
+    /// 当前 ChatView 内的会话列表选择器（选择后原地切换 thread）。
+    case conversationList
 
     /// `true`：禁止下滑关闭（同意/提问/选成员）；`false`：允许工具详情 Sheet 手势关闭。
     var requiresForcedSheetDismiss: Bool {
         switch self {
-        case .toolPreview, .systemMessageSettings, .healthResourceCandidates, .askReportPicker, .apiKeysSettings: return false
+        case .toolPreview,
+             .systemMessageSettings,
+             .healthResourceCandidates,
+             .askReportPicker,
+             .apiKeysSettings,
+             .conversationList:
+            return false
         case .consent, .question, .member: return true
         }
     }

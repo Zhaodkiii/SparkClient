@@ -2,6 +2,11 @@ import SwiftUI
 import UIKit
 import Combine
 
+enum ChatLeadingAction: Equatable {
+    case close
+    case home
+}
+
 struct ChatView: View {
     private enum ParameterCardKind: Hashable {
         case temperature
@@ -28,11 +33,13 @@ struct ChatView: View {
     @ObservedObject var homeViewModel: HomeViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     let autoSmallTaskCoordinator: ChatAutoSmallTaskCoordinator?
+    /// 全屏入口的 leading action 语义；普通 push 场景为 nil。
+    let leadingAction: ChatLeadingAction?
     /// 仅 fullScreenCover 场景注入；普通 NavigationStack 场景保持系统返回按钮。
     let onClose: (() -> Void)?
     /// 引导卡片滑块 → 健康首页 destination（CHAT-000025）；nil 时滑块降级为纯展示。
     var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
-
+    
     @State private var hasLoaded = false
     @StateObject private var uiStateStore = ChatMessageUIStateStore()
     @StateObject private var messageNavigationCoordinator = ChatMessageNavigationCoordinator()
@@ -62,26 +69,26 @@ struct ChatView: View {
     private var currentThreadID: UUID {
         activeThreadID
     }
-
+    
     private var reasoningRefreshId: String {
         let name = stateStore.composerDraft(for: currentThreadID).runtimeFlags.selectedChatModelName ?? "-"
         return "\(currentThreadID.uuidString)|\(name)"
     }
-
+    
     private var composerStyle: ChatComposerStyle {
         ChatComposerStyle(rawValue: composerStyleRaw) ?? .hanlin
     }
-
+    
     /// CHAT-000030：消息列表必须按 currentThreadID 读取，不能跟随全局 selectedMessages，
     /// 避免局部 activeThreadID 与全局 selectedThreadID 短暂不同步时显示错线程消息。
     private var visibleMessages: [ChatMessage] {
         stateStore.conversationListItems(for: currentThreadID).filter { uiStateStore.isDeleted($0.id) == false }
     }
-
+    
     private var hasMoreMessages: Bool {
         stateStore.hasMoreMessages(for: currentThreadID)
     }
-
+    
     private var isLoadingMoreMessages: Bool {
         stateStore.isLoadingMoreMessages(for: currentThreadID)
     }
@@ -89,7 +96,7 @@ struct ChatView: View {
     var body: some View {
         AnyView(configuredLayout)
     }
-
+    
     init(
         threadID: UUID,
         stateStore: ChatStateStore,
@@ -102,6 +109,7 @@ struct ChatView: View {
         aiSettingsViewModel: AISettingsViewModel,
         autoSmallTaskCoordinator: ChatAutoSmallTaskCoordinator? = nil,
         guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil,
+        leadingAction: ChatLeadingAction? = nil,
         onClose: (() -> Void)? = nil
     ) {
         self.threadID = threadID
@@ -116,6 +124,7 @@ struct ChatView: View {
         self.aiSettingsViewModel = aiSettingsViewModel
         self.autoSmallTaskCoordinator = autoSmallTaskCoordinator
         self.guideHomeDestinationBuilder = guideHomeDestinationBuilder
+        self.leadingAction = leadingAction
         self.onClose = onClose
         self.stateStore.setComposerStartupPreferences(aiSettingsViewModel.snapshot.chatComposerStartupPreferences)
     }
@@ -209,7 +218,7 @@ struct ChatView: View {
     private var selectedComposerModelRow: AIScenarioRemoteModelRow? {
         selectedComposerModelRow(for: currentThreadID)
     }
-
+    
     /// CHAT-000030：按 threadID 解析选中模型行（详情页内部切换 thread 后不得沿用旧 thread 的草稿/模型）。
     private func selectedComposerModelRow(for threadID: UUID) -> AIScenarioRemoteModelRow? {
         // 1. 优先取编辑器草稿中记录的选中模型名称（去空格）
@@ -351,13 +360,13 @@ struct ChatView: View {
             .safeAreaInset(edge: .bottom) {
                 composerChrome
             }
-//            .ignoresSafeArea(.container, edges: .bottom)
+        //            .ignoresSafeArea(.container, edges: .bottom)
             .overlay(alignment: .bottom) {
                 parameterOverlay
                 
             }
             .toolbar {
-                if let onClose {
+                if let onClose, let leadingAction {
                     ToolbarItem(placement: .topBarLeading) {
                         Button {
                             if stateStore.isSending {
@@ -366,21 +375,39 @@ struct ChatView: View {
                                 onClose()
                             }
                         } label: {
-                            Image(systemName: "xmark.circle.fill")
+                            Image(systemName: leadingAction == .home ? "heart.fill" : "xmark.circle.fill")
                         }
-                        .accessibilityLabel(L10n.text("common.close", fallback: "关闭"))
+                        .accessibilityLabel(
+                            L10n.text(
+                                leadingAction == .home ? "chat.home.return" : "common.close",
+                                fallback: leadingAction == .home ? "返回首页" : "关闭"
+                            )
+                        )
                         .accessibilityHint(
                             L10n.text(
-                                "chat.health_resource_conversation.close.hint",
-                                fallback: "关闭当前全屏对话"
+                                leadingAction == .home
+                                ? "chat.home.return.hint"
+                                : "chat.health_resource_conversation.close.hint",
+                                fallback: leadingAction == .home
+                                ? "关闭当前对话并返回健康首页"
+                                : "关闭当前全屏对话"
                             )
                         )
                     }
                 }
-
+                
                 // CHAT-000030：新建对话按钮与设置菜单合并到同一 ToolbarItemGroup，
                 // 避免 .topBarTrailing / .navigationBarTrailing 混用在部分 iOS 版本排列不稳定。
                 ToolbarItemGroup(placement: .topBarTrailing) {
+                    Button {
+                        detailViewModel.toolInteractionCoordinator.presentConversationList()
+                    } label: {
+                        Image(systemName: "bubble.left.and.bubble.right")
+                    }
+                    .accessibilityLabel(
+                        L10n.text("chat.conversation_list.open", fallback: "对话列表")
+                    )
+                    
                     // CHAT-000030：详情页右上角新建对话（当前详情内部切换 thread，不跳转）。
                     Button {
                         Task { await createThreadInsideCurrentChat() }
@@ -393,7 +420,7 @@ struct ChatView: View {
                     }
                     .disabled(isCreatingThreadInDetail || stateStore.isSending)
                     .accessibilityLabel(L10n.text("chat.thread.new", fallback: "新建对话"))
-
+#if DEBUG
                     Menu {
                         Menu(L10n.text("chat.settings.menu"), systemImage: "slider.horizontal.3") {
                             Button {
@@ -477,7 +504,7 @@ struct ChatView: View {
                     } label: {
                         Label(L10n.text("chat.settings.menu"), systemImage: "slider.horizontal.3")
                     }
-
+#endif
                 }
             }
     }
@@ -533,7 +560,7 @@ struct ChatView: View {
             .onChange(of: aiSettingsViewModel.snapshot.chatComposerStartupPreferences) { preferences in
                 stateStore.setComposerStartupPreferences(preferences)
             }
-            // CHAT-000030：以 currentThreadID 作为生命周期 key，右上角新建后原地重启新 thread 初始化链路。
+        // CHAT-000030：以 currentThreadID 作为生命周期 key，右上角新建后原地重启新 thread 初始化链路。
             .task(id: currentThreadID) {
                 // 固定本轮 ID，避免 await 期间用户再次新建导致后续步骤串到别的 thread
                 let id = currentThreadID
@@ -574,42 +601,8 @@ struct ChatView: View {
             .task(id: reasoningRefreshId) {
                 await detailViewModel.refreshReasoningToolbarContext(for: currentThreadID)
             }
-            .sheet(
-                item: Binding(
-                    get: { detailViewModel.toolInteractionCoordinator.activePresentation },
-                    set: { newValue in
-                        guard newValue == nil else { return }
-                        detailViewModel.clearToolPreviewRenderContext()
-                        detailViewModel.toolInteractionCoordinator.dismissActivePresentationByUser()
-                    }
-                )
-            ) { active in
-                ToolInteractionPresentationSheet(
-                    active: active,
-                    coordinator: detailViewModel.toolInteractionCoordinator,
-                    memberContextStore: homeViewModel.memberContextStoreForBinding,
-                    stateStore: stateStore,
-                    toolPreviewRenderContext: detailViewModel.toolPreviewRenderContext,
-                    aiSettingsViewModel: aiSettingsViewModel,
-                    initialCompleteData: homeViewModel.dashboard?.medical.completeData,
-                    memberCompleteDataFetcher: detailViewModel,
-                    onClearToolPreviewRenderContext: { detailViewModel.clearToolPreviewRenderContext() },
-                    onSaveSystemMessage: { prompt, value in
-                        Task {
-                            await detailViewModel.updateThreadSystemPrompt(value, for: prompt.threadID)
-                        }
-                    },
-                    onAskReportAppend: { _, refs in
-                        detailViewModel.appendAskReportRefs(refs, for: currentThreadID)
-                    },
-                    onAskReportSetMemberBinding: { memberID in
-                        Task { await detailViewModel.updateThreadMemberBinding(memberID, for: currentThreadID) }
-                    },
-                    onAskReportMaxRefsReached: {
-                        detailViewModel.notifyAskReportMaxRefsReached()
-                    }
-                )
-                .interactiveDismissDisabled(active.snapshot.requiresForcedSheetDismiss)
+            .sheet(item: toolInteractionPresentationBinding) { active in
+                toolInteractionSheetContent(active)
             }
             .onReceive(NotificationCenter.default.publisher(for: .chatGuideBindHealthRequested)) { _ in
                 isShowingGuideAddDevice = true
@@ -650,7 +643,7 @@ struct ChatView: View {
                 Button(
                     L10n.text(
                         "chat.health_resource_conversation.close.stop",
-                        fallback: "停止并关闭"
+                        fallback: leadingAction == .home ? "停止并返回首页" : "停止并关闭"
                     ),
                     role: .destructive
                 ) {
@@ -673,7 +666,7 @@ struct ChatView: View {
             } message: {
                 Text(L10n.text("chat.management.clear_confirm_message"))
             }
-            // CHAT-000030：详情页内部新建对话失败提示（保留旧会话，不切换）
+        // CHAT-000030：详情页内部新建对话失败提示（保留旧会话，不切换）
             .alert(
                 L10n.text("chat.thread.create_failed", fallback: "新建对话失败"),
                 isPresented: Binding(
@@ -687,6 +680,60 @@ struct ChatView: View {
             }
     }
 
+    /// 所有工具交互（包括对话列表）统一使用此绑定驱动单一 Sheet。
+    private var toolInteractionPresentationBinding: Binding<ToolInteractionCoordinator.ActivePresentation?> {
+        Binding(
+            get: { detailViewModel.toolInteractionCoordinator.activePresentation },
+            set: { newValue in
+                guard newValue == nil else { return }
+                detailViewModel.clearToolPreviewRenderContext()
+                detailViewModel.toolInteractionCoordinator.dismissActivePresentationByUser()
+            }
+        )
+    }
+
+    @ViewBuilder
+    private func toolInteractionSheetContent(
+        _ active: ToolInteractionCoordinator.ActivePresentation
+    ) -> some View {
+        ToolInteractionPresentationSheet(
+            active: active,
+            coordinator: detailViewModel.toolInteractionCoordinator,
+            memberContextStore: homeViewModel.memberContextStoreForBinding,
+            stateStore: stateStore,
+            listViewModel: listViewModel,
+            detailViewModel: detailViewModel,
+            knowledgeDependencies: knowledgeDependencies,
+            knowledgeViewModel: knowledgeViewModel,
+            taskManager: taskManager,
+            homeViewModel: homeViewModel,
+            toolPreviewRenderContext: detailViewModel.toolPreviewRenderContext,
+            aiSettingsViewModel: aiSettingsViewModel,
+            initialCompleteData: homeViewModel.dashboard?.medical.completeData,
+            memberCompleteDataFetcher: detailViewModel,
+            guideHomeDestinationBuilder: guideHomeDestinationBuilder,
+            onClearToolPreviewRenderContext: { detailViewModel.clearToolPreviewRenderContext() },
+            onSaveSystemMessage: { prompt, value in
+                Task {
+                    await detailViewModel.updateThreadSystemPrompt(value, for: prompt.threadID)
+                }
+            },
+            onAskReportAppend: { _, refs in
+                detailViewModel.appendAskReportRefs(refs, for: currentThreadID)
+            },
+            onAskReportSetMemberBinding: { memberID in
+                Task { await detailViewModel.updateThreadMemberBinding(memberID, for: currentThreadID) }
+            },
+            onAskReportMaxRefsReached: {
+                detailViewModel.notifyAskReportMaxRefsReached()
+            },
+            onConversationThreadSelected: { selectedThreadID in
+                switchThreadFromConversationList(to: selectedThreadID)
+            }
+        )
+        .interactiveDismissDisabled(active.snapshot.requiresForcedSheetDismiss)
+    }
+
     /// CHAT-000030：自动小任务显式按 threadID 触发，避免详情页内部切换后发送到旧 thread。
     private func trySendAutoSmallTaskIfReady(for threadID: UUID) async {
         guard let autoSmallTaskCoordinator else { return }
@@ -698,7 +745,7 @@ struct ChatView: View {
             detailViewModel: detailViewModel
         )
     }
-
+    
     @ViewBuilder
     private var messageList: some View {
         switch aiSettingsViewModel.snapshot.chatConversationUIPreferences.architecture {
@@ -751,7 +798,7 @@ struct ChatView: View {
             )
         }
     }
-
+    
     private func messageForNavigation(clientMessageID: UUID) -> ChatMessage? {
         visibleMessages.first { $0.clientMessageID == clientMessageID }
     }
@@ -962,7 +1009,7 @@ struct ChatView: View {
     private func presentSystemMessageSettings() {
         activeParameterCard = nil
         let thread = stateStore.threadItems.first(where: { $0.id == currentThreadID })?.thread
-            ?? ChatThread(title: L10n.text("chat.default_thread_title"))
+        ?? ChatThread(title: L10n.text("chat.default_thread_title"))
         let row = selectedComposerModelRow
         let isAgent = row?.identity == AIModelIdentity.agent.rawValue
         let prompt = SystemMessageSettingsPrompt(
@@ -1048,9 +1095,9 @@ struct ChatView: View {
     private func exportChatRecordsToDebugLog() {
         logDebugInfo()
     }
-
+    
     // MARK: - CHAT-000030 详情页内部新建对话与 thread 切换
-
+    
     /// CHAT-000030：右上角新建对话入口。
     /// 不做任何 Navigation push/pop，创建成功后在当前详情容器内部切换到新 thread。
     @MainActor
@@ -1062,12 +1109,12 @@ struct ChatView: View {
         isCreatingThreadInDetail = true
         detailThreadCreationError = nil
         defer { isCreatingThreadInDetail = false }
-
+        
         logger.info(
             "chat.detail.new_thread_button.tap current=\(String(oldThreadID.uuidString.prefix(8))) isSending=\(stateStore.isSending)",
             module: .general
         )
-
+        
         guard let newThreadID = await listViewModel.createThread() else {
             detailThreadCreationError = L10n.text("chat.thread.create_failed", fallback: "新建对话失败，请稍后再试")
             logger.warning(
@@ -1076,14 +1123,14 @@ struct ChatView: View {
             )
             return
         }
-
+        
         logger.info(
             "chat.detail.new_thread_button.create_success old=\(String(oldThreadID.uuidString.prefix(8))) new=\(String(newThreadID.uuidString.prefix(8)))",
             module: .general
         )
         switchDetailThread(from: oldThreadID, to: newThreadID)
     }
-
+    
     /// CHAT-000030：当前详情内部切换 thread（同步全局 selectedThreadID、
     /// 持久化旧 thread 卡片动作快照并恢复新 thread 快照、清理临时 UI 状态）。
     @MainActor
@@ -1106,6 +1153,15 @@ struct ChatView: View {
         messageNavigationCoordinator.reset()
         // 恢复新 thread 的卡片动作快照（forceReload 清掉旧 thread 遗留 UI 状态）
         restoreCardActionSnapshotIfNeeded(forceReload: true)
+    }
+    
+    /// Sheet 会话列表选择结果：复用当前 ChatView 原地切换，随后关闭列表。
+    @MainActor
+    private func switchThreadFromConversationList(to newThreadID: UUID) {
+        let oldThreadID = currentThreadID
+        if oldThreadID != newThreadID {
+            switchDetailThread(from: oldThreadID, to: newThreadID)
+        }
     }
     
     private func logDebugInfo() {
@@ -1189,11 +1245,11 @@ struct ChatView: View {
 /// 对话列表内的健康设备管理 sheet，复用设备模块已有的成员与绑定管理流程。
 private struct ChatGuideAddDeviceSheet: View {
     let memberContextStore: MemberContextStore
-
+    
     init(memberContextStore: MemberContextStore) {
         self.memberContextStore = memberContextStore
     }
-
+    
     var body: some View {
         MyDevicesView(memberContextStore: memberContextStore)
     }
@@ -1221,9 +1277,9 @@ private struct ChatConversationMessageListContainer: View {
     let lockBottomViewport: Bool
     let scrollToBottomRequestGeneration: UInt64
     var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
-
+    
     @StateObject private var refreshCoordinator: ConversationMessageListRefreshCoordinator
-
+    
     init(
         threadID: UUID,
         stateStore: ChatStateStore,
@@ -1273,7 +1329,7 @@ private struct ChatConversationMessageListContainer: View {
             )
         )
     }
-
+    
     var body: some View {
         ConversationMessageListRepresentable(
             threadID: threadID,

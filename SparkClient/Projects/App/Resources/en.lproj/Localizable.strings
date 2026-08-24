@@ -1404,6 +1404,17 @@
 "chat.list.no_available_model.title" = "Unable to Create Conversation";
 "chat.list.no_available_model.message" = "No conversation model is available. Configure a model API key or enable a model for chat first.";
 "chat.list.no_available_model.action" = "Go to Settings";
+"chat.home.return" = "Return Home";
+"chat.home.return.hint" = "Close this conversation and return to Health Home";
+"chat.health_resource_conversation.close.hint" = "Close the full-screen conversation";
+"chat.health_resource_conversation.close.title" = "Close conversation?";
+"chat.health_resource_conversation.close.continue" = "Continue conversation";
+"chat.health_resource_conversation.close.stop" = "Stop and close";
+"chat.health_resource_conversation.close.message" = "The answer is still being generated. Stop generation before closing the full-screen conversation.";
+"chat.health_resource_conversation.action" = "Chat about this record";
+"chat.health_resource_conversation.action.hint" = "Open a conversation with the current health record attached";
+"chat.health_resource_conversation.invalid_resource" = "This health record is not available for conversation.";
+"chat.health_resource_conversation.prepare_failed" = "The conversation could not be prepared. Please try again.";
 "common.yesterday" = "Yesterday";
 
 "settings.title" = "Settings";

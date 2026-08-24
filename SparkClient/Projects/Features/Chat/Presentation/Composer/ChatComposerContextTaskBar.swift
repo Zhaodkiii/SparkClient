@@ -4,8 +4,12 @@ struct ChatComposerContextTaskBar: View {
     let boundMemberID: Int?
     let isSending: Bool
     let smallTasks: [SmallTask]
+    let healthResourceRefs: [HealthResourceRef]
     let onAskReport: () -> Void
     let onSmallTaskTapped: (SmallTask) -> Void
+    let onHealthResourceTapped: (HealthResourceRef) -> Void
+    let onRemoveHealthResourceRef: (HealthResourceRef) -> Void
+    let onClearHealthResourceRefs: () -> Void
 
     private var shouldShowAskReportButton: Bool {
         guard let id = boundMemberID, id > 0 else { return false }
@@ -13,7 +17,9 @@ struct ChatComposerContextTaskBar: View {
     }
 
     private var hasContent: Bool {
-        shouldShowAskReportButton || smallTasks.isEmpty == false
+        shouldShowAskReportButton
+            || smallTasks.isEmpty == false
+            || healthResourceRefs.isEmpty == false
     }
 
     var body: some View {
@@ -33,7 +39,9 @@ struct ChatComposerContextTaskBar: View {
                 }
                 Spacer(minLength: 0)
 
-                if smallTasks.isEmpty == false {
+                if healthResourceRefs.isEmpty == false {
+                    healthResourcePreviewStrip
+                } else if smallTasks.isEmpty == false {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 10) {
                             ForEach(smallTasks) { task in
@@ -55,6 +63,35 @@ struct ChatComposerContextTaskBar: View {
             .padding(.leading, 8)
 //            .padding(.horizontal, 16)
 //            .padding(.vertical, 8)
+        }
+    }
+
+    private var healthResourcePreviewStrip: some View {
+        HStack(spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(Array(healthResourceRefs.enumerated()), id: \.element.id) { index, ref in
+                        HanlinHealthResourceThumbnail(
+                            ref: ref,
+                            index: index + 1,
+                            total: healthResourceRefs.count,
+                            onTap: { onHealthResourceTapped(ref) },
+                            onRemove: { onRemoveHealthResourceRef(ref) }
+                        )
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+
+            if healthResourceRefs.count > 1 {
+                Button(action: onClearHealthResourceRefs) {
+                    Text(L10n.text("chat.ask_report.strip.clear_all"))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(L10n.text("chat.ask_report.strip.clear_all"))
+            }
         }
     }
 

@@ -102,6 +102,7 @@ final class ToolInteractionCoordinator: ObservableObject {
         case systemMessageSettingsDismissed
         case askReportPickerDismissed
         case apiKeysSettingsDismissed
+        case conversationListDismissed
     }
 
     // MARK: - 内部状态
@@ -344,6 +345,17 @@ final class ToolInteractionCoordinator: ObservableObject {
         )
     }
 
+    /// 展示当前 ChatView 内的会话列表选择器。
+    func presentConversationList() {
+        enqueue(
+            QueuedWork(
+                id: UUID(),
+                snapshot: .conversationList,
+                completion: nil
+            )
+        )
+    }
+
     /// 请求用户确认健康资料候选（阻塞直至确认或取消，与敏感数据授权一致）。
     func requestHealthResourceCandidateSelection(
         prompt: HealthResourceToolCandidatePrompt,
@@ -410,6 +422,13 @@ final class ToolInteractionCoordinator: ObservableObject {
         guard activePresentation?.id == id, pendingOutcome == nil else { return }
         guard case .apiKeysSettings = activePresentation?.snapshot else { return }
         pendingOutcome = .apiKeysSettingsDismissed
+        resumeUserGate()
+    }
+
+    func dismissConversationList(id: UUID) {
+        guard activePresentation?.id == id, pendingOutcome == nil else { return }
+        guard case .conversationList = activePresentation?.snapshot else { return }
+        pendingOutcome = .conversationListDismissed
         resumeUserGate()
     }
 
@@ -737,6 +756,7 @@ final class ToolInteractionCoordinator: ObservableObject {
         case .healthResourceCandidates: return .healthResourceCandidates(.cancelled)
         case .askReportPicker: return .askReportPickerDismissed
         case .apiKeysSettings: return .apiKeysSettingsDismissed
+        case .conversationList: return .conversationListDismissed
         }
     }
 
@@ -754,6 +774,8 @@ final class ToolInteractionCoordinator: ObservableObject {
             completeAskReportPickerCancelled(id: active.id)
         case .apiKeysSettings:
             dismissAPIKeysSettings(id: active.id)
+        case .conversationList:
+            dismissConversationList(id: active.id)
         case .consent, .question, .member:
             break
         }

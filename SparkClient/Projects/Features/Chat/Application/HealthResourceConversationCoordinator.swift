@@ -38,6 +38,30 @@ final class HealthResourceConversationCoordinator {
             ))
         }
 
+        // 先确保本地 Thread 列表可用于选择。复用既有会话不要求当前模型可用；
+        // 用户仍可查看历史和已带入的预览，发送时沿用 Chat 自身的模型门控。
+        await listViewModel.loadForListIfNeeded()
+
+        let ref = HealthResourceRef(
+            identity: request.identity,
+            displayTitle: request.displayTitle,
+            displaySubtitle: request.displaySubtitle,
+            typeBadge: request.typeBadge
+        )
+
+        if let reusableThreadID = RecentActiveChatThreadSelector.mostRecentActiveThreadID(
+            in: stateStore.threadItems,
+            within: RecentActiveChatThreadSelector.defaultActiveInterval,
+            memberID: request.identity.memberID
+        ) {
+            return await prepareReference(
+                ref,
+                request: request,
+                threadID: reusableThreadID,
+                createdByThisRequest: false
+            )
+        }
+
         guard await detailViewModel.hasAvailableChatModel() else {
             return .requiresAISettings
         }
@@ -47,33 +71,89 @@ final class HealthResourceConversationCoordinator {
             memberID: request.identity.memberID,
             title: title
         )
-        let ref = HealthResourceRef(
-            identity: request.identity,
-            displayTitle: request.displayTitle,
-            displaySubtitle: request.displaySubtitle,
-            typeBadge: request.typeBadge
+        return await prepareReference(
+            ref,
+            request: request,
+            threadID: threadID,
+            createdByThisRequest: true
         )
-        stateStore.appendHealthResourceRefs([ref], for: threadID)
+    }
 
+    private func prepareReference(
+        _ ref: HealthResourceRef,
+        request: HealthResourceConversationRequest,
+        threadID: UUID,
+        createdByThisRequest: Bool
+    ) async -> PreparationResult {
         guard let thread = stateStore.threadItems.first(where: { $0.id == threadID })?.thread,
-              thread.memberID == request.identity.memberID,
-              stateStore.composerDraft(for: threadID).pendingHealthResourceRefs.contains(where: { $0.id == ref.id }) else {
-            logger.error(
-                "健康资料快捷对话准备失败：Thread/Ref 成员或草稿不一致 thread=\(shortID(threadID)) member=\(request.identity.memberID)",
+              thread.memberID == request.identity.memberID else {
+            return await failReferencePreparation(
+                request: request,
+                threadID: threadID,
+                createdByThisRequest: createdByThisRequest,
+                messageKey: "chat.health_resource_conversation.prepare_failed",
+                fallback: "对话准备失败，请稍后重试。"
+            )
+        }
+
+        let before = stateStore.composerDraft(for: threadID).pendingHealthResourceRefs
+        if before.contains(where: { $0.id == ref.id }) {
+            logger.info(
+                "健康资料快捷对话复用已有引用 decision=reuse source=\(request.source) type=\(request.identity.resourceType) resource=\(request.identity.resourceID) thread=\(shortID(threadID))",
                 module: .general
             )
-            await listViewModel.deleteThread(threadID)
-            return .failed(message: L10n.text(
-                "chat.health_resource_conversation.prepare_failed",
-                fallback: "对话准备失败，请稍后重试。"
-            ))
+            return .ready(threadID: threadID)
+        }
+
+        guard before.count < HealthResourceSendValidator.maxRefs else {
+            return await failReferencePreparation(
+                request: request,
+                threadID: threadID,
+                createdByThisRequest: createdByThisRequest,
+                messageKey: "chat.ask_report.toast.max_refs",
+                fallback: "当前对话最多关联 5 份健康资料，请先移除部分资料。"
+            )
+        }
+
+        stateStore.appendHealthResourceRefs([ref], for: threadID)
+        let after = stateStore.composerDraft(for: threadID).pendingHealthResourceRefs
+        guard after.contains(where: { $0.id == ref.id }) else {
+            return await failReferencePreparation(
+                request: request,
+                threadID: threadID,
+                createdByThisRequest: createdByThisRequest,
+                messageKey: "chat.health_resource_conversation.prepare_failed",
+                fallback: "对话准备失败，请稍后重试。",
+                rollbackRef: ref
+            )
         }
 
         logger.info(
-            "健康资料快捷对话准备完成 source=\(request.source) type=\(request.identity.resourceType) resource=\(request.identity.resourceID) thread=\(shortID(threadID))",
+            "健康资料快捷对话准备完成 decision=\(createdByThisRequest ? "create" : "reuse") source=\(request.source) type=\(request.identity.resourceType) resource=\(request.identity.resourceID) thread=\(shortID(threadID))",
             module: .general
         )
         return .ready(threadID: threadID)
+    }
+
+    private func failReferencePreparation(
+        request: HealthResourceConversationRequest,
+        threadID: UUID,
+        createdByThisRequest: Bool,
+        messageKey: String,
+        fallback: String,
+        rollbackRef: HealthResourceRef? = nil
+    ) async -> PreparationResult {
+        if let rollbackRef {
+            stateStore.removeHealthResourceRef(rollbackRef, for: threadID)
+        }
+        logger.error(
+            "健康资料快捷对话准备失败 decision=\(createdByThisRequest ? "create" : "reuse") source=\(request.source) type=\(request.identity.resourceType) resource=\(request.identity.resourceID) thread=\(shortID(threadID)) member=\(request.identity.memberID)",
+            module: .general
+        )
+        if createdByThisRequest {
+            await listViewModel.deleteThread(threadID)
+        }
+        return .failed(message: L10n.text(messageKey, fallback: fallback))
     }
 
     private func shortID(_ id: UUID) -> String {

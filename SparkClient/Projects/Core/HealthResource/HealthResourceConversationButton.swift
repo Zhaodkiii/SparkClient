@@ -31,9 +31,11 @@ extension View {
         isEnabled: Bool = true
     ) -> some View {
         overlay(alignment: .bottomTrailing) {
-            HealthResourceConversationButton(request: request, isEnabled: isEnabled)
-                .padding(.trailing, 20)
-                .padding(.bottom, 28)
+            if isEnabled {
+                HealthResourceConversationButton(request: request)
+                    .padding(.trailing, 20)
+                    .padding(.bottom, 28)
+            }
         }
     }
 }

@@ -6,15 +6,23 @@ struct ToolInteractionPresentationSheet: View {
     @ObservedObject var coordinator: ToolInteractionCoordinator
     @ObservedObject var memberContextStore: MemberContextStore
     @ObservedObject var stateStore: ChatStateStore
+    @ObservedObject var listViewModel: ChatListViewModel
+    @ObservedObject var detailViewModel: ChatDetailViewModel
+    let knowledgeDependencies: KnowledgeFeatureDependencies
+    @ObservedObject var knowledgeViewModel: KnowledgeLibraryViewModel
+    @ObservedObject var taskManager: TaskManager
+    @ObservedObject var homeViewModel: HomeViewModel
     let toolPreviewRenderContext: ChatRenderContext?
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     let initialCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
     let memberCompleteDataFetcher: any MemberCompleteDataFetching
+    let guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder?
     let onClearToolPreviewRenderContext: () -> Void
     let onSaveSystemMessage: (SystemMessageSettingsPrompt, String) -> Void
     let onAskReportAppend: (UUID, [HealthResourceRef]) -> Void
     let onAskReportSetMemberBinding: (Int?) -> Void
     let onAskReportMaxRefsReached: () -> Void
+    let onConversationThreadSelected: (UUID) -> Void
 
     var body: some View {
         switch active.snapshot {
@@ -92,6 +100,27 @@ struct ToolInteractionPresentationSheet: View {
                         }
                     }
             }
+        case .conversationList:
+            ChatConversationListPage(
+                stateStore: stateStore,
+                listViewModel: listViewModel,
+                detailViewModel: detailViewModel,
+                knowledgeDependencies: knowledgeDependencies,
+                knowledgeViewModel: knowledgeViewModel,
+                taskManager: taskManager,
+                homeViewModel: homeViewModel,
+                aiSettingsViewModel: aiSettingsViewModel,
+                pushAdapter: nil,
+                guideHomeDestinationBuilder: guideHomeDestinationBuilder,
+                onThreadSelected: { selectedThreadID in
+                    onConversationThreadSelected(selectedThreadID)
+                    coordinator.dismissConversationList(id: active.id)
+                },
+                onPresentChat: { _ in }
+            )
+            .presentationDetents([.fraction(0.80)])
+            .presentationDragIndicator(.visible)
+            .interactiveDismissDisabled(false)
         }
     }
 }

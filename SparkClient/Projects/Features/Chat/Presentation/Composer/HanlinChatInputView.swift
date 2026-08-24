@@ -26,7 +26,6 @@ struct HanlinChatInputView: View {
     @State private var inputHeight: CGFloat = 52
     @State private var voiceInputSheet = false
     @State private var attachmentPreviewRoute: ChatAttachmentPreviewRoute?
-    @State private var healthResourcePreviewRef: HealthResourceRef?
 
     private var composerDraft: ChatComposerDraft {
         stateStore.composerDraft(for: threadID)
@@ -137,16 +136,6 @@ struct HanlinChatInputView: View {
                     onClose: { attachmentPreviewRoute = nil }
                 )
             }
-            .sheet(item: $healthResourcePreviewRef) { ref in
-                ChatHealthResourcePreviewSheet(
-                    ref: ref,
-                    memberContextStore: memberContextStore,
-                    medicalQueryAPI: medicalQueryAPI,
-                    initialCompleteData: initialCompleteData,
-                    memberCompleteDataFetcher: memberCompleteDataFetcher,
-                    fileTransferService: fileTransferService
-                )
-            }
             .onChange(of: boundMemberID) { newValue in
                 stateStore.pruneHealthResourceRefs(matchingMemberID: newValue, for: threadID)
             }
@@ -154,7 +143,6 @@ struct HanlinChatInputView: View {
 
     private var composerAttachmentAreaHasContent: Bool {
         composerDraft.attachments.isEmpty == false
-            || composerDraft.pendingHealthResourceRefs.isEmpty == false
     }
 
     private var content: some View {
@@ -232,36 +220,6 @@ struct HanlinChatInputView: View {
         VStack(alignment: .leading, spacing: 8) {
             if composerDraft.attachments.isEmpty == false {
                 attachmentStrip
-            }
-            if composerDraft.pendingHealthResourceRefs.isEmpty == false {
-                healthResourcePreviewStrip
-            }
-        }
-    }
-
-    private var healthResourcePreviewStrip: some View {
-        let refs = composerDraft.pendingHealthResourceRefs
-        return HStack(spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(Array(refs.enumerated()), id: \.element.id) { index, ref in
-                        HanlinHealthResourceThumbnail(
-                            ref: ref,
-                            index: index + 1,
-                            total: refs.count,
-                            onTap: { healthResourcePreviewRef = ref },
-                            onRemove: { onRemoveHealthResourceRef(ref) }
-                        )
-                    }
-                }
-                .padding(.horizontal, 2)
-            }
-            if refs.count > 1 {
-                Button(action: onClearHealthResourceRefs) {
-                    Text(L10n.text("chat.ask_report.strip.clear_all"))
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
-                }
             }
         }
     }

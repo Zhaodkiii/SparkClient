@@ -141,7 +141,7 @@ struct ExamReportCard: View {
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             MainNavigationLink {
-                HealthExamRecognitionResultView(
+                HealthExamReportDetailPage(
                     item: item,
                     fileTransferService: fileTransferService,
                     memberContextStore: memberContextStore,
@@ -231,7 +231,7 @@ struct ExamReportCard: View {
             .foregroundStyle(Color.accentColor)
         } else if canNavigateToDetail {
             MainNavigationLink {
-                HealthExamRecognitionResultView(
+                HealthExamReportDetailPage(
                     item: item,
                     fileTransferService: fileTransferService,
                     memberContextStore: memberContextStore,

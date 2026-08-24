@@ -1404,6 +1404,17 @@
 "chat.list.no_available_model.title" = "无法新建对话";
 "chat.list.no_available_model.message" = "当前没有可用的对话模型，请先配置模型密钥或启用可用于对话的模型。";
 "chat.list.no_available_model.action" = "前往设置";
+"chat.home.return" = "返回首页";
+"chat.home.return.hint" = "关闭当前对话并返回健康首页";
+"chat.health_resource_conversation.close.hint" = "关闭当前全屏对话";
+"chat.health_resource_conversation.close.title" = "关闭对话？";
+"chat.health_resource_conversation.close.continue" = "继续对话";
+"chat.health_resource_conversation.close.stop" = "停止并关闭";
+"chat.health_resource_conversation.close.message" = "当前回答仍在生成，请停止生成后再关闭全屏对话。";
+"chat.health_resource_conversation.action" = "咨询当前资料";
+"chat.health_resource_conversation.action.hint" = "打开对话并自动带入当前健康资料";
+"chat.health_resource_conversation.invalid_resource" = "当前健康资料暂时无法开启对话。";
+"chat.health_resource_conversation.prepare_failed" = "对话准备失败，请稍后重试。";
 "common.yesterday" = "昨天";
 
 "settings.title" = "设置";

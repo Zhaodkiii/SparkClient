@@ -29,6 +29,7 @@ struct HanlinChatComposerView: View {
 
     @State private var showFileImporter = false
     @State private var isKeyboardVisible = false
+    @State private var healthResourcePreviewRef: HealthResourceRef?
 
     private var composerDraft: ChatComposerDraft {
         stateStore.composerDraft(for: threadID)
@@ -67,8 +68,18 @@ struct HanlinChatComposerView: View {
                 boundMemberID: boundMemberID,
                 isSending: stateStore.isSending,
                 smallTasks: smallTasks,
+                healthResourceRefs: composerDraft.pendingHealthResourceRefs,
                 onAskReport: onPresentAskReportPicker,
-                onSmallTaskTapped: onSmallTaskTapped
+                onSmallTaskTapped: onSmallTaskTapped,
+                onHealthResourceTapped: { ref in
+                    healthResourcePreviewRef = ref
+                },
+                onRemoveHealthResourceRef: { ref in
+                    stateStore.removeHealthResourceRef(ref, for: threadID)
+                },
+                onClearHealthResourceRefs: {
+                    stateStore.clearHealthResourceRefs(for: threadID)
+                }
             )
 
             HanlinChatInputView(
@@ -133,6 +144,16 @@ struct HanlinChatComposerView: View {
         .animation(.spring(response: 0.5, dampingFraction: 0.7), value: attachmentMenuOpen)
 //        .padding(.bottom, 12)
         .background(Color(uiColor: .systemBackground))
+        .sheet(item: $healthResourcePreviewRef) { ref in
+            ChatHealthResourcePreviewSheet(
+                ref: ref,
+                memberContextStore: memberContextStore,
+                medicalQueryAPI: medicalQueryAPI,
+                initialCompleteData: initialCompleteData,
+                memberCompleteDataFetcher: memberCompleteDataFetcher,
+                fileTransferService: fileTransferService
+            )
+        }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { _ in
             withAnimation(.easeInOut(duration: 0.2)) {
                 isKeyboardVisible = true
