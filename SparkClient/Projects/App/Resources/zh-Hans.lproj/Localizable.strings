@@ -2249,6 +2249,20 @@
 "knowledge.embedding.model_section" = "嵌入模型";
 "knowledge.embedding.indexed_hint" = "已索引 · 模型：%@";
 "knowledge.embedding.configure_key_hint" = "请先在 AI 设置中为嵌入模型配置 API Key。";
+"knowledge.sync.state.local_only" = "仅本机";
+"knowledge.sync.state.pending" = "待同步";
+"knowledge.sync.state.syncing" = "同步中";
+"knowledge.sync.state.synced" = "已同步";
+"knowledge.sync.state.failed_retryable" = "同步失败";
+"knowledge.sync.state.failed_permanent" = "无法同步";
+"knowledge.sync.state.resolved_by_server" = "已使用云端版本";
+"knowledge.sync.accessibility.local_only" = "同步状态：仅本机，尚未上云";
+"knowledge.sync.accessibility.pending" = "同步状态：待同步，等待自动上传";
+"knowledge.sync.accessibility.syncing" = "同步状态：正在同步";
+"knowledge.sync.accessibility.synced" = "同步状态：已同步到云端";
+"knowledge.sync.accessibility.failed_retryable" = "同步状态：同步失败，双击重试";
+"knowledge.sync.accessibility.failed_permanent" = "同步状态：无法同步，需修改后重试";
+"knowledge.sync.accessibility.resolved_by_server" = "同步状态：已应用云端最新版本";
 
 "auth.error.apple_credential_invalid" = "Apple 凭证无效。";
 "auth.error.apple_identity_token_missing" = "无法读取 Apple 身份令牌。";

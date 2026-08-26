@@ -51,6 +51,7 @@ struct IOS26TabBarView: View {
 
     private var destinationBuilder: MainTabRouteDestinationBuilder {
         MainTabRouteDestinationBuilder(
+            routeStore: routeStore,
             session: session,
             homeDependencies: homeDependencies,
             knowledgeDependencies: knowledgeDependencies,
@@ -460,10 +461,7 @@ struct IOS26TabBarView: View {
                 pushAdapter: pushAdapter,
                 guideHomeDestinationBuilder: guideHomeDestinationBuilder,
                 onPresentChat: { request in
-                    activeHomeFullScreenCover = .chat(
-                        threadID: request.threadID,
-                        source: request.source
-                    )
+                    routeStore.route(to: .automaticChatThread(request.threadID))
                 }
             )
         } destination: { route in

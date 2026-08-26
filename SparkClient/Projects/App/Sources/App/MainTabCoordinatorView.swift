@@ -42,6 +42,7 @@ struct MainTabCoordinatorView: View {
 
     private var destinationBuilder: MainTabRouteDestinationBuilder {
         MainTabRouteDestinationBuilder(
+            routeStore: routeStore,
             session: session,
             homeDependencies: homeDependencies,
             knowledgeDependencies: knowledgeDependencies,
@@ -219,10 +220,7 @@ struct MainTabCoordinatorView: View {
             pushAdapter: pushAdapter,
             guideHomeDestinationBuilder: guideHomeDestinationBuilder,
             onPresentChat: { request in
-                activeHomeFullScreenCover = .chat(
-                    threadID: request.threadID,
-                    source: request.source
-                )
+                routeStore.route(to: .automaticChatThread(request.threadID))
             }
         )
         .tabItem {

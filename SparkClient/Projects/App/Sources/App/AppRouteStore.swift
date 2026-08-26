@@ -10,6 +10,8 @@ enum AppRoute: Hashable, Sendable {
     case fitness
     case chatList
     case chatThread(UUID)
+    /// 对话 Tab 首次自动进入的会话；返回按钮应回到健康首页，而不是会话列表。
+    case automaticChatThread(UUID)
     case deepTutorList
     case deepTutorThread(UUID)
     case popularScience
@@ -33,7 +35,7 @@ enum AppRoute: Hashable, Sendable {
             return .nutrition
         case .fitness:
             return .fitness
-        case .chatList, .chatThread:
+        case .chatList, .chatThread, .automaticChatThread:
             return .chat
         case .deepTutorList, .deepTutorThread:
             return .deepTutor
@@ -48,7 +50,7 @@ enum AppRoute: Hashable, Sendable {
         switch self {
         case .home, .knowledge, .nutrition, .fitness, .chatList, .popularScience, .settings, .deepTutorList:
             return true
-        case .chatThread, .popularScienceArticle, .aiSettings, .accountManagement, .homeMedicalList, .homeFamilyMedicineCabinet, .taskDetail, .deepTutorThread:
+        case .chatThread, .automaticChatThread, .popularScienceArticle, .aiSettings, .accountManagement, .homeMedicalList, .homeFamilyMedicineCabinet, .taskDetail, .deepTutorThread:
             return false
         }
     }

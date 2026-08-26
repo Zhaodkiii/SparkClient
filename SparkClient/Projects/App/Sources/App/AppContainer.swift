@@ -102,6 +102,8 @@ final class AppContainer {
     let memoryRepository: any MemoryRepository
     /// 本地知识库持久化（Core Data：`KnowledgeDocumentEntity` / `KnowledgeChunkEntity`）。
     let knowledgeRepository: any KnowledgeRepository
+    /// 知识库多设备同步编排：启动/前台/网络恢复/手动触发的非阻断入口（KNOWLEDGE-SYNC-000001）。
+    let knowledgeSyncSupervisor: KnowledgeSyncSupervisor
     /// 服务端科普内容仓储：远端文档系统 + JSON 文件缓存。
     let popularScienceRepository: any PopularScienceRepository
     /// 本机 GGUF 等小模型加载与推理入口（与云端网关并列供 `AIRuntimeService` 选择）。
@@ -269,6 +271,7 @@ final class AppContainer {
             deepTutorChatViewModel: deepTutorChatViewModel,
             chatSyncSupervisor: chatSyncSupervisor,
             knowledgeViewModel: knowledgeViewModel,
+            knowledgeSyncSupervisor: knowledgeSyncSupervisor,
             aiConfigCenter: aiConfigCenter,
             logger: logger,
             clearSessionScopedViewModels: { [weak self] in
@@ -386,6 +389,7 @@ final class AppContainer {
         )
         let knowledge = AIAssembly.makeKnowledge(
             coreDataStack: coreDataStack,
+            backend: backend,
             ai: ai,
             ocrOrchestrator: medical.ocrOrchestrator,
             logger: logger
@@ -461,6 +465,7 @@ final class AppContainer {
         self.guestAIChatClient = ai.guestAIChatClient
 
         self.knowledgeRepository = knowledge.knowledgeRepository
+        self.knowledgeSyncSupervisor = knowledge.knowledgeSyncSupervisor
         let popularScienceRepository = RemotePopularScienceRepository(
             api: backend.popularScience,
             cacheStore: PopularScienceCacheStore(),
@@ -547,7 +552,8 @@ final class AppContainer {
             updateUseCase: knowledge.updateKnowledgeDocumentUseCase,
             deleteUseCase: knowledge.deleteKnowledgeDocumentUseCase,
             searchUseCase: knowledge.searchKnowledgeUseCase,
-            reindexUseCase: knowledge.reindexKnowledgeDocumentUseCase
+            reindexUseCase: knowledge.reindexKnowledgeDocumentUseCase,
+            knowledgeSyncSupervisor: knowledge.knowledgeSyncSupervisor
         )
         self.popularScienceViewModel = PopularScienceHomeViewModel(
             loadArticlesUseCase: LoadPopularScienceArticlesUseCase(repository: popularScienceRepository),

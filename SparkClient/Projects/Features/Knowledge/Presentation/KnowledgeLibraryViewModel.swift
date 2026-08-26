@@ -23,6 +23,8 @@ final class KnowledgeLibraryViewModel: ObservableObject {
     private let deleteUseCase: DeleteKnowledgeDocumentUseCase
     private let searchUseCase: SearchKnowledgeUseCase
     private let reindexUseCase: ReindexKnowledgeDocumentUseCase
+    /// 知识同步编排；下拉刷新触发 Push+Pull，不阻塞首屏本地读取。
+    private let knowledgeSyncSupervisor: KnowledgeSyncSupervisor?
 
     /// 是否已经加载过数据（避免重复加载）
     private var hasLoaded = false
@@ -35,7 +37,8 @@ final class KnowledgeLibraryViewModel: ObservableObject {
         updateUseCase: UpdateKnowledgeDocumentUseCase,
         deleteUseCase: DeleteKnowledgeDocumentUseCase,
         searchUseCase: SearchKnowledgeUseCase,
-        reindexUseCase: ReindexKnowledgeDocumentUseCase
+        reindexUseCase: ReindexKnowledgeDocumentUseCase,
+        knowledgeSyncSupervisor: KnowledgeSyncSupervisor? = nil
     ) {
         self.loadListUseCase = loadListUseCase
         self.loadDocumentUseCase = loadDocumentUseCase
@@ -44,6 +47,7 @@ final class KnowledgeLibraryViewModel: ObservableObject {
         self.deleteUseCase = deleteUseCase
         self.searchUseCase = searchUseCase
         self.reindexUseCase = reindexUseCase
+        self.knowledgeSyncSupervisor = knowledgeSyncSupervisor
     }
 
     // MARK: - 数据加载
@@ -54,7 +58,7 @@ final class KnowledgeLibraryViewModel: ObservableObject {
         await refresh()
     }
 
-    /// 刷新文档列表（支持搜索关键词）
+    /// 刷新文档列表（支持搜索关键词）；只读本地 Core Data，不触发网络请求。
     func refresh(query: String? = nil) async {
         isLoading = true
         defer { isLoading = false }
@@ -63,6 +67,15 @@ final class KnowledgeLibraryViewModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// 下拉刷新：先返回本地列表（避免整页 loading），再异步触发 Push+Pull，完成后局部刷新。
+    /// 同步失败不弹全局错误，只影响列表卡片的同步状态标识（工单 5.9、11.6）。
+    func syncAndRefresh() async {
+        await refresh()
+        guard let knowledgeSyncSupervisor else { return }
+        _ = await knowledgeSyncSupervisor.manualRefresh()
+        await refresh()
     }
 
     /// 根据 ID 加载单个文档
@@ -175,6 +188,11 @@ final class KnowledgeLibraryViewModel: ObservableObject {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// 列表卡片同步标识点击重试（`failedRetryable`）：只触发账号级后台重试，不进入阻断页面，卡片主体仍可正常打开。
+    func retrySyncBadgeTapped() async {
+        await syncAndRefresh()
     }
 
     // MARK: - 工具方法

@@ -20,9 +20,24 @@ struct KnowledgeLibraryView: View {
                         KnowledgeDocumentDetailView(dependencies: dependencies, viewModel: viewModel, documentID: document.id)
                     } label: {
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(document.title)
-                                .font(.headline)
-                                .lineLimit(1)
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(document.title)
+                                    .font(.headline)
+                                    .lineLimit(1)
+                                Spacer(minLength: 8)
+                                // 固定预留同步标识位置，避免状态切换引发布局跳动。
+                                // `failedRetryable` 用独立 Button 承载点击重试，与行的 NavigationLink 主操作区分。
+                                if document.syncState == .failedRetryable {
+                                    Button {
+                                        Task { await viewModel.retrySyncBadgeTapped() }
+                                    } label: {
+                                        KnowledgeSyncBadge(state: document.syncState)
+                                    }
+                                    .buttonStyle(.borderless)
+                                } else {
+                                    KnowledgeSyncBadge(state: document.syncState)
+                                }
+                            }
                             Text(document.listSubtitle)
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
@@ -69,7 +84,7 @@ struct KnowledgeLibraryView: View {
             await viewModel.loadIfNeeded()
         }
         .refreshable {
-            await viewModel.refresh()
+            await viewModel.syncAndRefresh()
         }
         .alert(L10n.text("common.error"), isPresented: Binding(
             get: { viewModel.errorMessage != nil },

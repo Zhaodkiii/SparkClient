@@ -2249,6 +2249,20 @@
 "knowledge.embedding.model_section" = "Embedding models";
 "knowledge.embedding.indexed_hint" = "Indexed · model: %@";
 "knowledge.embedding.configure_key_hint" = "Configure an embedding API key in AI Settings.";
+"knowledge.sync.state.local_only" = "Local only";
+"knowledge.sync.state.pending" = "Pending sync";
+"knowledge.sync.state.syncing" = "Syncing";
+"knowledge.sync.state.synced" = "Synced";
+"knowledge.sync.state.failed_retryable" = "Sync failed";
+"knowledge.sync.state.failed_permanent" = "Can't sync";
+"knowledge.sync.state.resolved_by_server" = "Using cloud version";
+"knowledge.sync.accessibility.local_only" = "Sync status: local only, not uploaded yet";
+"knowledge.sync.accessibility.pending" = "Sync status: pending, waiting to upload automatically";
+"knowledge.sync.accessibility.syncing" = "Sync status: syncing";
+"knowledge.sync.accessibility.synced" = "Sync status: synced to cloud";
+"knowledge.sync.accessibility.failed_retryable" = "Sync status: sync failed, double-tap to retry";
+"knowledge.sync.accessibility.failed_permanent" = "Sync status: can't sync, please edit and try again";
+"knowledge.sync.accessibility.resolved_by_server" = "Sync status: applied the latest cloud version";
 
 "auth.error.apple_credential_invalid" = "Apple credential is invalid.";
 "auth.error.apple_identity_token_missing" = "Unable to read Apple identity token.";

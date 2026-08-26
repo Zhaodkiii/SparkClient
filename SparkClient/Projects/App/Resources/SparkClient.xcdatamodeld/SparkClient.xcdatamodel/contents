@@ -273,15 +273,40 @@
         <attribute name="boundModelID" optional="YES" attributeType="String"/>
         <attribute name="chunkCount" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="content" attributeType="String" defaultValueString=""/>
+        <attribute name="contentHash" attributeType="String" defaultValueString=""/>
         <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="deletedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="excerpt" attributeType="String" defaultValueString=""/>
         <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="isRemoteDeleted" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
         <attribute name="isEmbeddingIndexed" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="knowledgeBaseID" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
         <attribute name="lastEmbeddingModelName" optional="YES" attributeType="String"/>
+        <attribute name="lastSyncAttemptAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="lastSyncErrorCode" optional="YES" attributeType="String"/>
+        <attribute name="lastSyncStateRaw" attributeType="String" defaultValueString="localOnly"/>
+        <attribute name="lastSyncSucceededAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="ownerAccountID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="scopeRaw" attributeType="String" defaultValueString="personal"/>
+        <attribute name="serverRevision" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="serverUpdatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="sourceRaw" attributeType="String" defaultValueString="user"/>
         <attribute name="title" attributeType="String" defaultValueString=""/>
+        <attribute name="updatedAt" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
+    <entity name="KnowledgeSyncOutboxEntity" representedClassName="KnowledgeSyncOutboxEntity" syncable="YES">
+        <attribute name="attemptCount" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="baseRevision" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="documentID" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="lastErrorCode" optional="YES" attributeType="String"/>
+        <attribute name="mutationID" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="nextAttemptAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="operationRaw" attributeType="String" defaultValueString="create"/>
+        <attribute name="ownerAccountID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="payloadData" attributeType="Binary"/>
+        <attribute name="requestHash" attributeType="String" defaultValueString=""/>
+        <attribute name="stateRaw" attributeType="String" defaultValueString="pending"/>
         <attribute name="updatedAt" attributeType="Date" usesScalarValueType="NO"/>
     </entity>
 </model>

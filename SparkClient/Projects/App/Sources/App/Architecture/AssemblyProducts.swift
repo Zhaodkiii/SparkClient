@@ -60,6 +60,9 @@ struct KnowledgeAssemblyProduct {
     let ocrKnowledgeImageUseCase: OCRKnowledgeImageUseCase
     let importKnowledgeFromFileUseCase: ImportKnowledgeFromFileUseCase
     let importKnowledgeFromWebUseCase: ImportKnowledgeFromWebUseCase
+    /// 知识库多设备同步：账号级 single-flight 引擎 + 生命周期编排（KNOWLEDGE-SYNC-000001）。
+    let knowledgeSyncEngine: KnowledgeSyncEngine
+    let knowledgeSyncSupervisor: KnowledgeSyncSupervisor
 }
 
 /// 医疗领域装配产物。
@@ -449,6 +452,7 @@ extension NotificationAssembly {
 extension AIAssembly {
     static func makeKnowledge(
         coreDataStack: CoreDataStack,
+        backend: Backend,
         ai: AIAssemblyProduct,
         ocrOrchestrator: OCROrchestrator,
         logger: Logger
@@ -465,6 +469,29 @@ extension AIAssembly {
             aiConfigCenter: ai.aiConfigCenter,
             embeddingClient: ai.knowledgeEmbeddingClient
         )
+        let buildKnowledgeEmbeddingsUseCase = BuildKnowledgeEmbeddingsUseCase(
+            repository: knowledgeRepository,
+            aiConfigCenter: ai.aiConfigCenter,
+            embeddingClient: ai.knowledgeEmbeddingClient
+        )
+
+        // 知识同步：账号级 single-flight Push/Pull 引擎 + 启动/前台/网络恢复/手动触发编排。
+        let knowledgeOutboxStore = KnowledgeSyncOutboxStore(repository: knowledgeRepository)
+        let knowledgeSyncEngine = KnowledgeSyncEngine(
+            repository: knowledgeRepository,
+            outboxStore: knowledgeOutboxStore,
+            remoteAPI: backend.knowledge,
+            logger: logger
+        )
+        let knowledgeSyncSupervisor = KnowledgeSyncSupervisor(
+            engine: knowledgeSyncEngine,
+            rebuildChunkEmbeddings: { documentID in
+                // 远端正文更新后本机重建向量；空字符串走默认配置模型，失败词法降级，不回滚已合并的文档（工单 8.4/5.8.4）。
+                _ = try? await buildKnowledgeEmbeddingsUseCase.execute(documentID: documentID, modelName: "")
+            },
+            logger: logger
+        )
+
         return KnowledgeAssemblyProduct(
             knowledgeRepository: knowledgeRepository,
             loadKnowledgeListUseCase: loadKnowledgeListUseCase,
@@ -474,14 +501,12 @@ extension AIAssembly {
             deleteKnowledgeDocumentUseCase: deleteKnowledgeDocumentUseCase,
             searchKnowledgeUseCase: searchKnowledgeUseCase,
             reindexKnowledgeDocumentUseCase: ReindexKnowledgeDocumentUseCase(repository: knowledgeRepository),
-            buildKnowledgeEmbeddingsUseCase: BuildKnowledgeEmbeddingsUseCase(
-                repository: knowledgeRepository,
-                aiConfigCenter: ai.aiConfigCenter,
-                embeddingClient: ai.knowledgeEmbeddingClient
-            ),
+            buildKnowledgeEmbeddingsUseCase: buildKnowledgeEmbeddingsUseCase,
             ocrKnowledgeImageUseCase: OCRKnowledgeImageUseCase(ocr: ocrOrchestrator),
             importKnowledgeFromFileUseCase: ImportKnowledgeFromFileUseCase(),
-            importKnowledgeFromWebUseCase: ImportKnowledgeFromWebUseCase()
+            importKnowledgeFromWebUseCase: ImportKnowledgeFromWebUseCase(),
+            knowledgeSyncEngine: knowledgeSyncEngine,
+            knowledgeSyncSupervisor: knowledgeSyncSupervisor
         )
     }
 }

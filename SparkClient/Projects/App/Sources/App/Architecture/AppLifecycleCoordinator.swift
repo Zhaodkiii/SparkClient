@@ -96,6 +96,7 @@ final class AppLifecycleCoordinator: ObservableObject {
         logger.debug("前台流程：应用回到前台，先检查设备登记再同步业务", module: .general)
         await container.deviceRegistrationCoordinator.handleForegroundResume()
         guard case .signedIn = sessionStore.state, isHandlingServerAuthInvalidation == false else { return }
+        await container.knowledgeSyncSupervisor.scheduleForegroundSyncIfNeeded()
         await container.taskRuntime.syncIncremental(memberID: container.memberContextStore.context.selectedMemberID)
         await container.versionUpdateCoordinator.checkOnLaunchIfNeeded()
         if case .signedIn(let session) = sessionStore.state {
@@ -178,6 +179,8 @@ final class AppLifecycleCoordinator: ObservableObject {
 
         logger.debug("会话流程：准备步骤 activateUser 开始 accountID=\(session.accountID)", module: .auth)
         await container.accountSessionRuntime.activateUser(accountID: session.accountID)
+        // 知识同步：非阻断调度，立即返回；不等待网络完成，不影响后续启动步骤（工单 6.5）。
+        await container.knowledgeSyncSupervisor.scheduleStartupSync(accountID: session.accountID)
         logger.debug("会话流程：准备步骤 onboarding activate 开始 accountID=\(session.accountID)", module: .auth)
         await container.onboardingStore.activate(session: session)
 

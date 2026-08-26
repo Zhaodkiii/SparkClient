@@ -32,7 +32,7 @@ struct ChatPresentationRequest: Identifiable, Equatable, Sendable {
 /// - 展示所有聊天会话列表，支持搜索过滤
 /// - 支持新建会话、删除会话、置顶/取消置顶、编辑会话外观（标题/图标/颜色）
 /// - 左滑/右滑快捷操作，长按上下文菜单
-/// - 启动时自动导航逻辑：5分钟内有活跃会话则自动进入，否则自动新建会话
+/// - 启动时自动导航逻辑：30分钟内有活跃会话则自动进入，否则自动新建会话
 /// - 无可用模型时提示用户前往设置配置 API Key
 struct ChatConversationListPage: View {
     /// 聊天全局状态存储
@@ -63,7 +63,7 @@ struct ChatConversationListPage: View {
 
     /// 搜索框输入文本
     @State private var searchText = ""
-    /// 请求根宿主呈现自动进入的全屏会话；手动入口继续使用本页 NavigationDestination
+    /// 请求宿主将自动进入的会话压入当前 Chat Tab 导航栈；手动入口继续使用本页 NavigationDestination
     let onPresentChat: (ChatPresentationRequest) -> Void
     /// 手动入口待导航的会话 ID
     @State private var pendingThreadNavigation: UUID?
@@ -485,7 +485,7 @@ struct ChatConversationListPage: View {
     ///
     /// 策略（CHAT-000041）：
     /// - 如果当前已有选中会话且有未发送草稿：不自动导航，保留用户编辑状态
-    /// - 否则走公共决策：优先复用 5 分钟内活跃会话；无活跃时仅当最近 Thread 尚未开始才复用
+    /// - 否则走公共决策：优先复用 30 分钟内活跃会话；无活跃时仅当最近 Thread 尚未开始才复用
     /// - 命中复用直接进入，不调用 `createThread`
     /// - 最近 Thread 已开始或不存在任何 Thread 时，才检查模型并新建
     private func handleInitialAutoNavigationIfNeeded() async {
@@ -537,7 +537,7 @@ struct ChatConversationListPage: View {
     /// 流程：
     /// 1. 在列表中选中该会话
     /// 2. 预加载消息数据，锁定底部视口保证打开时滚动到底部
-    /// 3. 向根宿主发出全屏 Chat presentation request
+    /// 3. 向 Chat Tab 宿主发出内部导航 request
     /// - Parameter threadID: 要导航到的会话 ID
     private func navigateToThread(_ threadID: UUID, source: ChatPresentationSource) async {
         listViewModel.selectThread(threadID)

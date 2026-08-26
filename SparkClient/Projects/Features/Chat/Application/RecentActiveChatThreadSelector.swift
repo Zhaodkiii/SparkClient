@@ -2,9 +2,9 @@ import Foundation
 
 /// 复用 Thread 的判定原因。
 enum ChatThreadReuseReason: Equatable, Sendable {
-    /// 5 分钟内存在最近活跃 Thread，优先复用。
+    /// 30 分钟内存在最近活跃 Thread，优先复用。
     case recentActive
-    /// 5 分钟内无活跃 Thread，但候选范围内最近一条 Thread 尚未开始（无 user message），复用。
+    /// 30 分钟内无活跃 Thread，但候选范围内最近一条 Thread 尚未开始（无 user message），复用。
     case latestUnstarted
     /// 当前请求加入了另一个请求正在创建的同一 Thread。
     case joinedCreation
@@ -19,12 +19,12 @@ enum ChatThreadReuseDecision: Equatable, Sendable {
 /// Chat 会话选择策略（CHAT-000041）。
 ///
 /// 该策略同时被对话 Tab 的自动进入和健康资源快捷对话使用，避免两处
-/// 对“5 分钟内活跃”的定义产生漂移。核心规则：
-/// 1. 优先复用 5 分钟内最近活跃 Thread。
+/// 对“30 分钟内活跃”的定义产生漂移。核心规则：
+/// 1. 优先复用 30 分钟内最近活跃 Thread。
 /// 2. 无近期活跃 Thread 时，只检查候选范围内唯一最近的一条 Thread：
 ///    它没有 user message（未开始会话）则复用，否则不返回可复用结果，绝不继续向后搜索更早的空白 Thread。
 struct RecentActiveChatThreadSelector {
-    static let defaultActiveInterval: TimeInterval = 5 * 60
+    static let defaultActiveInterval: TimeInterval = 30 * 60
 
     /// 候选范围：当前账号、未删除、chat 场景，且满足可选成员过滤。
     /// - Parameter memberID: nil 表示全局（对话 Tab），非 nil 表示严格同成员（医疗资料入口）。
@@ -87,7 +87,7 @@ struct RecentActiveChatThreadSelector {
         return .noReusableThread
     }
 
-    /// 兼容旧接口：仅返回 5 分钟内最近活跃 Thread ID（不含空白会话复用）。
+    /// 兼容旧接口：仅返回 30 分钟内最近活跃 Thread ID（不含空白会话复用）。
     static func mostRecentActiveThreadID(
         in items: [ChatThreadListItem],
         within interval: TimeInterval = defaultActiveInterval,
