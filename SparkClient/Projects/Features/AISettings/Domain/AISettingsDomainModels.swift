@@ -643,49 +643,6 @@ nonisolated struct ToolModelEgressConsentPreferences: Codable, Equatable, Sendab
     }
 }
 
-nonisolated enum DeepTutorConversationCardStyle: String, Codable, CaseIterable, Sendable {
-    case standard
-    case bodyFocused
-
-    var displayName: String {
-        switch self {
-        case .standard:
-            return "标准"
-        case .bodyFocused:
-            return "正文优先"
-        }
-    }
-}
-
-nonisolated enum DeepTutorToolTraceDisplayMode: String, Codable, CaseIterable, Sendable {
-    case expanded
-    case collapsedAfterCompletion
-    case collapsedAlways
-
-    var displayName: String {
-        switch self {
-        case .expanded:
-            return "默认展开"
-        case .collapsedAfterCompletion:
-            return "完成后折叠"
-        case .collapsedAlways:
-            return "始终折叠"
-        }
-    }
-}
-
-nonisolated struct DeepTutorConversationAppearancePreferences: Codable, Equatable, Sendable {
-    var cardStyle: DeepTutorConversationCardStyle
-    var toolTraceDisplayMode: DeepTutorToolTraceDisplayMode
-    var collapseToolsWhileStreaming: Bool
-
-    static let `default` = DeepTutorConversationAppearancePreferences(
-        cardStyle: .bodyFocused,
-        toolTraceDisplayMode: .collapsedAfterCompletion,
-        collapseToolsWhileStreaming: false
-    )
-}
-
 nonisolated struct SearchRuntimeConfigRevision: Codable, Equatable, Sendable {
     nonisolated static let schemaVersion = 1
 

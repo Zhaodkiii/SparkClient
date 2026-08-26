@@ -13,7 +13,6 @@ struct HealthHomeView: View {
     let session: UserSession
     @ObservedObject var taskManager: TaskManager
     @ObservedObject var chatListViewModel: ChatListViewModel
-    @ObservedObject var deepTutorChatViewModel: DeepTutorChatViewModel
     let autoSmallTaskRegistry: AutoSmallTaskRegistry
     let autoSmallTaskIntentStore: ChatAutoSmallTaskIntentStore
 
@@ -26,7 +25,6 @@ struct HealthHomeView: View {
         session: UserSession,
         taskManager: TaskManager,
         chatListViewModel: ChatListViewModel,
-        deepTutorChatViewModel: DeepTutorChatViewModel,
         autoSmallTaskRegistry: AutoSmallTaskRegistry,
         autoSmallTaskIntentStore: ChatAutoSmallTaskIntentStore,
         activeFullScreenCover: Binding<HomeFullScreenCover?> = .constant(nil)
@@ -39,7 +37,6 @@ struct HealthHomeView: View {
         self.session = session
         self.taskManager = taskManager
         self.chatListViewModel = chatListViewModel
-        self.deepTutorChatViewModel = deepTutorChatViewModel
         self.autoSmallTaskRegistry = autoSmallTaskRegistry
         self.autoSmallTaskIntentStore = autoSmallTaskIntentStore
         self._activeFullScreenCover = activeFullScreenCover
@@ -55,9 +52,7 @@ struct HealthHomeView: View {
             homeViewModel: viewModel,
             medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
             chatListViewModel: chatListViewModel,
-            deepTutorChatViewModel: deepTutorChatViewModel,
             notificationClient: dependencies.notificationClient,
-            quickStartPreferenceStore: .shared,
             autoSmallTaskRegistry: autoSmallTaskRegistry,
             autoSmallTaskIntentStore: autoSmallTaskIntentStore,
             ownerAccountID: session.accountID
@@ -724,7 +719,7 @@ struct HealthHomeView: View {
 
 //    @available(iOS 26.0, *)
     private var isCreatingQuickStartConversation: Bool {
-        deepTutorChatViewModel.isCreatingConversation || chatListViewModel.isCreatingQuickStartThread
+        chatListViewModel.isCreatingQuickStartThread
     }
 
     private func handlePrimaryAction(_ item: IOS26HomeActionItem) {
@@ -767,7 +762,6 @@ struct HealthHomeView: View {
             ),
             taskManager: AppContainer.preview.taskManager,
             chatListViewModel: AppContainer.preview.chatListViewModel,
-            deepTutorChatViewModel: AppContainer.preview.deepTutorChatViewModel,
             autoSmallTaskRegistry: AutoSmallTaskRegistry(
                 aiConfigCenter: AppContainer.preview.aiConfigCenter,
                 logger: AppContainer.preview.logger
@@ -795,7 +789,6 @@ struct HealthHomeView: View {
             ),
             taskManager: AppContainer.preview.taskManager,
             chatListViewModel: AppContainer.preview.chatListViewModel,
-            deepTutorChatViewModel: AppContainer.preview.deepTutorChatViewModel,
             autoSmallTaskRegistry: AutoSmallTaskRegistry(
                 aiConfigCenter: AppContainer.preview.aiConfigCenter,
                 logger: AppContainer.preview.logger

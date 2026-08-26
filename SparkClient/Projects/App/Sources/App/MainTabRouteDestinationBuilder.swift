@@ -27,8 +27,6 @@ struct MainTabRouteDestinationBuilder {
     let chatDetailViewModel: ChatDetailViewModel
     /// 聊天自动小任务协调器，处理对话中的自动化小任务，可为空
     let chatAutoSmallTaskCoordinator: ChatAutoSmallTaskCoordinator?
-    /// 深度导师聊天页面视图模型
-    let deepTutorChatViewModel: DeepTutorChatViewModel
     /// 账户管理页面视图模型
     let accountManagementViewModel: AccountManagementViewModel
     /// AI 设置页面视图模型
@@ -83,13 +81,6 @@ struct MainTabRouteDestinationBuilder {
                 await chatListViewModel.selectAndPrepare(threadID: threadID)
                 await chatDetailViewModel.loadMessagesIfNeeded(for: threadID, lockBottomViewport: true)
             }
-        /// 深度导师聊天会话页面，传入会话ID
-        case .deepTutorThread(let conversationID):
-            DeepTutorChatPage(
-                conversationID: conversationID,
-                viewModel: deepTutorChatViewModel,
-                aiSettingsViewModel: aiSettingsViewModel
-            )
         /// AI 设置页面
         case .aiSettings:
             AISettingsView(viewModel: aiSettingsViewModel)
@@ -127,7 +118,7 @@ struct MainTabRouteDestinationBuilder {
                 viewModel: popularScienceDependencies.makeDetailViewModel(articleID)
             )
         /// Tab 根页面路由，无需构建导航目的地，返回空视图
-        case .home, .knowledge, .nutrition, .fitness, .chatList, .popularScience, .settings, .deepTutorList:
+        case .home, .knowledge, .nutrition, .fitness, .chatList, .popularScience, .settings:
             EmptyView()
         }
     }

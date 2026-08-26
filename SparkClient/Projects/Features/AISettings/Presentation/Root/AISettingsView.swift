@@ -67,7 +67,7 @@ struct AISettingsView: View {
                 } label: {
                     SettingNavRow(
                         title: L10n.text("ai_settings.row.ai_tools", fallback: "AI 工具"),
-                        subtitle: L10n.text("ai_settings.row.ai_tools.subtitle", fallback: "查看 DeepTutorChat 与 Chat 可调用工具"),
+                        subtitle: L10n.text("ai_settings.row.ai_tools.subtitle", fallback: "查看 Chat 可调用工具"),
                         icon: "wrench.and.screwdriver"
                     )
                 }
@@ -99,10 +99,6 @@ struct AISettingsView: View {
                 ChatConversationUIArchitectureSettingsSection(viewModel: viewModel)
                 ChatConversationAppearanceSettingsSection(viewModel: viewModel)
                 ChatComposerStartupSettingsSection(viewModel: viewModel)
-            }
-
-            Section("DeepTutorChat 对话外观") {
-                DeepTutorConversationAppearanceSettingsSection(viewModel: viewModel)
             }
             #endif
 
@@ -351,43 +347,5 @@ private struct ChatComposerStartupSettingsSection: View {
             }
             .pickerStyle(.menu)
         }
-    }
-}
-
-private struct DeepTutorConversationAppearanceSettingsSection: View {
-    @ObservedObject var viewModel: AISettingsViewModel
-
-    var body: some View {
-        Picker("对话卡片样式", selection: Binding(
-            get: { viewModel.snapshot.deepTutorConversationAppearance.cardStyle },
-            set: { newValue in
-                viewModel.snapshot.deepTutorConversationAppearance.cardStyle = newValue
-                Task { await viewModel.persistSnapshotNow() }
-            }
-        )) {
-            ForEach(DeepTutorConversationCardStyle.allCases, id: \.self) { style in
-                Text(style.displayName).tag(style)
-            }
-        }
-
-        Picker("工具调用展示", selection: Binding(
-            get: { viewModel.snapshot.deepTutorConversationAppearance.toolTraceDisplayMode },
-            set: { newValue in
-                viewModel.snapshot.deepTutorConversationAppearance.toolTraceDisplayMode = newValue
-                Task { await viewModel.persistSnapshotNow() }
-            }
-        )) {
-            ForEach(DeepTutorToolTraceDisplayMode.allCases, id: \.self) { mode in
-                Text(mode.displayName).tag(mode)
-            }
-        }
-
-        Toggle("流式过程也折叠", isOn: Binding(
-            get: { viewModel.snapshot.deepTutorConversationAppearance.collapseToolsWhileStreaming },
-            set: { newValue in
-                viewModel.snapshot.deepTutorConversationAppearance.collapseToolsWhileStreaming = newValue
-                Task { await viewModel.persistSnapshotNow() }
-            }
-        ))
     }
 }

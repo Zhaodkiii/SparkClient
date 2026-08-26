@@ -14,7 +14,6 @@ enum LogModule: String, Sendable, CaseIterable {
     case fitness = "FITNESS"
     case general = "GENERAL"
     case push = "PUSH"
-    case deepTutorChat = "DEEP_TUTOR_CHAT"
 }
 
 /// 长文本日志安全截断（OCR、JSON、调试摘要等）。

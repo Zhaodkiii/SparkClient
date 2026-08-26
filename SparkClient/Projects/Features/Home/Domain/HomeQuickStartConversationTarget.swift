@@ -3,7 +3,6 @@ import Foundation
 
 enum HomeQuickStartConversationTarget: String, CaseIterable, Identifiable {
     case chat
-    case deepTutorChat
 
     var id: String { rawValue }
 
@@ -11,8 +10,6 @@ enum HomeQuickStartConversationTarget: String, CaseIterable, Identifiable {
         switch self {
         case .chat:
             return "settings.general.home_quick_start_target.chat"
-        case .deepTutorChat:
-            return "settings.general.home_quick_start_target.deep_tutor_chat"
         }
     }
 }

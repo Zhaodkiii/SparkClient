@@ -11,7 +11,6 @@
 "tab.health" = "Health";
 "tab.chat" = "Chat";
 "tab.knowledge" = "Knowledge Bag";
-"tab.deep_tutor" = "DeepTutor";
 "tab.search" = "Search";
 "tab.popular_science" = "Learn";
 "tab.nutrition" = "Nutrition";
@@ -1434,8 +1433,7 @@
 "settings.general.home_nutrition_entry.footer" = "Compact shows a single card; Full embeds summary and meal dashboard on Home.";
 "settings.general.home_quick_start_target.title" = "Home AI chat entry";
 "settings.general.home_quick_start_target.chat" = "Chat";
-"settings.general.home_quick_start_target.deep_tutor_chat" = "DeepTutor Chat";
-"settings.general.home_quick_start_target.footer" = "Controls whether Home quick actions open regular Chat or DeepTutor Chat.";
+"settings.general.home_quick_start_target.footer" = "Home quick actions open regular Chat.";
 "settings.general.medical.section" = "Medical";
 "settings.general.medical.show_drug_name_in_notification" = "Show drug names in notifications";
 "settings.general.medical.show_drug_name_in_notification.footer" = "When enabled, medication reminders may show drug names on the lock screen, Notification Center, Apple Watch, or in-car displays.";
@@ -1737,7 +1735,7 @@
 "ai_settings.row.search_tools" = "Web Search";
 "ai_settings.row.search_tools.subtitle" = "Search providers, result count, and bilingual search";
 "ai_settings.row.ai_tools" = "AI Tools";
-"ai_settings.row.ai_tools.subtitle" = "View tools available to DeepTutorChat and Chat";
+"ai_settings.row.ai_tools.subtitle" = "View tools available to Chat";
 "ai_settings.row.prompt_repo" = "Prompt Repository";
 "ai_settings.row.prompt_repo.subtitle" = "Preset prompts";
 "ai_settings.row.memory_archive" = "Memory Archive";
@@ -3283,12 +3281,10 @@
 "ai_settings.search.editor.nav_add" = "Add Search Provider";
 "ai_settings.search.editor.nav_edit" = "Edit Key";
 "ai_settings.ai_tools.nav_title" = "AI Tools";
-"ai_settings.ai_tools.intro" = "Search providers stay in Web Search settings. This page shows which tools DeepTutorChat and Chat can expose to the model, and why a tool may require another setting or system permission.";
+"ai_settings.ai_tools.intro" = "Search providers stay in Web Search settings. This page shows which tools Chat can expose to the model, and why a tool may require another setting or system permission.";
 "ai_settings.ai_tools.section.status" = "Related Settings";
 "ai_settings.ai_tools.section.tool_lists" = "Tool Lists";
 "ai_settings.ai_tools.section.tools" = "Tools";
-"ai_settings.ai_tools.section.deeptutor" = "DeepTutorChat";
-"ai_settings.ai_tools.section.deeptutor.subtitle" = "Native DeepTutorChat tools and DeepTutor-main compatible names.";
 "ai_settings.ai_tools.section.chat" = "Chat";
 "ai_settings.ai_tools.section.chat.subtitle" = "ToolHub tools used by the standard Chat runtime.";
 "ai_settings.ai_tools.availability.available" = "Available";
@@ -3309,16 +3305,6 @@
 "ai_settings.ai_tools.category.health_records" = "Health Records";
 "ai_settings.ai_tools.category.memory" = "Memory";
 "ai_settings.ai_tools.category.cards" = "Cards";
-"ai_settings.ai_tools.summary.deeptutor.ask_user" = "Asks the user a structured question, then continues the original request after the answer is submitted.";
-"ai_settings.ai_tools.summary.deeptutor.request_member_selection" = "Requests member selection or switching when a health question needs member context.";
-"ai_settings.ai_tools.summary.deeptutor.get_current_member_binding" = "Reads the member currently bound to this DeepTutorChat conversation.";
-"ai_settings.ai_tools.summary.deeptutor.query_member_profile" = "Reads member profile, medical history, checkup summaries, and risk projections for personalized answers.";
-"ai_settings.ai_tools.summary.deeptutor.read_memory" = "Reads user preferences, tone, and long-term context when memory is available.";
-"ai_settings.ai_tools.summary.deeptutor.write_memory" = "Saves explicitly stated long-term preferences, not inferred medical facts.";
-"ai_settings.ai_tools.summary.deeptutor.show_custom_message_card" = "Inserts upload or camera cards when reports, medicine-box photos, or skin photos are needed.";
-"ai_settings.ai_tools.summary.deeptutor_web_search" = "DeepTutor-main compatible web search name. SparkClient resolves it through Web Search settings and the active provider.";
-"ai_settings.ai_tools.summary.deeptutor_paper_search" = "Academic search name from DeepTutor-main. Availability depends on the SparkClient search runtime and paper-search executor.";
-"ai_settings.ai_tools.summary.planned_deeptutor" = "Declared as a DeepTutor-main compatible tool name, but not yet wired as a native DeepTutorChat executor in this client.";
 "ai_settings.ai_tools.chat_group.health_data" = "Health Data";
 "ai_settings.ai_tools.chat_group.health_data.subtitle" = "Gets body, activity, sleep, nutrition, energy, and other health data.";
 "ai_settings.ai_tools.chat_group.member_management" = "Member Management";

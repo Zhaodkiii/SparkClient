@@ -16,7 +16,6 @@ struct IOS26HomeView: View {
     let session: UserSession
     let actionHandler: IOS26HomeDashboardActionHandler
     @ObservedObject var chatListViewModel: ChatListViewModel
-    @ObservedObject var deepTutorChatViewModel: DeepTutorChatViewModel
 
     /// 首页内可左右切换的分页（参考 MyHome.Tab）。rawValue 用于本地持久化。
     enum HomeSection: String, CaseIterable, Identifiable {
@@ -66,8 +65,7 @@ private extension IOS26HomeView {
             taskManager: taskManager,
             session: session,
             actionHandler: actionHandler,
-            chatListViewModel: chatListViewModel,
-            deepTutorChatViewModel: deepTutorChatViewModel
+            chatListViewModel: chatListViewModel
         )
         .refreshable {
             await viewModel.refresh()

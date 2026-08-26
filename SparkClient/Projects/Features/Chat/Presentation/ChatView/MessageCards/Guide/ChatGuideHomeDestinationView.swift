@@ -48,7 +48,6 @@ struct ChatGuideHomeDestinationView: View {
     @ObservedObject var launchIntentCoordinator: LaunchIntentCoordinator
     let session: UserSession
     @ObservedObject var chatListViewModel: ChatListViewModel
-    @ObservedObject var deepTutorChatViewModel: DeepTutorChatViewModel
     let autoSmallTaskRegistry: AutoSmallTaskRegistry
     let autoSmallTaskIntentStore: ChatAutoSmallTaskIntentStore
     @Binding var activeFullScreenCover: HomeFullScreenCover?
@@ -72,7 +71,6 @@ struct ChatGuideHomeDestinationView: View {
         launchIntentCoordinator: LaunchIntentCoordinator,
         session: UserSession,
         chatListViewModel: ChatListViewModel,
-        deepTutorChatViewModel: DeepTutorChatViewModel,
         autoSmallTaskRegistry: AutoSmallTaskRegistry,
         autoSmallTaskIntentStore: ChatAutoSmallTaskIntentStore,
         activeFullScreenCover: Binding<HomeFullScreenCover?>,
@@ -91,7 +89,6 @@ struct ChatGuideHomeDestinationView: View {
         self.launchIntentCoordinator = launchIntentCoordinator
         self.session = session
         self.chatListViewModel = chatListViewModel
-        self.deepTutorChatViewModel = deepTutorChatViewModel
         self.autoSmallTaskRegistry = autoSmallTaskRegistry
         self.autoSmallTaskIntentStore = autoSmallTaskIntentStore
         self._activeFullScreenCover = activeFullScreenCover
@@ -113,7 +110,6 @@ struct ChatGuideHomeDestinationView: View {
 //                   session: session,
 //                   actionHandler: actionHandler,
 //                   chatListViewModel: chatListViewModel,
-//                   deepTutorChatViewModel: deepTutorChatViewModel,
 //                   currentSection: $currentSection,
 //                   safeAreaRefreshRevision: safeAreaRefreshRevision,
 //                   activeFullScreenCover: $activeFullScreenCover
@@ -160,7 +156,6 @@ struct ChatGuideHomeDestinationView: View {
                 session: session,
                 taskManager: taskManager,
                 chatListViewModel: chatListViewModel,
-                deepTutorChatViewModel: deepTutorChatViewModel,
                 autoSmallTaskRegistry: autoSmallTaskRegistry,
                 autoSmallTaskIntentStore: autoSmallTaskIntentStore,
                 activeFullScreenCover: $activeFullScreenCover

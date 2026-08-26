@@ -6,9 +6,7 @@ struct IOS26HomeDashboardActionHandler {
     let homeViewModel: HomeViewModel
     let medicalDocumentUploadViewModel: MedicalDocumentUploadViewModel
     let chatListViewModel: ChatListViewModel
-    let deepTutorChatViewModel: DeepTutorChatViewModel
     let notificationClient: any NotificationClient
-    let quickStartPreferenceStore: HomeQuickStartConversationPreferenceStore
     let autoSmallTaskRegistry: AutoSmallTaskRegistry
     let autoSmallTaskIntentStore: ChatAutoSmallTaskIntentStore
     let ownerAccountID: Int64
@@ -88,23 +86,18 @@ struct IOS26HomeDashboardActionHandler {
         routeStore.route(to: .chatThread(threadID))
     }
 
-    private func openQuickStart(mode: DeepTutorQuickStartMode) async {
-        switch quickStartPreferenceStore.target {
-        case .chat:
-            switch mode {
-            case .checkupPlan:
-                await openAutoSmallTaskInChat(
-                    mode: .checkupPlan,
-                    definition: BuiltInAutoSmallTaskCatalog.healthExamPlan
-                )
-            case .reportInterpretation:
-                await openAutoSmallTaskInChat(
-                    mode: .reportInterpretation,
-                    definition: BuiltInAutoSmallTaskCatalog.reportInterpretation
-                )
-            }
-        case .deepTutorChat:
-            await openDeepTutor(mode: mode)
+    private func openQuickStart(mode: ChatQuickStartMode) async {
+        switch mode {
+        case .checkupPlan:
+            await openAutoSmallTaskInChat(
+                mode: .checkupPlan,
+                definition: BuiltInAutoSmallTaskCatalog.healthExamPlan
+            )
+        case .reportInterpretation:
+            await openAutoSmallTaskInChat(
+                mode: .reportInterpretation,
+                definition: BuiltInAutoSmallTaskCatalog.reportInterpretation
+            )
         }
     }
 
@@ -127,18 +120,5 @@ struct IOS26HomeDashboardActionHandler {
             return nil
         }
         return threadID
-    }
-
-    private func openDeepTutor(mode: DeepTutorQuickStartMode) async {
-        guard let conversationID = await deepTutorChatViewModel.createQuickStartConversation(
-            mode: mode,
-            source: "ios26_home_\(mode.rawValue)"
-        ) else {
-            if let error = deepTutorChatViewModel.conversationCreationError {
-                notificationClient.error(error, title: mode.title, source: "ios26_home")
-            }
-            return
-        }
-        routeStore.route(to: .deepTutorThread(conversationID))
     }
 }

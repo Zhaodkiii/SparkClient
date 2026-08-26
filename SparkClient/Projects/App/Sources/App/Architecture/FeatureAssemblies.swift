@@ -244,7 +244,6 @@ struct MainTabDependencies {
     let chatAutoSmallTaskIntentStore: ChatAutoSmallTaskIntentStore
     let chatAutoSmallTaskCoordinator: ChatAutoSmallTaskCoordinator
     let autoSmallTaskRegistry: AutoSmallTaskRegistry
-    let deepTutorChatViewModel: DeepTutorChatViewModel
     let settingsViewModel: SettingsViewModel
     let accountManagementViewModel: AccountManagementViewModel
     let aiSettingsViewModel: AISettingsViewModel

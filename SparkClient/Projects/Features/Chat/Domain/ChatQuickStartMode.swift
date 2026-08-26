@@ -1,18 +1,9 @@
 import Foundation
 
-/// 普通 Chat 首页快捷入口模式；与 DeepTutor 快捷入口保持同一标题和预填草稿。
+/// 普通 Chat 首页快捷入口模式。
 enum ChatQuickStartMode: String, Sendable {
     case checkupPlan = "checkup_plan"
     case reportInterpretation = "report_interpretation"
-
-    init(deepTutorMode: DeepTutorQuickStartMode) {
-        switch deepTutorMode {
-        case .checkupPlan:
-            self = .checkupPlan
-        case .reportInterpretation:
-            self = .reportInterpretation
-        }
-    }
 
     var title: String {
         switch self {

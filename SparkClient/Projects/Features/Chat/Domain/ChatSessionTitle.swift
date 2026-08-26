@@ -1,7 +1,6 @@
 import Foundation
 
 /// Sentinel and presentation helpers for Chat conversation titles.
-/// Mirrors DeepTutorChat title generation semantics while keeping Chat's domain independent.
 nonisolated enum ChatSessionTitle {
     static let defaultSentinel = "New conversation"
 

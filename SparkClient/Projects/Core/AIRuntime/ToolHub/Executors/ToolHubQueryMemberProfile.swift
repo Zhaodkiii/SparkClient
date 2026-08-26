@@ -46,7 +46,7 @@ extension ToolHub {
         }
 
         let result = await MainActor.run {
-            DeepTutorQueryMemberProfileFormatter.makeAIResult(
+            MemberProfileFormatter.makeAIResult(
                 data: data,
                 requestedFocus: requestedFocus
             )

@@ -1,12 +1,10 @@
 import SwiftUI
 
 enum AIToolSettingsSource: String {
-    case deepTutorChat
     case chat
 
     var title: String {
         switch self {
-        case .deepTutorChat: "DeepTutorChat"
         case .chat: "Chat"
         }
     }
@@ -105,7 +103,7 @@ struct AIToolSettingsView: View {
                         .foregroundStyle(.blue)
                         .padding(.top, 4)
 
-                    Text(L10n.text("ai_settings.ai_tools.intro", fallback: "Search providers stay in Search Settings. This page shows which tools DeepTutorChat and Chat can expose to the model, and why a tool may require another setting or permission."))
+                    Text(L10n.text("ai_settings.ai_tools.intro", fallback: "Search providers stay in Search Settings. This page shows which tools Chat can expose to the model, and why a tool may require another setting or permission."))
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -117,22 +115,6 @@ struct AIToolSettingsView: View {
             currentStatusSection
 
             Section(L10n.text("ai_settings.ai_tools.section.tool_lists", fallback: "Tool Lists")) {
-                NavigationLink {
-                    AIToolListView(
-                        title: "DeepTutorChat",
-                        subtitle: L10n.text("ai_settings.ai_tools.section.deeptutor.subtitle", fallback: "Native DeepTutorChat tools and DeepTutor-main compatible names."),
-                        tools: AIToolCatalog.deepTutorTools(),
-                        viewModel: viewModel
-                    )
-                } label: {
-                    toolListRow(
-                        title: "DeepTutorChat",
-                        subtitle: L10n.text("ai_settings.ai_tools.section.deeptutor.subtitle", fallback: "Native DeepTutorChat tools and DeepTutor-main compatible names."),
-                        icon: "graduationcap.fill",
-                        count: AIToolCatalog.deepTutorTools().count
-                    )
-                }
-
                 NavigationLink {
                     AIToolListView(
                         title: "Chat",
@@ -784,10 +766,6 @@ private struct AIToolBadge: View {
 enum AIToolCatalog {
     static let defaultExpandedChatGroupIDs: Set<String> = []
 
-    static func deepTutorTools() -> [AIToolSettingsItem] {
-        nativeDeepTutorTools() + deepTutorCompatibilityTools()
-    }
-
     static func chatTools() -> [AIToolSettingsItem] {
         SparkToolName.allCases.map { tool in
             AIToolSettingsItem(
@@ -805,7 +783,7 @@ enum AIToolCatalog {
 
     static func tool(named toolName: String) -> AIToolSettingsItem? {
         let normalized = normalizeToolName(toolName)
-        return (chatTools() + deepTutorTools()).first {
+        return chatTools().first {
             normalizeToolName($0.definition.name) == normalized
         }
     }
@@ -936,218 +914,6 @@ enum AIToolCatalog {
                 ])
             )
         ].filter { $0.tools.isEmpty == false }
-    }
-
-    private static func nativeDeepTutorTools() -> [AIToolSettingsItem] {
-        [
-            deepTutorNative(
-                name: "ask_user",
-                category: "Interaction",
-                mountMode: .automatic,
-                summary: "Pause the conversation to ask the user 1-4 clarifying questions in one card. Use only when blocked on a decision that is genuinely the user's to make.",
-                properties: [
-                    "intro": prop("string", "Optional one-line lead-in shown above the questions."),
-                    "questions": prop(
-                        "array",
-                        "1-4 questions to ask in one card. Bundle all clarifications into this single call.",
-                        items: prop(
-                            "object",
-                            "Clarifying question",
-                            objectProperties: [
-                                "id": prop("string", "Stable question id."),
-                                "header": prop("string", "Very short tab label, max 12 chars."),
-                                "prompt": prop("string", "The complete question text."),
-                                "options": prop(
-                                    "array",
-                                    "2-4 concise options when useful.",
-                                    items: prop(
-                                        "object",
-                                        "Option",
-                                        objectProperties: [
-                                            "label": prop("string", "Concise option label."),
-                                            "description": prop("string", "What this option means.")
-                                        ],
-                                        objectRequired: ["label"]
-                                    )
-                                ),
-                                "multi_select": prop("boolean", "Whether multiple options may be selected."),
-                                "allow_free_text": prop("boolean", "Whether free text is allowed."),
-                                "placeholder": prop("string", "Free text placeholder.")
-                            ],
-                            objectRequired: ["prompt"]
-                        )
-                    )
-                ],
-                required: ["questions"]
-            ),
-            deepTutorNative(
-                name: "get_current_member_binding",
-                category: "Member",
-                mountMode: .automatic,
-                summary: "Check whether the current DeepTutorChat conversation is already bound to a family member."
-            ),
-            deepTutorNative(
-                name: "request_member_selection",
-                category: "Member",
-                mountMode: .automatic,
-                summary: "Pause the turn and ask the user to choose the family member this answer should use.",
-                properties: [
-                    "reason": prop("string", "Why a member is needed for this request."),
-                    "required_context": prop("string", "The kind of member-specific context required."),
-                    "allow_skip": prop("boolean", "Whether the user may continue without selecting a member.")
-                ],
-                required: ["reason"]
-            ),
-            deepTutorNative(
-                name: "query_member_profile",
-                category: "Health Records",
-                mountMode: .automatic,
-                summary: "Load the bound member's medical profile, health history, lifestyle, exam archive and risk summary before creating any personalized health-check plan.",
-                properties: [
-                    "member_id": prop("integer", "Optional explicit member id. Usually omit this and use the current bound member."),
-                    "focus": prop("string", "Optional planning focus such as cancer screening, cardiovascular, thyroid, women's health, bone density, or budget.")
-                ]
-            ),
-            deepTutorNative(
-                name: "read_memory",
-                category: "Memory",
-                mountMode: .conditional,
-                summary: "Read the user's persistent memory for personalization. Use for tone, depth, format, and explicit preferences; not on every turn."
-            ),
-            deepTutorNative(
-                name: "write_memory",
-                category: "Memory",
-                mountMode: .automatic,
-                summary: "Save an explicit user preference to long-term memory. Call only when the user clearly states a preference; never speculate.",
-                properties: [
-                    "op": prop("string", "`add` for a new preference, `edit` to revise an existing one.", enumValues: ["add", "edit"]),
-                    "text": prop("string", "The preference, in the user's own words where possible. <= 240 chars."),
-                    "target_id": prop("string", "Existing entry id. Required for edit."),
-                    "reason": prop("string", "Optional one-line note.")
-                ],
-                required: ["op", "text"]
-            ),
-            deepTutorNative(
-                name: "show_custom_message_card",
-                category: "Cards",
-                mountMode: .automatic,
-                summary: "Insert a DeepTutorChat upload/capture card and pause the turn while the user chooses an attachment.",
-                properties: [
-                    "card_type": prop(
-                        "string",
-                        "Card type to show: report_photo for medical reports/PDFs, medicine_box_photo for medicine package photos, skin_photo for skin photos.",
-                        enumValues: ["report_photo", "medicine_box_photo", "skin_photo"]
-                    )
-                ],
-                required: ["card_type"]
-            )
-        ]
-    }
-
-    private static func deepTutorCompatibilityTools() -> [AIToolSettingsItem] {
-        [
-            deepTutorCompatibility(
-                name: "web_search",
-                category: "Search",
-                availability: .requiresSearchSettings,
-                summary: L10n.text("ai_settings.ai_tools.summary.deeptutor_web_search", fallback: "DeepTutor-main compatible web search name. SparkClient resolves it through Web Search settings and the active provider."),
-                properties: ["query": prop("string", L10n.text("tool.param.search_query", fallback: "Search query"))],
-                required: ["query"],
-                relatedDestination: .search
-            ),
-            deepTutorCompatibility(
-                name: "paper_search",
-                category: "Search",
-                availability: .requiresSearchSettings,
-                summary: L10n.text("ai_settings.ai_tools.summary.deeptutor_paper_search", fallback: "Academic search name from DeepTutor-main. Availability depends on the SparkClient search runtime and paper-search executor."),
-                properties: ["query": prop("string", L10n.text("tool.param.search_query", fallback: "Search query"))],
-                required: ["query"],
-                relatedDestination: .search
-            ),
-            deepTutorCompatibility(
-                name: "imagegen",
-                category: "Media",
-                availability: .planned,
-                summary: L10n.text("ai_settings.ai_tools.summary.planned_deeptutor", fallback: "Declared as a DeepTutor-main compatible tool name, but not yet wired as a native DeepTutorChat executor in this client.")
-            ),
-            deepTutorCompatibility(
-                name: "videogen",
-                category: "Media",
-                availability: .planned,
-                summary: L10n.text("ai_settings.ai_tools.summary.planned_deeptutor", fallback: "Declared as a DeepTutor-main compatible tool name, but not yet wired as a native DeepTutorChat executor in this client.")
-            )
-        ]
-    }
-
-    private static func deepTutorNative(
-        name: String,
-        category: String,
-        mountMode: AIToolMountMode,
-        summary: String,
-        properties: [String: AIRuntimeToolProperty] = [:],
-        required: [String] = []
-    ) -> AIToolSettingsItem {
-        AIToolSettingsItem(
-            id: "deeptutor.\(name)",
-            displayName: displayName(for: name),
-            definition: AIRuntimeToolDefinition(
-                name: name,
-                summary: summary,
-                properties: properties,
-                required: required
-            ),
-            source: .deepTutorChat,
-            category: category,
-            availability: .available,
-            mountMode: mountMode,
-            relatedDestination: nil
-        )
-    }
-
-    private static func deepTutorCompatibility(
-        name: String,
-        category: String,
-        availability: AIToolAvailability,
-        summary: String,
-        properties: [String: AIRuntimeToolProperty] = [:],
-        required: [String] = [],
-        relatedDestination: AIToolRelatedDestination? = nil
-    ) -> AIToolSettingsItem {
-        AIToolSettingsItem(
-            id: "deeptutor.\(name)",
-            displayName: displayName(for: name),
-            definition: AIRuntimeToolDefinition(
-                name: name,
-                summary: summary,
-                properties: properties,
-                required: required
-            ),
-            source: .deepTutorChat,
-            category: category,
-            availability: availability,
-            mountMode: .userToggleable,
-            relatedDestination: relatedDestination
-        )
-    }
-
-    private static func prop(
-        _ type: String,
-        _ description: String,
-        enumValues: [String]? = nil,
-        format: String? = nil,
-        objectProperties: [String: AIRuntimeToolProperty]? = nil,
-        objectRequired: [String]? = nil,
-        items: AIRuntimeToolProperty? = nil
-    ) -> AIRuntimeToolProperty {
-        AIRuntimeToolProperty(
-            type: type,
-            description: description,
-            enumValues: enumValues,
-            format: format,
-            objectProperties: objectProperties,
-            objectRequired: objectRequired,
-            arrayItems: items
-        )
     }
 
     private static func displayName(for toolName: String) -> String {

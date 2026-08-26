@@ -8,7 +8,7 @@ enum ChatGuideMemberProfilePromptFormatter {
         data: SparkMedicalSyncAPI.RemoteMemberCompleteData,
         requestedFocus: String? = "对话引导卡片健康科普问题生成"
     ) -> String {
-        DeepTutorQueryMemberProfileFormatter.makeAIResult(
+        MemberProfileFormatter.makeAIResult(
             data: data,
             requestedFocus: requestedFocus
         ).content

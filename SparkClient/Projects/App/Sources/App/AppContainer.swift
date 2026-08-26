@@ -258,8 +258,6 @@ final class AppContainer {
     let chatListViewModel: ChatListViewModel
     /// 单会话消息与发送 UI（单例）。
     let chatDetailViewModel: ChatDetailViewModel
-    /// DeepTutor 本地会话 UI（单例）。
-    let deepTutorChatViewModel: DeepTutorChatViewModel
     /// 账号级运行时重置入口：账号切换、登出、鉴权失效都走这里。
     lazy var accountSessionRuntime: AccountSessionRuntime = {
         AccountSessionRuntime(
@@ -268,7 +266,6 @@ final class AppContainer {
             memberContextStore: memberContextStore,
             chatStateStore: chatStateStore,
             chatListViewModel: chatListViewModel,
-            deepTutorChatViewModel: deepTutorChatViewModel,
             chatSyncSupervisor: chatSyncSupervisor,
             knowledgeViewModel: knowledgeViewModel,
             knowledgeSyncSupervisor: knowledgeSyncSupervisor,
@@ -629,23 +626,6 @@ final class AppContainer {
             guideQuestionClickReporter: backend.chatGuideQuestion,
             logger: logger
         )
-        self.deepTutorChatViewModel = DeepTutorChatViewModel(
-            repository: DeepTutorLocalChatStore(
-                coreDataStack: coreDataStack,
-                snapshotStore: auth.sessionSnapshotStore,
-                logger: logger
-            ),
-            chatOrchestrator: chat.chatOrchestrator,
-            aiRuntimeService: ai.aiRuntimeService,
-            aiConfigCenter: ai.aiConfigCenter,
-            loadMemoryArchiveUseCase: ai.loadMemoryArchiveUseCase,
-            saveMemoryUseCase: ai.saveMemoryUseCase,
-            updateMemoryUseCase: ai.updateMemoryUseCase,
-            memberContextStore: notification.memberContextStore,
-            medicalQueryAPI: backend.medicalQuery,
-            fileTransferService: fileTransferService,
-            logger: logger
-        )
         logger.info("AppContainer 组合完成：容器仅持有 Assembly facade 与共享运行时", module: .general)
     }
 
@@ -936,7 +916,6 @@ final class AppContainer {
             chatAutoSmallTaskIntentStore: chatAutoSmallTaskIntentStore,
             chatAutoSmallTaskCoordinator: chatAutoSmallTaskCoordinator,
             autoSmallTaskRegistry: autoSmallTaskRegistry,
-            deepTutorChatViewModel: deepTutorChatViewModel,
             settingsViewModel: makeSettingsViewModel(),
             accountManagementViewModel: makeAccountManagementViewModel(),
             aiSettingsViewModel: aiSettingsViewModel,

@@ -12,8 +12,6 @@ enum AppRoute: Hashable, Sendable {
     case chatThread(UUID)
     /// 对话 Tab 首次自动进入的会话；返回按钮应回到健康首页，而不是会话列表。
     case automaticChatThread(UUID)
-    case deepTutorList
-    case deepTutorThread(UUID)
     case popularScience
     case popularScienceArticle(id: Int)
     case settings
@@ -37,8 +35,6 @@ enum AppRoute: Hashable, Sendable {
             return .fitness
         case .chatList, .chatThread, .automaticChatThread:
             return .chat
-        case .deepTutorList, .deepTutorThread:
-            return .deepTutor
         case .popularScience, .popularScienceArticle:
             return .popularScience
         case .settings, .aiSettings, .accountManagement:
@@ -48,9 +44,9 @@ enum AppRoute: Hashable, Sendable {
 
     var isRootDestination: Bool {
         switch self {
-        case .home, .knowledge, .nutrition, .fitness, .chatList, .popularScience, .settings, .deepTutorList:
+        case .home, .knowledge, .nutrition, .fitness, .chatList, .popularScience, .settings:
             return true
-        case .chatThread, .automaticChatThread, .popularScienceArticle, .aiSettings, .accountManagement, .homeMedicalList, .homeFamilyMedicineCabinet, .taskDetail, .deepTutorThread:
+        case .chatThread, .automaticChatThread, .popularScienceArticle, .aiSettings, .accountManagement, .homeMedicalList, .homeFamilyMedicineCabinet, .taskDetail:
             return false
         }
     }
@@ -66,8 +62,6 @@ final class AppRouteStore: ObservableObject {
         case settings = 4
         /// 科普 Tab 使用新 raw value，避免影响历史 settings 选中态。
         case popularScience = 5
-        /// DeepTutor Tab 使用新 raw value，避免影响历史 Tab 选中态。
-        case deepTutor = 6
         /// iOS 26 专用搜索 Tab。
         case search = 7
         /// 饮食营养 Tab，使用新 raw value，避免影响历史 Tab 选中态。

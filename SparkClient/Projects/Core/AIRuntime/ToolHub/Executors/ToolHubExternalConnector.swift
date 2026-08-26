@@ -151,8 +151,8 @@ extension ToolHub {
         do {
             let config = try await aiConfigCenter.effectiveWeatherConfig()
             logger.info(
-                "deeptutor.weather.query_start conversation=\(shortConversationID(context.threadID)) lat=\(String(format: "%.2f", latitude)) lon=\(String(format: "%.2f", longitude)) timeRange=\(timeRange)",
-                module: .deepTutorChat
+                "weather.query_start conversation=\(shortConversationID(context.threadID)) lat=\(String(format: "%.2f", latitude)) lon=\(String(format: "%.2f", longitude)) timeRange=\(timeRange)",
+                module: .general
             )
             let result = try await weatherGateway.queryWeather(
                 latitude: latitude,
@@ -163,8 +163,8 @@ extension ToolHub {
             )
             let elapsedMs = Int(Date().timeIntervalSince(started) * 1000)
             logger.info(
-                "deeptutor.weather.query_result conversation=\(shortConversationID(context.threadID)) provider=\(config.provider.rawValue) condition=\(result.condition) temp=\(result.temperatureC.map { String(format: "%.1f", $0) } ?? "-") elapsedMs=\(elapsedMs)",
-                module: .deepTutorChat
+                "weather.query_result conversation=\(shortConversationID(context.threadID)) provider=\(config.provider.rawValue) condition=\(result.condition) temp=\(result.temperatureC.map { String(format: "%.1f", $0) } ?? "-") elapsedMs=\(elapsedMs)",
+                module: .general
             )
             let markdown = result.markdown
             let baseResult = ToolExecutionResult(
@@ -187,8 +187,8 @@ extension ToolHub {
                 ).withToolCallID(normalizedToolCallID(from: context))
             }
             logger.warning(
-                "deeptutor.weather.query_failed conversation=\(shortConversationID(context.threadID)) error=\(error.localizedDescription)",
-                module: .deepTutorChat
+                "weather.query_failed conversation=\(shortConversationID(context.threadID)) error=\(error.localizedDescription)",
+                module: .general
             )
             return ToolExecutionResult(
                 toolName: invocation.name,

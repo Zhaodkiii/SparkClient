@@ -20,7 +20,6 @@ struct IOS26TabBarView: View {
     @ObservedObject var chatAutoSmallTaskIntentStore: ChatAutoSmallTaskIntentStore
     let chatAutoSmallTaskCoordinator: ChatAutoSmallTaskCoordinator
     let autoSmallTaskRegistry: AutoSmallTaskRegistry
-    @ObservedObject var deepTutorChatViewModel: DeepTutorChatViewModel
     @ObservedObject var settingsViewModel: SettingsViewModel
     @ObservedObject var accountManagementViewModel: AccountManagementViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
@@ -63,7 +62,6 @@ struct IOS26TabBarView: View {
             chatListViewModel: chatListViewModel,
             chatDetailViewModel: chatDetailViewModel,
             chatAutoSmallTaskCoordinator: chatAutoSmallTaskCoordinator,
-            deepTutorChatViewModel: deepTutorChatViewModel,
             accountManagementViewModel: accountManagementViewModel,
             aiSettingsViewModel: aiSettingsViewModel,
             guideHomeDestinationBuilder: guideHomeDestinationBuilder
@@ -76,9 +74,7 @@ struct IOS26TabBarView: View {
             homeViewModel: homeViewModel,
             medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
             chatListViewModel: chatListViewModel,
-            deepTutorChatViewModel: deepTutorChatViewModel,
             notificationClient: homeDependencies.notificationClient,
-            quickStartPreferenceStore: .shared,
             autoSmallTaskRegistry: autoSmallTaskRegistry,
             autoSmallTaskIntentStore: chatAutoSmallTaskIntentStore,
             ownerAccountID: session.accountID
@@ -113,11 +109,6 @@ struct IOS26TabBarView: View {
 
                 //            Tab(L10n.text("tab.knowledge"), systemImage: "backpack.fill", value: AppRouteStore.RootTab.knowledge) {
                 //                knowledgeContainer
-                //            }
-
-                /// iOS 26 正式主导航：系统 Liquid Glass 浮动 TabBar，底部 Tab 为首页、对话、DeepTutor、搜索、设置（IOS26-TABBAR-000002）。
-                //            Tab(L10n.text("tab.deep_tutor"), systemImage: "graduationcap.fill", value: AppRouteStore.RootTab.deepTutor) {
-                //                deepTutorContainer
                 //            }
 
                 //            Tab(L10n.text("tab.search"), systemImage: "magnifyingglass", value: AppRouteStore.RootTab.search, role: .search) {
@@ -435,7 +426,6 @@ struct IOS26TabBarView: View {
             session: session,
             actionHandler: homeDashboardActionHandler,
             chatListViewModel: chatListViewModel,
-            deepTutorChatViewModel: deepTutorChatViewModel,
             currentSection: $homeSectionPreferenceStore.section,
             safeAreaRefreshRevision: homeSafeAreaRefreshRevision,
             activeFullScreenCover: $activeHomeFullScreenCover
@@ -479,7 +469,6 @@ struct IOS26TabBarView: View {
             session: session,
             taskManager: taskManager,
             chatListViewModel: chatListViewModel,
-            deepTutorChatViewModel: deepTutorChatViewModel,
             autoSmallTaskRegistry: autoSmallTaskRegistry,
             autoSmallTaskIntentStore: chatAutoSmallTaskIntentStore,
             activeFullScreenCover: $activeHomeFullScreenCover
@@ -492,17 +481,6 @@ struct IOS26TabBarView: View {
 
     private var fitnessContainer: some View {
         FitnessHomeView(dependencies: homeDependencies.fitnessDependencies)
-    }
-
-    private var deepTutorContainer: some View {
-        CompatibleRouteNavigationContainer(path: routePath(.deepTutor)) {
-            DeepTutorConversationListPage(
-                viewModel: deepTutorChatViewModel,
-                aiSettingsViewModel: aiSettingsViewModel
-            )
-        } destination: { route in
-            destinationBuilder.destination(route)
-        }
     }
 
     private var knowledgeContainer: some View {

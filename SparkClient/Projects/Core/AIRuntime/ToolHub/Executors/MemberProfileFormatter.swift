@@ -1,6 +1,8 @@
 import Foundation
 
-enum DeepTutorQueryMemberProfileFormatter {
+/// 将 SparkService complete-data 聚合接口结果格式化为 AI 可读的成员医疗资料摘要与扁平元数据。
+/// 名称保持中性，供普通 Chat 与 ToolHub 的成员资料工具共用，不依赖任何下线模块类型。
+enum MemberProfileFormatter {
     struct AIResult: Sendable {
         let content: String
         let metadata: [String: String]
@@ -57,7 +59,7 @@ enum DeepTutorQueryMemberProfileFormatter {
         - 用药计划：\(card.medicationPlanCount) 条
         """
 
-        var metadata: [String: String] = [
+        let metadata: [String: String] = [
             "member_id": String(card.memberID),
             "member_name": card.memberName,
             "relationship": card.relationshipText,
@@ -71,49 +73,33 @@ enum DeepTutorQueryMemberProfileFormatter {
             "examination_report_count": String(card.examinationReportCount),
             "medication_plan_count": String(card.medicationPlanCount),
         ]
-        if let encoded = encode(card) {
-            metadata["member_profile_card"] = encoded
-        }
         return AIResult(content: content, metadata: metadata)
     }
 
-    nonisolated static func payload(from metadata: [String: String]?) -> DeepTutorMemberProfileBlockPayload? {
-        guard let raw = metadata?["member_profile_card"],
-              let data = raw.data(using: .utf8),
-              let payload = try? JSONDecoder.default.decode(DeepTutorMemberProfileBlockPayload.self, from: data) else {
-            return nil
-        }
-        return payload
-    }
-
     @MainActor
-    static func makeCardPayload(
+    private static func makeCardPayload(
         data: SparkMedicalSyncAPI.RemoteMemberCompleteData,
         requestedFocus: String?
-    ) -> DeepTutorMemberProfileBlockPayload {
+    ) -> MemberProfileCard {
         let member = data.member
         let profile = data.memberMedicalProfile
         let extra = profile?.extra ?? [:]
         let ageText = member.birthDate.map(ageDescription(from:)) ?? "未提供"
         let bodyMetrics = bodyMetricsSummary(extra: extra)
         let guidanceSections = (profile?.guidanceSections ?? []).map {
-            DeepTutorMemberProfileSectionCardPayload(
-                sectionCode: $0.sectionCode,
+            MemberProfileCard.Section(
                 title: $0.title,
-                summary: normalizedText($0.summary, fallback: "未提供"),
-                status: normalizedText($0.status, fallback: "unknown")
+                summary: normalizedText($0.summary, fallback: "未提供")
             )
         }
 
-        return DeepTutorMemberProfileBlockPayload(
-            toolCallID: "",
+        return MemberProfileCard(
             memberID: member.id,
             memberName: member.name,
             relationshipText: relationshipText(member.relationship),
             genderText: genderText(member.gender),
             ageText: ageText,
             bodyMetricsSummary: bodyMetrics,
-            requestedFocus: requestedFocus,
             basicProfileSummary: basicProfileSummary(member: member, extra: extra, bodyMetricsSummary: bodyMetrics),
             healthHistorySummary: healthHistorySummary(profile: profile),
             lifestyleSummary: lifestyleSummary(profile: profile, extra: extra),
@@ -126,11 +112,7 @@ enum DeepTutorQueryMemberProfileFormatter {
             followUpCount: data.followUps?.count ?? 0,
             healthExamReportCount: data.healthExamReports?.count ?? 0,
             examinationReportCount: data.examinationReports?.count ?? 0,
-            medicationPlanCount: data.medicationPlans?.count ?? 0,
-            guidanceUpdatedAt: profile?.guidanceUpdatedAt,
-            source: "spark_complete_data",
-            createdAt: Date(),
-            updatedAt: Date()
+            medicationPlanCount: data.medicationPlans?.count ?? 0
         )
     }
 
@@ -334,9 +316,31 @@ enum DeepTutorQueryMemberProfileFormatter {
     private nonisolated static func normalizedText(_ value: String?, fallback: String) -> String {
         text(value) ?? fallback
     }
+}
 
-    private nonisolated static func encode<T: Encodable>(_ value: T) -> String? {
-        guard let data = try? JSONEncoder.default.encode(value) else { return nil }
-        return String(data: data, encoding: .utf8)
+private struct MemberProfileCard {
+    struct Section {
+        let title: String
+        let summary: String
     }
+
+    let memberID: Int
+    let memberName: String
+    let relationshipText: String
+    let genderText: String
+    let ageText: String
+    let bodyMetricsSummary: String
+    let basicProfileSummary: String
+    let healthHistorySummary: String
+    let lifestyleSummary: String
+    let examArchiveSummary: String
+    let riskAssessmentSummary: String
+    let sections: [Section]
+    let medicalCaseCount: Int
+    let symptomCount: Int
+    let surgeryCount: Int
+    let followUpCount: Int
+    let healthExamReportCount: Int
+    let examinationReportCount: Int
+    let medicationPlanCount: Int
 }

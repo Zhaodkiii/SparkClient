@@ -177,7 +177,7 @@ struct ChatOrchestrator: Sendable {
         let initialLoopMessages: [AIRuntimeMessage]
         if let resumeLoopMessages, resumeLoopMessages.isEmpty == false {
             logger.info(
-                "DeepTutor 追问恢复推理开始，resumeMessages=\(resumeLoopMessages.count)",
+                "追问恢复推理开始，resumeMessages=\(resumeLoopMessages.count)",
                 module: .aiConfig
             )
             initialLoopMessages = resumeLoopMessages

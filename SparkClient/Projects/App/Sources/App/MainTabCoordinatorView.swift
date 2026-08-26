@@ -21,7 +21,6 @@ struct MainTabCoordinatorView: View {
     @ObservedObject var chatAutoSmallTaskIntentStore: ChatAutoSmallTaskIntentStore
     let chatAutoSmallTaskCoordinator: ChatAutoSmallTaskCoordinator
     let autoSmallTaskRegistry: AutoSmallTaskRegistry
-    @ObservedObject var deepTutorChatViewModel: DeepTutorChatViewModel
     @ObservedObject var settingsViewModel: SettingsViewModel
     @ObservedObject var accountManagementViewModel: AccountManagementViewModel
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
@@ -54,7 +53,6 @@ struct MainTabCoordinatorView: View {
             chatListViewModel: chatListViewModel,
             chatDetailViewModel: chatDetailViewModel,
             chatAutoSmallTaskCoordinator: chatAutoSmallTaskCoordinator,
-            deepTutorChatViewModel: deepTutorChatViewModel,
             accountManagementViewModel: accountManagementViewModel,
             aiSettingsViewModel: aiSettingsViewModel,
             guideHomeDestinationBuilder: guideHomeDestinationBuilder
@@ -67,9 +65,7 @@ struct MainTabCoordinatorView: View {
             homeViewModel: homeViewModel,
             medicalDocumentUploadViewModel: medicalDocumentUploadViewModel,
             chatListViewModel: chatListViewModel,
-            deepTutorChatViewModel: deepTutorChatViewModel,
             notificationClient: homeDependencies.notificationClient,
-            quickStartPreferenceStore: .shared,
             autoSmallTaskRegistry: autoSmallTaskRegistry,
             autoSmallTaskIntentStore: chatAutoSmallTaskIntentStore,
             ownerAccountID: session.accountID
@@ -182,7 +178,6 @@ struct MainTabCoordinatorView: View {
             session: session,
             actionHandler: actionHandler,
             chatListViewModel: chatListViewModel,
-            deepTutorChatViewModel: deepTutorChatViewModel,
             currentSection: $homeSectionPreferenceStore.section,
             safeAreaRefreshRevision: homeSafeAreaRefreshRevision,
             activeFullScreenCover: $activeHomeFullScreenCover
@@ -200,7 +195,6 @@ struct MainTabCoordinatorView: View {
             session: session,
             taskManager: taskManager,
             chatListViewModel: chatListViewModel,
-            deepTutorChatViewModel: deepTutorChatViewModel,
             autoSmallTaskRegistry: autoSmallTaskRegistry,
             autoSmallTaskIntentStore: chatAutoSmallTaskIntentStore,
             activeFullScreenCover: $activeHomeFullScreenCover
