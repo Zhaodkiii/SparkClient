@@ -127,14 +127,12 @@ extension ISO8601DateFormatter {
 
 /// 聊天相关 JSON 日期编解码（同步 API / Core Data block payload 共用）。
 nonisolated enum ChatCodableDateCodec: Sendable {
-    /// 聊天同步与 block payload：毫秒 ISO8601 + Unix 时间戳回退。
+    /// 聊天同步与 block payload：微秒 ISO8601（服务端 `datetime.isoformat()` 输出
+    /// `.ffffff+00:00`）+ 毫秒/整秒 ISO8601 + Unix 时间戳回退。
     nonisolated static func decodeRemoteSyncDate(from serializer: any Decoder) throws -> Date {
         let container = try serializer.singleValueContainer()
         if let text = try? container.decode(String.self) {
-            if let parsed = ISO8601DateFormatter.chatFractional.date(from: text) {
-                return parsed
-            }
-            if let parsed = ISO8601DateFormatter.chatBasic.date(from: text) {
+            if let parsed = parseChatRemoteISO8601(text) {
                 return parsed
             }
         }
@@ -151,6 +149,55 @@ nonisolated enum ChatCodableDateCodec: Sendable {
             in: container,
             debugDescription: "Unsupported chat date value"
         )
+    }
+
+    /// 解析聊天同步日期字符串：优先微秒精度（服务端 `datetime.isoformat()` 的
+    /// `.ffffff+00:00`），再回落到毫秒、整秒（`ISO8601DateFormatter` 仅支持毫秒）。
+    nonisolated static func parseChatRemoteISO8601(_ text: String) -> Date? {
+        if let parsed = parseWithMicroseconds(text) {
+            return parsed
+        }
+        if let parsed = ISO8601DateFormatter.chatFractional.date(from: text) {
+            return parsed
+        }
+        return ISO8601DateFormatter.chatBasic.date(from: text)
+    }
+
+    /// 格式化为带微秒的 ISO8601（UTC、`Z` 后缀），用于调试输出与 Web 侧格式对齐。
+    nonisolated static func encodeISO8601Microseconds(_ date: Date) -> String {
+        let seconds = date.timeIntervalSince1970
+        let whole = seconds.rounded(.down)
+        let micros = Int(((seconds - whole) * 1_000_000).rounded())
+        let base = ISO8601DateFormatter.chatBasic.string(from: Date(timeIntervalSince1970: whole))
+        guard micros > 0 else { return base }
+        return base.replacingOccurrences(of: "Z", with: String(format: ".%06dZ", micros))
+    }
+
+    /// 手动解析微秒级 ISO8601：`Foundation` 的 `ISO8601DateFormatter` / `DateFormatter`
+    /// 小数秒均会截断到毫秒，无法区分服务端 1 微秒的时间间隔，这里拆分小数位与时区后自行叠加。
+    private nonisolated static func parseWithMicroseconds(_ raw: String) -> Date? {
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let dot = text.firstIndex(of: ".") else { return nil }
+        let basePart = String(text[..<dot])
+        let rest = text[text.index(after: dot)...]
+
+        var index = rest.startIndex
+        var fractionDigits = ""
+        while index < rest.endIndex, rest[index].isNumber {
+            fractionDigits.append(rest[index])
+            index = rest.index(after: index)
+        }
+        guard !fractionDigits.isEmpty, let fractionValue = Double(fractionDigits) else { return nil }
+
+        var offset = String(rest[index...])
+        if offset.isEmpty {
+            offset = "Z"
+        } else if offset != "Z", !offset.contains(":"), offset.count == 5 {
+            offset = String(offset.prefix(3)) + ":" + String(offset.suffix(2))
+        }
+
+        guard let base = ISO8601DateFormatter.chatBasic.date(from: basePart + offset) else { return nil }
+        return base.addingTimeInterval(fractionValue / pow(10.0, Double(fractionDigits.count)))
     }
 }
 

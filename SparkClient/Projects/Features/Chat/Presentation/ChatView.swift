@@ -1184,8 +1184,12 @@ struct ChatView: View {
         """
         logger.debug(summary, module: .general)
         
-        let iso = ISO8601DateFormatter()
-        let sortedMessages = messages.sorted { $0.createdAt < $1.createdAt }
+        let iso: (Date) -> String = { ChatCodableDateCodec.encodeISO8601Microseconds($0) }
+        let sortedMessages = messages.sorted { lhs, rhs in
+            if lhs.createdAt != rhs.createdAt { return lhs.createdAt < rhs.createdAt }
+            if lhs.role != rhs.role { return Self.roleSortOrder(lhs.role) < Self.roleSortOrder(rhs.role) }
+            return lhs.clientMessageID.uuidString < rhs.clientMessageID.uuidString
+        }
         let payload: [[String: Any]] = sortedMessages.map { message in
             let attachments = message.blocks
                 .filter { $0.kind == .imageGallery || $0.kind == .fileAttachments }
@@ -1198,7 +1202,7 @@ struct ChatView: View {
                 "client_message_id": message.clientMessageID.uuidString,
                 "role": message.role.rawValue,
                 "delivery_state": message.deliveryState.rawValue,
-                "created_at": iso.string(from: message.createdAt),
+                "created_at": iso(message.createdAt),
                 "content_preview": String(contentPreview.prefix(300)),
                 "attachments_count": attachments.count,
                 "blocks_count": message.blocks.count
@@ -1222,7 +1226,7 @@ struct ChatView: View {
         let exportData: [String: Any] = [
             "thread_id": currentThreadID.uuidString,
             "title": thread?.listDisplayTitle ?? "",
-            "debug_time": iso.string(from: Date()),
+            "debug_time": iso(Date()),
             "messages": payload
         ]
         if let data = try? JSONSerialization.data(withJSONObject: exportData, options: [.prettyPrinted]),
@@ -1235,9 +1239,21 @@ struct ChatView: View {
     
     private func encodableToJSONObject<T: Encodable>(_ value: T) -> Any? {
         let encoder = JSONEncoder.default
-        encoder.dateEncodingStrategy = .iso8601
+        encoder.dateEncodingStrategy = .custom { date, enc in
+            var container = enc.singleValueContainer()
+            try container.encode(ChatCodableDateCodec.encodeISO8601Microseconds(date))
+        }
         guard let data = try? encoder.encode(value) else { return nil }
         return try? JSONSerialization.jsonObject(with: data)
+    }
+
+    /// 相同时间戳时的角色兜底排序：system < user < assistant（与 Web 侧消息显示顺序一致）。
+    private static func roleSortOrder(_ role: ChatMessageRole) -> Int {
+        switch role {
+        case .system: return 0
+        case .user: return 1
+        case .assistant: return 2
+        }
     }
     
 }
