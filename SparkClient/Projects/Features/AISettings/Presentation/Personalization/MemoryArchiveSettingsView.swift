@@ -4,6 +4,9 @@ struct MemoryArchiveSettingsView: View {
     @ObservedObject var viewModel: MemoryArchiveSettingsViewModel
     @State private var editorDraft = MemoryEditorDraft()
     @State private var showEditor = false
+    @State private var viewingRecord: MemoryRecord?
+    @State private var showDetail = false
+    @State private var pendingEditorRecord: MemoryRecord?
     @State private var showClearAllAlert = false
 
     var body: some View {
@@ -20,7 +23,7 @@ struct MemoryArchiveSettingsView: View {
                         MemoryRecordCard(record: record, searchText: viewModel.searchText)
                             .contentShape(Rectangle())
                             .onTapGesture {
-                                openEditor(for: record)
+                                openDetail(for: record)
                             }
                             .memoryListRow()
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -76,6 +79,21 @@ struct MemoryArchiveSettingsView: View {
         .refreshable {
             await viewModel.refresh()
         }
+        .sheet(isPresented: $showDetail) {
+            if let record = viewingRecord {
+                MemoryDetailSheet(
+                    record: record,
+                    onEdit: {
+                        showDetail = false
+                        pendingEditorRecord = record
+                    },
+                    onDelete: {
+                        showDetail = false
+                        Task { await viewModel.deleteMemory(record) }
+                    }
+                )
+            }
+        }
         .sheet(isPresented: $showEditor) {
             MemoryEditorSheet(draft: $editorDraft) {
                 Task {
@@ -96,6 +114,11 @@ struct MemoryArchiveSettingsView: View {
                     showEditor = false
                 }
             }
+        }
+        .onChange(of: showDetail) { _, visible in
+            guard visible == false, let pending = pendingEditorRecord else { return }
+            pendingEditorRecord = nil
+            openEditor(for: pending)
         }
         .alert("确定要清除所有记忆吗？", isPresented: $showClearAllAlert) {
             Button("取消", role: .cancel) {}
@@ -206,6 +229,11 @@ struct MemoryArchiveSettingsView: View {
         showEditor = true
     }
 
+    private func openDetail(for record: MemoryRecord) {
+        viewingRecord = record
+        showDetail = true
+    }
+
     private func openEditor(for record: MemoryRecord) {
         editorDraft = MemoryEditorDraft(record: record)
         showEditor = true
@@ -312,6 +340,59 @@ private struct NewMemoryCard: View {
         .foregroundStyle(.blue)
         .padding(16)
         .memoryCardStyle()
+    }
+}
+
+private struct MemoryDetailSheet: View {
+    let record: MemoryRecord
+    let onEdit: () -> Void
+    let onDelete: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationView {
+            ZStack {
+                MemoryArchiveBackground()
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        if record.title.isEmpty == false {
+                            Text(record.title)
+                                .font(.headline)
+                        }
+                        Text(record.content)
+                            .font(.body)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        HStack(spacing: 8) {
+                            if record.pinned {
+                                Label("已置顶", systemImage: "pin.fill")
+                            }
+                            Spacer(minLength: 8)
+                            Text(record.updatedAt.formatted(date: .abbreviated, time: .shortened))
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                    .padding(16)
+                    .memoryCardStyle()
+                    .padding(16)
+                }
+            }
+            .navigationTitle("记忆详情")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("关闭") { dismiss() }
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button("编辑", action: onEdit)
+                }
+                ToolbarItem(placement: .bottomBar) {
+                    Button(role: .destructive, action: onDelete) {
+                        Label("忘记", systemImage: "heart.slash")
+                    }
+                }
+            }
+        }
     }
 }
 

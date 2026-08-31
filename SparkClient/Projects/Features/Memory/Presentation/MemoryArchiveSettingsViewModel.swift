@@ -14,6 +14,7 @@ final class MemoryArchiveSettingsViewModel: ObservableObject {
     private let updateUseCase: UpdateMemoryUseCase
     private let deleteUseCase: DeleteMemoryUseCase
     private let preferencesUseCase: MemoryPreferencesUseCase
+    private let syncSupervisor: MemorySyncSupervisor?
     private var cancellables: Set<AnyCancellable> = []
 
     init(
@@ -21,20 +22,29 @@ final class MemoryArchiveSettingsViewModel: ObservableObject {
         saveUseCase: SaveMemoryUseCase,
         updateUseCase: UpdateMemoryUseCase,
         deleteUseCase: DeleteMemoryUseCase,
-        preferencesUseCase: MemoryPreferencesUseCase
+        preferencesUseCase: MemoryPreferencesUseCase,
+        syncSupervisor: MemorySyncSupervisor? = nil
     ) {
         self.loadUseCase = loadUseCase
         self.saveUseCase = saveUseCase
         self.updateUseCase = updateUseCase
         self.deleteUseCase = deleteUseCase
         self.preferencesUseCase = preferencesUseCase
+        self.syncSupervisor = syncSupervisor
         bindSearch()
+        NotificationCenter.default.publisher(for: .sparkMemoryDatabaseDidChange)
+            .debounce(for: .milliseconds(200), scheduler: RunLoop.main)
+            .sink { [weak self] _ in
+                Task { await self?.refresh() }
+            }
+            .store(in: &cancellables)
     }
 
     func load() async {
         isLoading = true
         defer { isLoading = false }
         preferences = await preferencesUseCase.load()
+        _ = await syncSupervisor?.manualRefresh()
         await refresh()
     }
 
@@ -104,6 +114,11 @@ final class MemoryArchiveSettingsViewModel: ObservableObject {
         }
     }
 
+    func retrySync() async {
+        _ = await syncSupervisor?.manualRefresh()
+        await refresh()
+    }
+
     func clearError() {
         errorMessage = nil
     }
@@ -119,4 +134,3 @@ final class MemoryArchiveSettingsViewModel: ObservableObject {
             .store(in: &cancellables)
     }
 }
-

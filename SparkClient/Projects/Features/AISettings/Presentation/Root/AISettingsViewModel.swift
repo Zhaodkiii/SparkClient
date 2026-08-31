@@ -8,6 +8,7 @@ struct AISettingsMemoryTooling {
     let updateMemoryUseCase: UpdateMemoryUseCase
     let deleteMemoryUseCase: DeleteMemoryUseCase
     let memoryPreferencesUseCase: MemoryPreferencesUseCase
+    let syncSupervisor: MemorySyncSupervisor?
 }
 
 enum SmallTaskVersionDisplay: Equatable {
@@ -95,14 +96,16 @@ final class AISettingsViewModel: ObservableObject {
             saveMemoryUseCase: SaveMemoryUseCase(repository: fallbackRepository),
             updateMemoryUseCase: UpdateMemoryUseCase(repository: fallbackRepository),
             deleteMemoryUseCase: DeleteMemoryUseCase(repository: fallbackRepository),
-            memoryPreferencesUseCase: MemoryPreferencesUseCase(repository: fallbackRepository)
+            memoryPreferencesUseCase: MemoryPreferencesUseCase(repository: fallbackRepository),
+            syncSupervisor: nil
         )
         let created = MemoryArchiveSettingsViewModel(
             loadUseCase: tooling.loadMemoryArchiveUseCase,
             saveUseCase: tooling.saveMemoryUseCase,
             updateUseCase: tooling.updateMemoryUseCase,
             deleteUseCase: tooling.deleteMemoryUseCase,
-            preferencesUseCase: tooling.memoryPreferencesUseCase
+            preferencesUseCase: tooling.memoryPreferencesUseCase,
+            syncSupervisor: tooling.syncSupervisor
         )
         cachedMemoryArchiveViewModel = created
         return created

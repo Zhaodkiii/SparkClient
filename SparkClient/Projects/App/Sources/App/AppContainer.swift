@@ -104,6 +104,10 @@ final class AppContainer {
     let knowledgeRepository: any KnowledgeRepository
     /// 知识库多设备同步编排：启动/前台/网络恢复/手动触发的非阻断入口（KNOWLEDGE-SYNC-000001）。
     let knowledgeSyncSupervisor: KnowledgeSyncSupervisor
+    /// 账号级权威记忆仓储（新同步实体，独立于旧本地工具仓库）。
+    let memoryEntityRepository: any MemoryEntityRepository
+    /// 记忆多设备同步编排：与知识库独立，互不阻断。
+    let memorySyncSupervisor: MemorySyncSupervisor
     /// 服务端科普内容仓储：远端文档系统 + JSON 文件缓存。
     let popularScienceRepository: any PopularScienceRepository
     /// 本机 GGUF 等小模型加载与推理入口（与云端网关并列供 `AIRuntimeService` 选择）。
@@ -269,6 +273,7 @@ final class AppContainer {
             chatSyncSupervisor: chatSyncSupervisor,
             knowledgeViewModel: knowledgeViewModel,
             knowledgeSyncSupervisor: knowledgeSyncSupervisor,
+            memorySyncSupervisor: memorySyncSupervisor,
             aiConfigCenter: aiConfigCenter,
             logger: logger,
             clearSessionScopedViewModels: { [weak self] in
@@ -370,10 +375,16 @@ final class AppContainer {
         let infrastructure = AppAssembly.makeInfrastructure(backend: backend, logger: logger)
         let auth = AuthAssembly.makeCore(backend: backend, logger: logger)
         let accountManagementRepository = DefaultAccountManagementRepository(backend: backend)
+        let memory = AIAssembly.makeMemory(
+            coreDataStack: coreDataStack,
+            backend: backend,
+            logger: logger
+        )
         let ai = AIAssembly.makeCore(
             coreDataStack: coreDataStack,
             backend: backend,
             sessionSnapshotStore: auth.sessionSnapshotStore,
+            memoryEntityRepository: memory.memoryEntityRepository,
             logger: logger
         )
         let medical = MedicalAssembly.makeCore(
@@ -463,6 +474,8 @@ final class AppContainer {
 
         self.knowledgeRepository = knowledge.knowledgeRepository
         self.knowledgeSyncSupervisor = knowledge.knowledgeSyncSupervisor
+        self.memoryEntityRepository = memory.memoryEntityRepository
+        self.memorySyncSupervisor = memory.memorySyncSupervisor
         let popularScienceRepository = RemotePopularScienceRepository(
             api: backend.popularScience,
             cacheStore: PopularScienceCacheStore(),
@@ -958,7 +971,8 @@ final class AppContainer {
                 saveMemoryUseCase: saveMemoryUseCase,
                 updateMemoryUseCase: updateMemoryUseCase,
                 deleteMemoryUseCase: deleteMemoryUseCase,
-                memoryPreferencesUseCase: memoryPreferencesUseCase
+                memoryPreferencesUseCase: memoryPreferencesUseCase,
+                syncSupervisor: memorySyncSupervisor
             )
         )
         aiSettingsViewModelCache.store(created, ownerAccountID: ownerAccountID)

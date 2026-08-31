@@ -65,6 +65,13 @@ struct KnowledgeAssemblyProduct {
     let knowledgeSyncSupervisor: KnowledgeSyncSupervisor
 }
 
+/// 记忆同步领域装配产物：权威条目、设置镜像、Outbox 与启动同步。
+struct MemoryAssemblyProduct {
+    let memoryEntityRepository: any MemoryEntityRepository
+    let memorySyncEngine: MemorySyncEngine
+    let memorySyncSupervisor: MemorySyncSupervisor
+}
+
 /// 医疗领域装配产物。
 struct MedicalAssemblyProduct {
     let ocrOrchestrator: OCROrchestrator
@@ -224,6 +231,7 @@ extension AIAssembly {
         coreDataStack: CoreDataStack,
         backend: Backend,
         sessionSnapshotStore: SessionSnapshotStore,
+        memoryEntityRepository: any MemoryEntityRepository,
         logger: Logger
     ) -> AIAssemblyProduct {
         logger.info("AIAssembly 装配 AI 配置与运行时", module: .aiConfig)
@@ -235,6 +243,10 @@ extension AIAssembly {
         let memoryRepository = CoreDataMemoryRepository(
             coreDataStack: coreDataStack,
             sessionSnapshotStore: sessionSnapshotStore
+        )
+        let toolMemoryRepository = ToolingMemoryRepository(
+            local: memoryRepository,
+            synced: memoryEntityRepository
         )
         // embedding 客户端只能在装配根创建，归属 Runtime 下游网关。
         let knowledgeEmbeddingClient = OpenAICompatibleEmbeddingClient()
@@ -273,11 +285,11 @@ extension AIAssembly {
             aiConfigCenter: aiConfigCenter,
             aiRuntimeService: aiRuntimeService,
             localModelService: localModelService,
-            loadMemoryArchiveUseCase: LoadMemoryArchiveUseCase(repository: memoryRepository),
-            saveMemoryUseCase: SaveMemoryUseCase(repository: memoryRepository),
-            retrieveMemoryUseCase: RetrieveMemoryUseCase(repository: memoryRepository),
-            updateMemoryUseCase: UpdateMemoryUseCase(repository: memoryRepository),
-            deleteMemoryUseCase: DeleteMemoryUseCase(repository: memoryRepository),
+            loadMemoryArchiveUseCase: LoadMemoryArchiveUseCase(repository: toolMemoryRepository),
+            saveMemoryUseCase: SaveMemoryUseCase(repository: toolMemoryRepository),
+            retrieveMemoryUseCase: RetrieveMemoryUseCase(repository: toolMemoryRepository),
+            updateMemoryUseCase: UpdateMemoryUseCase(repository: toolMemoryRepository),
+            deleteMemoryUseCase: DeleteMemoryUseCase(repository: toolMemoryRepository),
             memoryPreferencesUseCase: MemoryPreferencesUseCase(repository: memoryRepository),
             polishKnowledgeTextUseCase: PolishKnowledgeTextUseCase(runtime: aiRuntimeService),
             translateKnowledgeTextUseCase: TranslateKnowledgeTextUseCase(runtime: aiRuntimeService),
@@ -507,6 +519,30 @@ extension AIAssembly {
             importKnowledgeFromWebUseCase: ImportKnowledgeFromWebUseCase(),
             knowledgeSyncEngine: knowledgeSyncEngine,
             knowledgeSyncSupervisor: knowledgeSyncSupervisor
+        )
+    }
+}
+
+extension AIAssembly {
+    static func makeMemory(
+        coreDataStack: CoreDataStack,
+        backend: Backend,
+        logger: Logger
+    ) -> MemoryAssemblyProduct {
+        logger.info("AIAssembly 装配记忆同步核心", module: .aiConfig)
+        let memoryEntityRepository = CoreDataMemoryEntityRepository(coreDataStack: coreDataStack, logger: logger)
+        let memoryOutboxStore = MemorySyncOutboxStore(repository: memoryEntityRepository)
+        let memorySyncEngine = MemorySyncEngine(
+            repository: memoryEntityRepository,
+            outboxStore: memoryOutboxStore,
+            remoteAPI: backend.memory,
+            logger: logger
+        )
+        let memorySyncSupervisor = MemorySyncSupervisor(engine: memorySyncEngine, logger: logger)
+        return MemoryAssemblyProduct(
+            memoryEntityRepository: memoryEntityRepository,
+            memorySyncEngine: memorySyncEngine,
+            memorySyncSupervisor: memorySyncSupervisor
         )
     }
 }

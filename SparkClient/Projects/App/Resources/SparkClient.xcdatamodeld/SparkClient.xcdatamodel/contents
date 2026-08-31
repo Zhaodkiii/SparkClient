@@ -309,4 +309,80 @@
         <attribute name="stateRaw" attributeType="String" defaultValueString="pending"/>
         <attribute name="updatedAt" attributeType="Date" usesScalarValueType="NO"/>
     </entity>
+    <entity name="MemoryEntity" representedClassName="MemoryEntity" syncable="YES">
+        <attribute name="confirmationStatus" attributeType="String" defaultValueString="not_required"/>
+        <attribute name="content" attributeType="String" defaultValueString=""/>
+        <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="deletedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="documentKey" attributeType="String" defaultValueString="preferences"/>
+        <attribute name="expiresAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="isPinned" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="isRemoteDeleted" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="lastSyncedRevision" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="lastSyncAttemptAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="lastSyncErrorAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="lastSyncErrorCode" optional="YES" attributeType="String"/>
+        <attribute name="lastSyncSucceededAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="layer" attributeType="String" defaultValueString="L3"/>
+        <attribute name="memberID" optional="YES" attributeType="Integer 64" usesScalarValueType="YES"/>
+        <attribute name="memoryType" attributeType="String" defaultValueString="preference"/>
+        <attribute name="normalizedKey" attributeType="String" defaultValueString=""/>
+        <attribute name="ownerAccountID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="revision" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="scope" attributeType="String" defaultValueString="account"/>
+        <attribute name="scopeKey" attributeType="String" defaultValueString="account"/>
+        <attribute name="sectionKey" attributeType="String" defaultValueString="answer_style"/>
+        <attribute name="sensitivity" attributeType="String" defaultValueString="normal"/>
+        <attribute name="serverSnapshotHash" optional="YES" attributeType="String"/>
+        <attribute name="serverUpdatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="sortOrder" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="source" attributeType="String" defaultValueString="user"/>
+        <attribute name="status" attributeType="String" defaultValueString="active"/>
+        <attribute name="structuredValueData" optional="YES" attributeType="Binary"/>
+        <attribute name="syncStateRaw" attributeType="String" defaultValueString="local_only"/>
+        <attribute name="threadID" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="title" attributeType="String" defaultValueString=""/>
+        <attribute name="updatedAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="agentKey" optional="YES" attributeType="String"/>
+    </entity>
+    <entity name="MemorySyncOutboxEntity" representedClassName="MemorySyncOutboxEntity" syncable="YES">
+        <attribute name="attemptCount" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="baseRevision" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="lastErrorAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="lastErrorCode" optional="YES" attributeType="String"/>
+        <attribute name="memoryID" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="mutationID" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="nextRetryAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="operationRaw" attributeType="String" defaultValueString="create"/>
+        <attribute name="ownerAccountID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="payloadData" attributeType="Binary"/>
+        <attribute name="payloadHash" attributeType="String" defaultValueString=""/>
+        <attribute name="stateRaw" attributeType="String" defaultValueString="pending"/>
+        <attribute name="updatedAt" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
+    <entity name="MemorySyncCursorEntity" representedClassName="MemorySyncCursorEntity" syncable="YES">
+        <attribute name="cursor" optional="YES" attributeType="String"/>
+        <attribute name="lastPullErrorCode" optional="YES" attributeType="String"/>
+        <attribute name="lastPullStartedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="lastPullSucceededAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="ownerAccountID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="schemaVersion" attributeType="Integer 32" defaultValueString="1" usesScalarValueType="YES"/>
+        <attribute name="updatedAt" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
+    <entity name="MemorySettingsEntity" representedClassName="MemorySettingsEntity" syncable="YES">
+        <attribute name="allowCrossThreadRecall" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="allowSensitiveSources" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="allowToolWrite" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="autoConsolidationEnabled" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="isEnabled" attributeType="Boolean" defaultValueString="YES" usesScalarValueType="YES"/>
+        <attribute name="maxRecallCount" attributeType="Integer 32" defaultValueString="5" usesScalarValueType="YES"/>
+        <attribute name="ownerAccountID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="revision" attributeType="Integer 64" defaultValueString="1" usesScalarValueType="YES"/>
+        <attribute name="serverUpdatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="syncStateRaw" attributeType="String" defaultValueString="synced"/>
+        <attribute name="updatedAt" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
 </model>

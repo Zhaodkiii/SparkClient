@@ -205,8 +205,8 @@ nonisolated struct ETagCacheRecord: Codable, Sendable {
 
 // MARK: - 后端错误与动态 JSON
 
-/// 弱类型 JSON，用于解析结构不固定的 `data` 等字段。
-nonisolated enum JSONValue: Decodable, Sendable, Equatable {
+/// 弱类型 JSON，用于解析结构不固定的 `data` 等字段，也可回写非固定结构 payload。
+nonisolated enum JSONValue: Codable, Sendable, Equatable {
     case string(String)
     case number(Double)
     case bool(Bool)
@@ -242,6 +242,24 @@ nonisolated enum JSONValue: Decodable, Sendable, Equatable {
             return
         }
         throw DecodingError.typeMismatch(JSONValue.self, DecodingError.Context(codingPath: decoder.codingPath, debugDescription: "Unsupported JSON value"))
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .string(let value):
+            try container.encode(value)
+        case .number(let value):
+            try container.encode(value)
+        case .bool(let value):
+            try container.encode(value)
+        case .object(let value):
+            try container.encode(value)
+        case .array(let value):
+            try container.encode(value)
+        case .null:
+            try container.encodeNil()
+        }
     }
 }
 

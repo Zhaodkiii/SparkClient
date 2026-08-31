@@ -35,7 +35,7 @@ actor InMemoryMemoryRepository: MemoryRepository {
 
     func update(id: UUID, title: String?, content: String, pinned: Bool?) async throws -> MemoryRecord {
         guard let index = records.firstIndex(where: { $0.id == id }) else {
-            throw MemoryRepositoryError.emptyContent
+            throw MemoryRepositoryError.notFound
         }
         records[index].title = title?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? title! : String(content.prefix(20))
         records[index].content = content

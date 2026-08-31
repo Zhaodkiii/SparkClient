@@ -107,7 +107,7 @@ nonisolated final class CoreDataMemoryRepository: MemoryRepository, @unchecked S
 
         return try await coreDataStack.performBackgroundTask { context in
             guard let object = try self.fetchObject(id: id, ownerAccountID: ownerAccountID, context: context) else {
-                throw CocoaError(.managedObjectValidation)
+                throw MemoryRepositoryError.notFound
             }
             var record = self.makeRecord(from: object)
             record.title = self.normalizedTitle(title, content: trimmedContent)

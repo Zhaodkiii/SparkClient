@@ -54,6 +54,7 @@ nonisolated struct MemorySearchResult: Equatable, Sendable {
 nonisolated enum MemoryRepositoryError: Error, LocalizedError {
     case notSignedIn
     case emptyContent
+    case notFound
 
     var errorDescription: String? {
         switch self {
@@ -61,6 +62,8 @@ nonisolated enum MemoryRepositoryError: Error, LocalizedError {
             return "当前未登录，无法访问记忆档案。"
         case .emptyContent:
             return "记忆内容不能为空。"
+        case .notFound:
+            return "未找到对应记忆。"
         }
     }
 }

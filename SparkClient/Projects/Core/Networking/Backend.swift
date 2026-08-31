@@ -14,6 +14,7 @@ final class Backend {
     let aiConfig: SparkAIConfigAPI
     let chat: SparkChatRemoteAPI
     let knowledge: SparkKnowledgeRemoteAPI
+    let memory: SparkMemoryRemoteAPI
     let medicalMembers: SparkMedicalMemberAPI
     let medicalQuery: SparkMedicalQueryAPI
     let medicalResources: SparkMedicalWorkflowAPI
@@ -64,6 +65,7 @@ final class Backend {
         self.aiConfig = SparkAIConfigAPI(configuration: configuration)
         self.chat = SparkChatRemoteAPI(configuration: configuration)
         self.knowledge = SparkKnowledgeRemoteAPI(configuration: configuration)
+        self.memory = SparkMemoryRemoteAPI(configuration: configuration)
         self.medicalMembers = SparkMedicalMemberAPI(configuration: configuration)
         self.medicalQuery = SparkMedicalQueryAPI(configuration: configuration)
         self.medicalResources = SparkMedicalWorkflowAPI(configuration: configuration)
@@ -92,6 +94,7 @@ final class Backend {
         self.aiConfig = SparkAIConfigAPI(configuration: configuration)
         self.chat = SparkChatRemoteAPI(configuration: configuration)
         self.knowledge = SparkKnowledgeRemoteAPI(configuration: configuration)
+        self.memory = SparkMemoryRemoteAPI(configuration: configuration)
         self.medicalMembers = SparkMedicalMemberAPI(configuration: configuration)
         self.medicalQuery = SparkMedicalQueryAPI(configuration: configuration)
         self.medicalResources = SparkMedicalWorkflowAPI(configuration: configuration)
