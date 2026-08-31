@@ -1,10 +1,16 @@
 import Foundation
 
+/// 聊天消息角色：标识这条消息由谁发出。
+/// 与 OpenAI 风格的对话角色对齐，并可通过 `runtimeRole` 映射到 AI 运行时角色。
 nonisolated enum ChatMessageRole: String, Codable, Sendable {
+    /// 系统提示 / 系统注入内容（对用户不可见或弱展示）
     case system
+    /// 用户发出的消息
     case user
+    /// 助手（模型）回复
     case assistant
 
+    /// 映射为 AI 运行时使用的角色，供编排层构造 `AIRuntimeMessage`。
     var runtimeRole: AIRuntimeRole {
         switch self {
         case .system: return .system
@@ -14,21 +20,37 @@ nonisolated enum ChatMessageRole: String, Codable, Sendable {
     }
 }
 
+/// 消息级内容类型（整条消息的粗粒度分类，区别于块级的 `ChatMessageBlockKind`）。
+/// 主要用于编排输出、工具解释等运行时路径，标识本轮结果是文本、工具、卡片还是系统消息。
 nonisolated enum ChatMessageKind: String, Codable, Sendable {
+    /// 普通文本回复
     case text
+    /// 工具调用 / 工具执行结果
     case tool
+    /// 卡片类结构化展示（知识卡、健康卡等）
     case card
+    /// 系统消息（引导、状态、内部注入等）
     case system
 }
 
+/// 消息块锚点：描述一个块应插入或关联到消息中的哪个位置。
+/// 流式写入与工具副作用落块时用它保证顺序稳定，不依赖数组合并时机。
+///
+/// 编解码为带标签的 JSON：`{ "type": "...", "value": ... }`。
+/// `messageStart` / `messageEnd` 无附加值；其余 case 把关联 ID 写入 `value`。
 nonisolated enum ChatBlockAnchor: Codable, Equatable, Sendable {
+    /// 插到当前消息最前面
     case messageStart
+    /// 插到当前消息末尾
     case messageEnd
+    /// 插到指定块之前（关联目标块 UUID）
     case beforeBlock(UUID)
+    /// 插到指定块之后（关联目标块 UUID）
     case afterBlock(UUID)
+    /// 挂到指定工具调用上（关联 toolCallID）
     case toolCall(String)
 
-
+    /// 序列化用的锚点类型标签，与对外 JSON 的 `type` 字段一一对应。
     private enum AnchorType: String, Codable {
         case messageStart
         case messageEnd
@@ -37,6 +59,7 @@ nonisolated enum ChatBlockAnchor: Codable, Equatable, Sendable {
         case toolCall
     }
 
+    /// 按 `type` 还原枚举；带关联值的 case 再读 `value`。
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodableKey.self)
         switch try c.decode(AnchorType.self, forKey: .key("type")) {
@@ -53,6 +76,7 @@ nonisolated enum ChatBlockAnchor: Codable, Equatable, Sendable {
         }
     }
 
+    /// 写出 `type`；带关联值的 case 额外写出 `value`。
     func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodableKey.self)
         switch self {
