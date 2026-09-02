@@ -104,17 +104,27 @@ struct ChatConversationMessageRow: View {
         }
     }
 
+    /// 医院医生简介系统卡不进入长按菜单，避免被当成 AI 消息操作。
+    private var disablesBubbleMenu: Bool {
+        message.blocks.contains { $0.kind == .hospitalDoctorIntroCard }
+    }
+
     /// 带长按手势的气泡，替代系统 contextMenu
+    @ViewBuilder
     private var longPressableBubble: some View {
-        bubbleContent
-            .contentShape(Rectangle())
-            .highPriorityGesture(
-                LongPressGesture(minimumDuration: 0.45)
-                    .onEnded { _ in
-                        UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
-                        bubbleMenuConfig = makeBubbleMenuConfig()
-                    }
-            )
+        if disablesBubbleMenu {
+            bubbleContent
+        } else {
+            bubbleContent
+                .contentShape(Rectangle())
+                .highPriorityGesture(
+                    LongPressGesture(minimumDuration: 0.45)
+                        .onEnded { _ in
+                            UIImpactFeedbackGenerator(style: .heavy).impactOccurred()
+                            bubbleMenuConfig = makeBubbleMenuConfig()
+                        }
+                )
+        }
     }
 
     private func makeBubbleMenuConfig() -> ChatBubbleMenuConfig {

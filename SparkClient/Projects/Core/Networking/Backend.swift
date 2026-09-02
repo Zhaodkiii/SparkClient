@@ -27,6 +27,7 @@ final class Backend {
     let version: SparkVersionAPI
     let nutrition: NutritionAPI
     let popularScience: PopularScienceRemoteAPI
+    let hospitalCare: HospitalCareRemoteAPI
     let deviceCache: DeviceCache
 
     init(
@@ -78,6 +79,7 @@ final class Backend {
         self.version = SparkVersionAPI(configuration: configuration)
         self.nutrition = NutritionAPI(configuration: configuration)
         self.popularScience = PopularScienceRemoteAPI(configuration: configuration)
+        self.hospitalCare = HospitalCareRemoteAPI(configuration: configuration)
 
         logger.info(SparkNetworkingStrings.Backend.initialized, module: .network)
     }
@@ -107,6 +109,7 @@ final class Backend {
         self.version = SparkVersionAPI(configuration: configuration)
         self.nutrition = NutritionAPI(configuration: configuration)
         self.popularScience = PopularScienceRemoteAPI(configuration: configuration)
+        self.hospitalCare = HospitalCareRemoteAPI(configuration: configuration)
 
         configuration.logger.info(SparkNetworkingStrings.Backend.initialized, module: .network)
     }

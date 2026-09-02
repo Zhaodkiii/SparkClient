@@ -52,6 +52,7 @@ struct SignedInMainTabHostView: View {
             } message: {
                 Text(L10n.text("chat.list.no_available_model.message"))
             }
+            .environment(\.hospitalCare, mainTab.hospitalCareDependencies)
     }
 
     @ViewBuilder

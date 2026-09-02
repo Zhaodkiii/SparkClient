@@ -7,6 +7,16 @@ enum ChatLeadingAction: Equatable {
     case home
 }
 
+/// CHAT-000054：医院会话身份判定状态。
+/// 本地 scope 命中 → `.hospital`；服务端 context 404 → `.ordinary`；
+/// context 请求失败 → `.failed`（阻断继承新建并展示错误，不降级为普通会话）。
+private enum HospitalScopeResolution: Equatable {
+    case undetermined
+    case hospital(HospitalConversationScope)
+    case ordinary
+    case failed
+}
+
 struct ChatView: View {
     private enum ParameterCardKind: Hashable {
         case temperature
@@ -24,6 +34,16 @@ struct ChatView: View {
     @State private var isCreatingThreadInDetail = false
     /// CHAT-000030：详情页内部新建对话失败提示文案（nil 表示无错误）。
     @State private var detailThreadCreationError: String?
+    /// CHAT-000054：当前 thread 的医院会话身份判定结果。
+    /// 引导卡插入、历史入口展示、新建继承都依赖该判定，进入页面后先完成判定再执行副作用。
+    @State private var hospitalScopeResolution: HospitalScopeResolution = .undetermined
+    @State private var showHospitalScopeResolutionFailure = false
+    /// CHAT-000055：当前医院会话的能力（context 回源前为 nil，发送入口据此先回源再判定）。
+    @State private var hospitalCapabilities: HospitalConversationCapabilities?
+    /// CHAT-000055：当前医院会话的知识 Manifest（仅用于展示/调试；同步由 coordinator 处理）。
+    @State private var hospitalKnowledgeManifest: HospitalAgentKnowledgeManifest?
+    /// CHAT-000055：医院会话发送被门禁拦截的提示文案（nil 表示无拦截）。
+    @State private var hospitalSendBlockedMessage: String?
     @ObservedObject var stateStore: ChatStateStore
     @ObservedObject var listViewModel: ChatListViewModel
     @ObservedObject var detailViewModel: ChatDetailViewModel
@@ -39,6 +59,7 @@ struct ChatView: View {
     let onClose: (() -> Void)?
     /// 引导卡片滑块 → 健康首页 destination（CHAT-000025）；nil 时滑块降级为纯展示。
     var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
+    @Environment(\.hospitalCare) private var hospitalCare
     
     @State private var hasLoaded = false
     @StateObject private var uiStateStore = ChatMessageUIStateStore()
@@ -358,7 +379,15 @@ struct ChatView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                composerChrome
+                VStack(spacing: 0) {
+                    // CHAT-000055 Q27：智能体下架/会话只读时，输入区上方固定提示，发送入口同步禁用。
+                    if case .hospital = hospitalScopeResolution,
+                       let capabilities = hospitalCapabilities,
+                       capabilities.canSendMessage == false {
+                        hospitalReadOnlyBanner(reason: capabilities.readOnlyReason)
+                    }
+                    composerChrome
+                }
             }
         //            .ignoresSafeArea(.container, edges: .bottom)
             .overlay(alignment: .bottom) {
@@ -399,14 +428,18 @@ struct ChatView: View {
                 // CHAT-000030：新建对话按钮与设置菜单合并到同一 ToolbarItemGroup，
                 // 避免 .topBarTrailing / .navigationBarTrailing 混用在部分 iOS 版本排列不稳定。
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button {
-                        detailViewModel.toolInteractionCoordinator.presentConversationList()
-                    } label: {
-                        Image(systemName: "bubble.left.and.bubble.right")
+                    // CHAT-000054：医院会话隐藏“对话列表”入口，
+                    // 医院 Thread 只能从院内名医目录或“最近咨询”进入。
+                    if showsOrdinaryConversationListButton {
+                        Button {
+                            detailViewModel.toolInteractionCoordinator.presentConversationList()
+                        } label: {
+                            Image(systemName: "bubble.left.and.bubble.right")
+                        }
+                        .accessibilityLabel(
+                            L10n.text("chat.conversation_list.open", fallback: "对话列表")
+                        )
                     }
-                    .accessibilityLabel(
-                        L10n.text("chat.conversation_list.open", fallback: "对话列表")
-                    )
                     
                     // CHAT-000030：详情页右上角新建对话（当前详情内部切换 thread，不跳转）。
                     Button {
@@ -580,11 +613,28 @@ struct ChatView: View {
                     "chat.detail.thread_switch.messages_loaded thread=\(String(id.uuidString.prefix(8))) count=\(stateStore.persistedMessages(for: id).count)",
                     module: .general
                 )
+                // CHAT-000054：先完成医院会话身份判定（本地 scope → 服务端 context 回源），
+                // 再决定引导卡/修复/新建继承副作用，避免重装后医院会话被降级为普通会话。
+                let scopeResolution = await resolveHospitalScope(for: id)
+                hospitalScopeResolution = scopeResolution
+                showHospitalScopeResolutionFailure = (scopeResolution == .failed)
+                // CHAT-000055：医院会话进入后后台回源 context（能力 + 知识 Manifest），
+                // 驱动发送门禁与知识同步；失败不降级、不阻断历史可读。
+                if case .hospital(let scope) = scopeResolution {
+                    let capturedScope = scope
+                    Task { await refreshHospitalConversationContext(threadID: id, scope: capturedScope) }
+                }
                 // CHAT-000029：默认绑定已在 thread 创建阶段前置完成，页面不再补绑。
                 // 新建链路：保持新建标记（阻止并发 repair）→ 幂等插入 guide card → 启动生成 → 清除标记；
                 // 重新进入旧对话：只做 guide 卡片异常状态修复，绝不生成。
                 if stateStore.isThreadMarkedAsNewlyCreated(id) {
-                    let didInsertGuideCard = await detailViewModel.ensureFirstGuideCardInsertedForNewThreadIfNeeded(threadID: id)
+                    let didInsertGuideCard: Bool
+                    if case .ordinary = scopeResolution {
+                        didInsertGuideCard = await detailViewModel.ensureFirstGuideCardInsertedForNewThreadIfNeeded(threadID: id)
+                    } else {
+                        // 医院会话或身份未明：不插入普通引导卡，避免降级副作用。
+                        didInsertGuideCard = false
+                    }
                     if didInsertGuideCard {
                         await detailViewModel.startGuideQuestionGenerationForNewlyCreatedThread(threadID: id)
                     }
@@ -594,7 +644,9 @@ struct ChatView: View {
                         module: .general
                     )
                 } else {
-                    await detailViewModel.repairGuideQuestionsForReenteredThreadIfNeeded(threadID: id)
+                    if case .ordinary = scopeResolution {
+                        await detailViewModel.repairGuideQuestionsForReenteredThreadIfNeeded(threadID: id)
+                    }
                 }
                 await trySendAutoSmallTaskIfReady(for: id)
             }
@@ -677,6 +729,33 @@ struct ChatView: View {
                 Button(L10n.text("common.ok", fallback: "好"), role: .cancel) {}
             } message: {
                 Text(detailThreadCreationError ?? "")
+            }
+        // CHAT-000054：医院会话身份校验失败提示（不降级普通会话，提供重试）。
+            .alert(
+                L10n.text("chat.hospital_scope.failed.title", fallback: "无法确认院内会话身份"),
+                isPresented: $showHospitalScopeResolutionFailure
+            ) {
+                Button(L10n.text("common.retry", fallback: "重试")) {
+                    Task { await retryHospitalScopeResolution() }
+                }
+                Button(L10n.text("common.cancel", fallback: "取消"), role: .cancel) {}
+            } message: {
+                Text(L10n.text(
+                    "chat.hospital_scope.failed.message",
+                    fallback: "当前会话的医院身份校验失败，请检查网络后重试。"
+                ))
+            }
+        // CHAT-000055：医院会话发送门禁拦截提示（不发送、不重发、不转普通 AI）。
+            .alert(
+                L10n.text("chat.hospital.send_blocked.title", fallback: "暂时无法发送"),
+                isPresented: Binding(
+                    get: { hospitalSendBlockedMessage != nil },
+                    set: { if $0 == false { hospitalSendBlockedMessage = nil } }
+                )
+            ) {
+                Button(L10n.text("common.ok", fallback: "好"), role: .cancel) {}
+            } message: {
+                Text(hospitalSendBlockedMessage ?? "")
             }
     }
 
@@ -1026,6 +1105,36 @@ struct ChatView: View {
     
     private func sendCurrentDraftIfChatModelAvailable() {
         KeyboardDismissHelper.dismissKeyboard()
+        // CHAT-000055 Q27/Q28：医院会话发送前必须过能力门禁。
+        // 禁发时只提示、不发送；绝不自动重发、绝不改走普通 AI 链路。
+        if case .hospital(let scope) = hospitalScopeResolution {
+            if let capabilities = hospitalCapabilities {
+                guard capabilities.canSendMessage else {
+                    hospitalSendBlockedMessage = hospitalReadOnlyMessage(for: capabilities.readOnlyReason)
+                    return
+                }
+            } else {
+                // context 未回源：先回源再判定，本次不直接发送。
+                let threadID = currentThreadID
+                Task {
+                    await refreshHospitalConversationContext(threadID: threadID, scope: scope)
+                    guard currentThreadID == threadID else { return }
+                    if let capabilities = hospitalCapabilities {
+                        if capabilities.canSendMessage {
+                            sendCurrentDraftIfChatModelAvailable()
+                        } else {
+                            hospitalSendBlockedMessage = hospitalReadOnlyMessage(for: capabilities.readOnlyReason)
+                        }
+                    } else {
+                        hospitalSendBlockedMessage = L10n.text(
+                            "chat.hospital.send_unavailable",
+                            fallback: "无法确认院内会话状态，请检查网络后重试"
+                        )
+                    }
+                }
+                return
+            }
+        }
         guard detailViewModel.chatScenarioModels.isEmpty == false else {
             showNoAvailableChatModelAlert = true
             return
@@ -1034,7 +1143,37 @@ struct ChatView: View {
             sendsOriginalImagesToAI: sendsOriginalImagesToAITemporarily
         )
     }
-    
+
+    /// CHAT-000055：只读原因 → 用户可读文案。
+    private func hospitalReadOnlyMessage(for reason: String?) -> String {
+        switch reason {
+        case "agent_unpublished":
+            return L10n.text("chat.hospital.readonly.agent_unpublished", fallback: "该医生智能体已下架，历史对话可查看，无法继续提问")
+        case "member_access_revoked":
+            return L10n.text("chat.hospital.readonly.member_revoked", fallback: "就诊人权限已变更，无法继续提问")
+        default:
+            return L10n.text("chat.hospital.readonly.generic", fallback: "当前会话为只读状态，无法继续提问")
+        }
+    }
+
+    /// CHAT-000055 Q27：只读横幅（输入区上方固定展示）。
+    @ViewBuilder
+    private func hospitalReadOnlyBanner(reason: String?) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            Text(hospitalReadOnlyMessage(for: reason))
+                .font(.footnote)
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.leading)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background(Color.orange.opacity(0.12))
+    }
+
     private func updateOverlaySetting(
         temperature: Double? = nil,
         topP: Double? = nil,
@@ -1114,7 +1253,41 @@ struct ChatView: View {
             "chat.detail.new_thread_button.tap current=\(String(oldThreadID.uuidString.prefix(8))) isSending=\(stateStore.isSending)",
             module: .general
         )
-        
+
+        // CHAT-000054：点击“＋”前必须完成医院身份判定；判定失败阻断继承新建并展示错误。
+        var resolution = hospitalScopeResolution
+        if resolution == .undetermined {
+            resolution = await resolveHospitalScope(for: oldThreadID)
+            hospitalScopeResolution = resolution
+        }
+        switch resolution {
+        case .hospital(let scope):
+            guard let newHospitalThreadID = await createHospitalThreadInsideCurrentChatIfNeeded(
+                scope: scope,
+                from: oldThreadID
+            ) else {
+                if detailThreadCreationError == nil {
+                    detailThreadCreationError = L10n.text("chat.thread.create_failed", fallback: "新建对话失败，请稍后再试")
+                }
+                logger.warning(
+                    "chat.detail.new_thread_button.create_failed current=\(String(oldThreadID.uuidString.prefix(8))) hospital=1",
+                    module: .general
+                )
+                return
+            }
+            logger.info(
+                "chat.detail.new_thread_button.create_success old=\(String(oldThreadID.uuidString.prefix(8))) new=\(String(newHospitalThreadID.uuidString.prefix(8))) hospital=1",
+                module: .general
+            )
+            switchDetailThread(from: oldThreadID, to: newHospitalThreadID)
+            return
+        case .failed:
+            detailThreadCreationError = "无法确认院内会话身份，请检查网络后重试"
+            return
+        case .ordinary, .undetermined:
+            break
+        }
+
         guard let newThreadID = await listViewModel.createThread() else {
             detailThreadCreationError = L10n.text("chat.thread.create_failed", fallback: "新建对话失败，请稍后再试")
             logger.warning(
@@ -1129,6 +1302,120 @@ struct ChatView: View {
             module: .general
         )
         switchDetailThread(from: oldThreadID, to: newThreadID)
+    }
+
+    /// CHAT-000054：仅普通会话展示“对话列表”入口；
+    /// 医院会话与身份未明/判定失败时隐藏，避免跨入口泄露医院 Thread。
+    private var showsOrdinaryConversationListButton: Bool {
+        if case .ordinary = hospitalScopeResolution {
+            return true
+        }
+        return false
+    }
+
+    /// CHAT-000054：身份判定失败后的手动重试（alert 内“重试”按钮触发）。
+    @MainActor
+    private func retryHospitalScopeResolution() async {
+        let id = currentThreadID
+        let resolution = await resolveHospitalScope(for: id)
+        guard currentThreadID == id else { return }
+        hospitalScopeResolution = resolution
+        showHospitalScopeResolutionFailure = (resolution == .failed)
+    }
+
+    /// CHAT-000054：解析 thread 的医院会话身份。
+    /// 顺序：本地 scope → 本地新建标记（普通会话快速路径）→ 服务端 context 回源。
+    /// 服务端请求失败返回 `.failed`，由调用方阻断继承新建，不静默降级。
+    @MainActor
+    private func resolveHospitalScope(for threadID: UUID) async -> HospitalScopeResolution {
+        guard let hospitalCare, let accountID = listViewModel.signedInAccountID else {
+            return .ordinary
+        }
+        if let scope = hospitalCare.scopeStore.scope(for: threadID, accountID: accountID) {
+            return .hospital(scope)
+        }
+        // 本地刚新建的普通会话不可能有医院绑定，跳过服务端往返。
+        if stateStore.isThreadMarkedAsNewlyCreated(threadID) {
+            return .ordinary
+        }
+        do {
+            if let scope = try await hospitalCare.resolveScope.execute(threadID: threadID, accountID: accountID) {
+                return .hospital(scope)
+            }
+            return .ordinary
+        } catch {
+            if error is CancellationError {
+                return .undetermined
+            }
+            logger.warning(
+                "chat.detail.hospital_scope.resolve_failed thread=\(String(threadID.uuidString.prefix(8))) error=\(error.localizedDescription)",
+                module: .general
+            )
+            return .failed
+        }
+    }
+
+    /// CHAT-000055：回源医院会话 context（能力 + 知识 Manifest），驱动发送门禁与知识同步。
+    /// Q27/Q28：只读/禁发状态只能由该回源结果驱动；请求失败保持旧值，绝不本地猜测。
+    @MainActor
+    private func refreshHospitalConversationContext(threadID: UUID, scope: HospitalConversationScope) async {
+        guard let hospitalCare, let accountID = listViewModel.signedInAccountID else { return }
+        do {
+            // Q28：携带 scope 中的 memberID 让服务端一并校验成员归属（撤权 → 禁发能力）。
+            guard let result = try await hospitalCare.fetchContext.execute(
+                threadID: threadID,
+                memberID: scope.memberID
+            ) else {
+                // 404：服务端已无该医院会话绑定；保留本地能力，不主动降级当前页面。
+                return
+            }
+            // 切换 thread 后迟到的回包不得覆盖新会话状态。
+            guard currentThreadID == threadID else { return }
+            hospitalCapabilities = result.capabilities
+            hospitalKnowledgeManifest = result.manifest
+            // 知识同步：capabilities.canSyncKnowledge == false（下架）时 reconcile 内部直接返回。
+            await hospitalCare.knowledgeSync.reconcileWithManifest(
+                result.manifest,
+                agentID: scope.agentID,
+                capabilities: result.capabilities,
+                accountID: accountID
+            )
+        } catch {
+            if error is CancellationError { return }
+            logger.warning(
+                "chat.detail.hospital_context.refresh_failed thread=\(String(threadID.uuidString.prefix(8))) error=\(error.localizedDescription)",
+                module: .general
+            )
+        }
+    }
+
+    /// 医院会话内「新建对话」继承同一智能体，使用当前选中就诊人创建新线程。
+    @MainActor
+    private func createHospitalThreadInsideCurrentChatIfNeeded(
+        scope: HospitalConversationScope,
+        from oldThreadID: UUID
+    ) async -> UUID? {
+        guard let hospitalCare, let accountID = listViewModel.signedInAccountID else { return nil }
+        guard let memberID = listViewModel.memberContextStore.context.selectedMemberID else {
+            detailThreadCreationError = "请先选择就诊人"
+            return nil
+        }
+        do {
+            return try await hospitalCare.resolveOrCreate.execute(
+                agentID: scope.agentID,
+                memberID: memberID,
+                hospitalID: scope.hospitalID,
+                accountID: accountID,
+                recentThreadID: nil
+            )
+        } catch {
+            detailThreadCreationError = error.localizedDescription
+            logger.warning(
+                "chat.detail.new_thread_button.hospital_create_failed current=\(String(oldThreadID.uuidString.prefix(8))) error=\(error.localizedDescription)",
+                module: .general
+            )
+            return nil
+        }
     }
     
     /// CHAT-000030：当前详情内部切换 thread（同步全局 selectedThreadID、
@@ -1151,6 +1438,12 @@ struct ChatView: View {
         // 关闭参数弹层/重置消息内导航，避免保存或展示串到旧 thread
         activeParameterCard = nil
         messageNavigationCoordinator.reset()
+        // CHAT-000054：切换 thread 后重置医院身份判定，由 .task(id:) 重新解析。
+        hospitalScopeResolution = .undetermined
+        showHospitalScopeResolutionFailure = false
+        // CHAT-000055：能力与 Manifest 一并重置，避免旧会话门禁串到新会话。
+        hospitalCapabilities = nil
+        hospitalKnowledgeManifest = nil
         // 恢复新 thread 的卡片动作快照（forceReload 清掉旧 thread 遗留 UI 状态）
         restoreCardActionSnapshotIfNeeded(forceReload: true)
     }

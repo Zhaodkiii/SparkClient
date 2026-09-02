@@ -244,11 +244,25 @@ struct IOS26TabBarView: View {
                 }
                 .accessibilityLabel(L10n.text("knowledge.library.title"))
             }
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    Task { await createChatThread() }
-                } label: {
-                    Image(systemName: "plus.bubble")
+            if chatListViewModel.hospitalCatalogAvailable {
+                ToolbarItem(placement: .principal) {
+                    Picker("对话分段", selection: $chatListViewModel.chatListSegment) {
+                        ForEach(ChatListSegment.allCases, id: \.self) { segment in
+                            Text(segment.localizedTitle).tag(segment)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(minWidth: 220)
+                    .fixedSize()
+                }
+            }
+            if chatListViewModel.hospitalCatalogAvailable == false || chatListViewModel.chatListSegment == .conversations {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        Task { await createChatThread() }
+                    } label: {
+                        Image(systemName: "plus.bubble")
+                    }
                 }
             }
         case .nutrition:

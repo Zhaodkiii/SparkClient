@@ -1,11 +1,26 @@
 import Combine
 import Foundation
 
+/// CHAT-000054：对话 Tab 分段：院内名医 / 普通对话。
+enum ChatListSegment: String, CaseIterable, Hashable, Sendable {
+    case hospitalAgents
+    case conversations
+
+    var localizedTitle: String {
+        switch self {
+        case .hospitalAgents:
+            return L10n.text("chat.segment.hospital_agents", fallback: "院内名医")
+        case .conversations:
+            return L10n.text("chat.segment.conversations", fallback: "普通对话")
+        }
+    }
+}
+
 @MainActor
 final class ChatListViewModel: ObservableObject {
     private let stateStore: ChatStateStore
-    private let sessionStore: AppSessionStore
-    private let memberContextStore: MemberContextStore
+    let sessionStore: AppSessionStore
+    let memberContextStore: MemberContextStore
     private let loadMembersUseCase: LoadMembersUseCase
     private let selectMemberUseCase: SelectMemberUseCase
     private let selectedMemberIDPersistence: any SelectedMemberIDPersisting
@@ -17,10 +32,17 @@ final class ChatListViewModel: ObservableObject {
     private let aiSettingsRepository: any AISettingsRepository
     private let chatSyncSupervisor: ChatSyncSupervisor
     private let notificationClient: any NotificationClient
+    /// CHAT-000054：医院会话身份记忆；普通对话投影据此排除医院 Thread。
+    private let hospitalScopeStore: HospitalConversationScopeStore?
     private let logger: Logger
     private var hasLoadedForList = false
     private var didAttemptEmptyListRemoteRefresh = false
     private var cancellables = Set<AnyCancellable>()
+
+    /// CHAT-000054：对话 Tab 当前分段（院内名医 / 普通对话）。
+    @Published var chatListSegment: ChatListSegment = .hospitalAgents
+    /// CHAT-000054：医院 Demo 目录是否可用；不可用时隐藏分段选择器，只显示普通对话。
+    @Published var hospitalCatalogAvailable: Bool = true
 
     /// 公共“获取可复用 Thread，必要时创建”编排器（CHAT-000041）。
     /// - Note: 单飞门在 account 级共享实例上保持，账号切换由 `resetForSessionSwitch()` 清空。
@@ -69,6 +91,7 @@ final class ChatListViewModel: ObservableObject {
         aiSettingsRepository: any AISettingsRepository,
         chatSyncSupervisor: ChatSyncSupervisor,
         notificationClient: any NotificationClient,
+        hospitalScopeStore: HospitalConversationScopeStore? = nil,
         logger: Logger = ConsoleLogger()
     ) {
         self.stateStore = stateStore
@@ -85,6 +108,7 @@ final class ChatListViewModel: ObservableObject {
         self.aiSettingsRepository = aiSettingsRepository
         self.chatSyncSupervisor = chatSyncSupervisor
         self.notificationClient = notificationClient
+        self.hospitalScopeStore = hospitalScopeStore
         self.logger = logger
 
         NotificationCenter.default.publisher(for: .sparkChatDatabaseDidChange)
@@ -157,6 +181,13 @@ final class ChatListViewModel: ObservableObject {
         let snapshot = await aiSettingsRepository.loadSnapshot()
         guard snapshot.chatComposerStartupPreferences.memberProfileEnabled else { return nil }
         return memberContextStore.context.selectedMemberID
+    }
+
+    var signedInAccountID: Int64? {
+        if case .signedIn(let session) = sessionStore.state {
+            return session.accountID
+        }
+        return nil
     }
 
     /// CHAT-000030：返回新 threadID 供详情页内部切换使用；列表页入口可忽略返回值。
@@ -237,10 +268,31 @@ final class ChatListViewModel: ObservableObject {
         stateStore.setSelectedThreadID(threadID)
     }
 
+    /// CHAT-000054：普通对话投影。所有可识别为医院会话的 Thread（本地 scope
+    /// 或由服务端回源恢复的 scope）必须从普通列表与全局搜索中排除；
+    /// 这些会话只能从院内名医目录或目录内“最近咨询”进入。
+    var ordinaryThreadItems: [ChatThreadListItem] {
+        guard let hospitalScopeStore, let accountID = signedInAccountID else {
+            return stateStore.threadItems
+        }
+        return Self.excludingHospitalThreads(stateStore.threadItems) {
+            hospitalScopeStore.scope(for: $0, accountID: accountID) != nil
+        }
+    }
+
+    /// CHAT-000054：普通对话投影的纯过滤逻辑（独立出来便于单测）。
+    static func excludingHospitalThreads(
+        _ items: [ChatThreadListItem],
+        isHospitalThread: (UUID) -> Bool
+    ) -> [ChatThreadListItem] {
+        items.filter { isHospitalThread($0.id) == false }
+    }
+
     func search(text: String) -> [ChatThreadListItem] {
+        let source = ordinaryThreadItems
         let query = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard query.isEmpty == false else { return stateStore.threadItems }
-        return stateStore.threadItems.filter { item in
+        guard query.isEmpty == false else { return source }
+        return source.filter { item in
             item.thread.listDisplayTitle.lowercased().contains(query)
             || item.latestMessagePreview.lowercased().contains(query)
         }

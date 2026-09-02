@@ -294,6 +294,9 @@ extension ChatMessageBlock {
                 metricSectionsProvider: context.guideMetricSectionsProvider
             )
 
+        case .hospitalDoctorIntroCard(let payload):
+            HospitalDoctorIntroCardView(payload: payload)
+
         }
         }
     }
@@ -390,6 +393,8 @@ extension ChatMessageBlock {
             return "正在整理联网搜索参考..."
         case .chatGuideCard:
             return "正在准备健康引导卡片..."
+        case .hospitalDoctorIntroCard:
+            return "正在准备医生简介..."
         default:
             return "正在整理结果..."
         }

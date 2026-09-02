@@ -1647,6 +1647,7 @@ actor CoreDataChatStore {
             block.kind == .healthResourceReference
                 || block.kind == .medicalDisclaimerCard
                 || block.kind == .chatGuideCard
+                || block.kind == .hospitalDoctorIntroCard
         }
         let remotePreservedIDs = Set(
             remote

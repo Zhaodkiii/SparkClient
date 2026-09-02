@@ -56,6 +56,7 @@ struct ChatConversationListPage: View {
     /// 引导卡片滑块跳转健康首页的构造器（CHAT-000025）
     /// - Note: 由 App 宿主注入；nil（旧宿主 / 未注入）时滑块降级为纯展示面板，不响应点击跳转
     var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
+    @Environment(\.hospitalCare) private var hospitalCare
 
     /// 会话选择回调。非 nil 时页面作为 Sheet 内的会话选择器使用：
     /// 隐藏普通列表页头部，点击卡片仅回传 threadID，不执行 NavigationDestination。
@@ -108,11 +109,10 @@ struct ChatConversationListPage: View {
             await listViewModel.loadForListIfNeeded()
             // Sheet 选择模式只负责展示和回传，不触发列表页启动自动导航。
             guard isThreadSelectionMode == false else { return }
+            if await probeHospitalCatalogIfNeeded() {
+                return
+            }
             await handleInitialAutoNavigationIfNeeded()
-        }
-        // 下拉刷新
-        .refreshable {
-            await listViewModel.refreshThreads()
         }
         // 无可用模型警告弹窗
         .alert(L10n.text("chat.list.no_available_model.title"), isPresented: $showNoAvailableChatModelAlert) {
@@ -198,6 +198,9 @@ struct ChatConversationListPage: View {
             }
         }
         .listStyle(.plain)
+        .refreshable {
+            await listViewModel.refreshThreads()
+        }
         // 对齐主流聊天应用交互：列表滚动时交互式收起键盘
         .chatScrollDismissesKeyboardInteractively()
         // 自定义拖拽手势：拖拽开始时立即收起键盘，参考 Signal 交互设计
@@ -221,35 +224,36 @@ struct ChatConversationListPage: View {
             conversationList
                 .toolbar(.hidden, for: .navigationBar)
         } else {
-            conversationList
-                .navigationTitle(L10n.text("chat.title"))
+            chatTabContent
+                .navigationTitle(listViewModel.hospitalCatalogAvailable ? "" : L10n.text("chat.title"))
                 .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+
+    private var showsOrdinaryConversationList: Bool {
+        listViewModel.hospitalCatalogAvailable == false || listViewModel.chatListSegment == .conversations
+    }
+
+    @ViewBuilder
+    private var chatTabContent: some View {
+        if showsOrdinaryConversationList {
+            conversationList
                 .searchable(text: $searchText, prompt: L10n.text("chat.list.search.placeholder"))
-                .toolbar {
-                    // 左侧导航栏按钮：知识库入口
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        MainNavigationLink {
-                            KnowledgeLibraryView(
-                                dependencies: knowledgeDependencies,
-                                viewModel: knowledgeViewModel
-                            )
-                        } label: {
-                            Image(systemName: "backpack.fill")
-                        }
-                        .accessibilityLabel(L10n.text("knowledge.library.title"))
-                    }
-                    // 右侧导航栏按钮：新建会话
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        Button {
-                            Task {
-                                await createThreadIfAvailable(source: .manualNewThread)
-                            }
-                        } label: {
-                            Image(systemName: "plus.bubble")
-                        }
-                        .accessibilityLabel(L10n.text("chat.thread.new", fallback: "新建对话"))
+        } else if let hospitalCare {
+            HospitalAgentDirectoryView(
+                dependencies: hospitalCare,
+                memberContextStore: listViewModel.memberContextStore,
+                sessionStore: listViewModel.sessionStore,
+                onOpenThread: { threadID in
+                    pendingThreadNavigation = threadID
+                    Task {
+                        await listViewModel.refreshThreads()
                     }
                 }
+            )
+        } else {
+            conversationList
+                .searchable(text: $searchText, prompt: L10n.text("chat.list.search.placeholder"))
         }
     }
 
@@ -457,6 +461,32 @@ struct ChatConversationListPage: View {
         editingIconName = thread.iconName
         editingIconColorName = thread.iconColorName
         isEditingThreadAppearance = true
+    }
+
+    /// 医院列表可解析出首家医院则开启「院内名医」分段并默认选中；
+    /// CHAT-000055 Q31：医院列表为空或无缓存加载失败 → 自动切换普通对话，不新建 Thread。
+    /// 同时在后台回填全部医院 Thread 的 scope，供普通对话投影排除医院会话。
+    private func probeHospitalCatalogIfNeeded() async -> Bool {
+        guard let hospitalCare, let accountID = listViewModel.signedInAccountID else {
+            listViewModel.hospitalCatalogAvailable = false
+            listViewModel.chatListSegment = .conversations
+            return false
+        }
+        let resolution = await hospitalCare.resolveDemoHospital.execute(accountID: accountID)
+        switch resolution {
+        case .resolved:
+            listViewModel.hospitalCatalogAvailable = true
+            listViewModel.chatListSegment = .hospitalAgents
+        case .missing, .failed:
+            // Q31：仅医院列表空/无缓存失败才回退；智能体目录单次失败不在此列。
+            listViewModel.hospitalCatalogAvailable = false
+            listViewModel.chatListSegment = .conversations
+        }
+        hasHandledInitialAutoNavigation = true
+        Task {
+            await hospitalCare.hydrateScopes.execute(accountID: accountID)
+        }
+        return listViewModel.hospitalCatalogAvailable
     }
 
     /// 创建新会话（如果有可用模型）

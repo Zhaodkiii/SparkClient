@@ -43,6 +43,12 @@ final class AppContainer {
     let taskManager: TaskManager
     /// 任务同步 facade：根生命周期只依赖协议，不直接触碰 `TaskManager.shared`。
     let taskRuntime: any TaskRuntimeSyncing
+    /// 医院目录账号级内存缓存。
+    let hospitalCatalogCache = HospitalCatalogMemoryCache()
+    /// 医院会话 threadID → agent/member 映射，账号隔离持久化。
+    let hospitalConversationScopeStore = HospitalConversationScopeStore()
+    /// CHAT-000055：医院知识只读仓库（账号隔离持久化，与个人知识库完全分离）。
+    let hospitalKnowledgeRepository = HospitalKnowledgeUserDefaultsRepository()
 
     // MARK: - 路由与启动
     //
@@ -584,7 +590,8 @@ final class AppContainer {
             updateThreadMetadataUseCase: UpdateChatThreadMetadataUseCase(repository: chat.chatRepository),
             aiSettingsRepository: ai.aiSettingsRepository,
             chatSyncSupervisor: chat.chatSyncSupervisor,
-            notificationClient: notification.notificationClient
+            notificationClient: notification.notificationClient,
+            hospitalScopeStore: hospitalConversationScopeStore
         )
         let guideQuestionHealthRepository = HealthResourceRepository(medicalQueryAPI: backend.medicalQuery)
         let guideQuestionGenerationUseCase = ChatGuideQuestionGenerationUseCase(
@@ -806,6 +813,9 @@ final class AppContainer {
         cachedAccountManagementViewModel = nil
         aiSettingsViewModelCache.clear()
         mainTabDependenciesCache.clear()
+        hospitalCatalogCache.clearAll()
+        hospitalConversationScopeStore.clearAll()
+        hospitalKnowledgeRepository.resetInMemoryState()
         logger.info("账号级 ViewModel 与主 Tab 依赖缓存已清理", module: .general)
     }
 
@@ -937,10 +947,21 @@ final class AppContainer {
             memberContextStore: memberContextStore,
             pushAdapter: pushAdapter,
             externalMedicalDocumentImportCoordinator: externalMedicalDocumentImportCoordinator,
-            launchIntentCoordinator: launchIntentCoordinator
+            launchIntentCoordinator: launchIntentCoordinator,
+            hospitalCareDependencies: makeHospitalCareDependencies()
         )
         mainTabDependenciesCache.store(created, ownerAccountID: ownerAccountID)
         return created
+    }
+
+    func makeHospitalCareDependencies() -> HospitalCareFeatureDependencies {
+        HospitalCareAssembly(
+            backend: backend,
+            catalogCache: hospitalCatalogCache,
+            scopeStore: hospitalConversationScopeStore,
+            knowledgeRepository: hospitalKnowledgeRepository,
+            logger: logger
+        ).makeFacade()
     }
 
     /// AI 设置：本地偏好读写 + 可选远程模型列表（`backend.aiConfig`）。

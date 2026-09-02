@@ -787,6 +787,12 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
     /// - 插入失败（或无 builder）：返回 false，调用方不得启动科普问题生成。
     @discardableResult
     func ensureFirstGuideCardInsertedForNewThreadIfNeeded(threadID: UUID) async -> Bool {
+        let existing = stateStore.persistedMessages(for: threadID)
+        if existing.contains(where: { message in
+            message.role == .system && message.blocks.contains { $0.kind == .hospitalDoctorIntroCard }
+        }) {
+            return false
+        }
         let output = await ensureGuideSystemMessageUseCase.execute(threadID: threadID)
         guard let target = output.target else {
             return false

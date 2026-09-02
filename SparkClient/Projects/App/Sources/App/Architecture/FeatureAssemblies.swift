@@ -253,6 +253,7 @@ struct MainTabDependencies {
     let pushAdapter: PushAdapter
     let externalMedicalDocumentImportCoordinator: ExternalMedicalDocumentImportCoordinator
     let launchIntentCoordinator: LaunchIntentCoordinator
+    let hospitalCareDependencies: HospitalCareFeatureDependencies
 }
 
 struct MainTabFeatureDependencies {
@@ -407,6 +408,55 @@ struct OnboardingAssembly: FeatureAssembly {
         return OnboardingFeatureDependencies(
             store: store,
             makeFlowViewModel: makeFlowViewModel
+        )
+    }
+}
+
+struct HospitalCareAssembly: FeatureAssembly {
+    let backend: Backend
+    let catalogCache: HospitalCatalogMemoryCache
+    let scopeStore: HospitalConversationScopeStore
+    let knowledgeRepository: any HospitalKnowledgeRepository
+    let logger: Logger
+    let scope: DependencyScope = .accountScoped
+
+    func makeFacade() -> HospitalCareFeatureDependencies {
+        logger.debug("HospitalCareAssembly 输出医院智能体 facade", module: .general)
+        let remoteAPI = backend.hospitalCare
+        return HospitalCareFeatureDependencies(
+            remoteAPI: remoteAPI,
+            catalogCache: catalogCache,
+            scopeStore: scopeStore,
+            loadDirectory: LoadHospitalAgentDirectoryUseCase(
+                remoteAPI: remoteAPI,
+                catalogCache: catalogCache
+            ),
+            resolveDemoHospital: ResolveDemoHospitalUseCase(
+                remoteAPI: remoteAPI,
+                catalogCache: catalogCache
+            ),
+            resolveOrCreate: ResolveOrCreateHospitalConversationUseCase(
+                remoteAPI: remoteAPI,
+                scopeStore: scopeStore
+            ),
+            resolveScope: ResolveHospitalConversationScopeUseCase(
+                remoteAPI: remoteAPI,
+                scopeStore: scopeStore
+            ),
+            hydrateScopes: HydrateHospitalConversationScopesUseCase(
+                remoteAPI: remoteAPI,
+                scopeStore: scopeStore
+            ),
+            loadDoctorProfile: LoadHospitalDoctorProfileUseCase(
+                remoteAPI: remoteAPI,
+                catalogCache: catalogCache
+            ),
+            fetchContext: FetchHospitalConversationContextUseCase(remoteAPI: remoteAPI),
+            knowledgeSync: HospitalKnowledgeSyncCoordinator(
+                remoteAPI: remoteAPI,
+                repository: knowledgeRepository
+            ),
+            knowledgeRepository: knowledgeRepository
         )
     }
 }

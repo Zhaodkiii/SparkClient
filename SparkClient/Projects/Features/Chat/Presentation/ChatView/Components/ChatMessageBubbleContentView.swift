@@ -601,7 +601,7 @@ private enum ChatMessageTimelineProjector {
 
     nonisolated private static func isToolPresentationBlock(_ kind: ChatMessageBlockKind) -> Bool {
         switch kind {
-        case .tool, .text, .deepThought, .error, .assistantStatusCard, .chatGuideCard:
+        case .tool, .text, .deepThought, .error, .assistantStatusCard, .chatGuideCard, .hospitalDoctorIntroCard:
             return false
         case .imageGallery,
                 .fileAttachments,

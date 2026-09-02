@@ -283,6 +283,19 @@ struct MainTabCoordinatorView: View {
                 }
                 .accessibilityLabel(L10n.text("knowledge.library.title"))
             }
+            if chatListViewModel.hospitalCatalogAvailable {
+                ToolbarItem(placement: .principal) {
+                    Picker("对话分段", selection: $chatListViewModel.chatListSegment) {
+                        ForEach(ChatListSegment.allCases, id: \.self) { segment in
+                            Text(segment.localizedTitle).tag(segment)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .frame(minWidth: 220)
+                    .fixedSize()
+                    .accessibilityLabel("院内名医或普通对话")
+                }
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
                     Task { await createChatThread() }
