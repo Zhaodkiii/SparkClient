@@ -40,6 +40,9 @@ struct SendChatMessageUseCase: Sendable {
     }
 
     /// 发送消息核心业务方法：处理输入、上传附件、保存消息、调用AI生成、返回对话快照
+    /// - Parameter aiReplySuppressed: CHAT-000057 38.6/L1942：医生接管（canSend=true、canUseAI=false）
+    ///   时为 true —— 仅持久化并上送患者消息（outbox 同步送达服务端/医生端），
+    ///   不创建助手占位、不触发 AI 编排、不要求可用 AI 模型。
     func execute(
         threadID: UUID?,                     // 对话线程ID
         memberID: Int? = nil,                // 成员ID
@@ -53,6 +56,7 @@ struct SendChatMessageUseCase: Sendable {
         modelReasoning: ChatModelReasoningContext = .unknown,      // 模型推理上下文
         smallTask: SmallTask? = nil,          // 小任务（可选）
         sendsOriginalImagesToAI: Bool = false, // 本次多模态发送是否使用原图
+        aiReplySuppressed: Bool = false,      // 医生接管中：只发送患者消息，AI 不回复
         cancellationToken: AIRuntimeCancellationToken? = nil,      // 取消令牌
         onImageUploadProgress: (@Sendable (UUID, Double) -> Void)? = nil,           // 图片上传进度
         onUserMessagePersisted: (@Sendable (_ snapshot: ChatThreadSnapshot) async -> Void)? = nil,  // 用户消息落库回调
@@ -91,6 +95,21 @@ struct SendChatMessageUseCase: Sendable {
                 firstUserInput: smallTask?.name ?? sanitizedInput,
                 defaultImageDeliveryRaw: catalogSnapshot.defaultThreadImageDeliveryModeRaw
             )
+
+            // CHAT-000057 38.6/L1942：医生接管中（canSend=true、canUseAI=false）仅上送患者消息，
+            // 不解析/要求 AI 模型、不创建助手占位、不触发 AI 编排；消息经 outbox 同步送达医生端。
+            if aiReplySuppressed {
+                return try await executeMessageOnlySend(
+                    thread: thread,
+                    sanitizedInput: sanitizedInput,
+                    composerAttachments: composerAttachments,
+                    preparedAttachments: preparedAttachments,
+                    healthResourceRefs: healthResourceRefs,
+                    smallTask: smallTask,
+                    onImageUploadProgress: onImageUploadProgress,
+                    onUserMessagePersisted: onUserMessagePersisted
+                )
+            }
             
             // 模型名称清洗处理
             let trimmedSelected = selectedChatModelName?.trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
@@ -147,162 +166,15 @@ struct SendChatMessageUseCase: Sendable {
                 && supportsMultimodal
                 && composerAttachments.isEmpty == false
 
-            // 把预处理附件转成字典，方便按ID查找
-            let preparedByID = Dictionary(uniqueKeysWithValues: preparedAttachments.map { ($0.previewID, $0) })
-            var chatAttachments: [ChatAttachment] = []
-
-            // 遍历所有编辑区附件，上传并组装成可发送的聊天附件
-            for preview in composerAttachments {
-                // 如果附件已经预处理完成，直接复用
-                if let prepared = preparedByID[preview.id] {
-                    let publicURL = await fileTransferService.publicHTTPSURLForObjectKey(prepared.record.objectKey)
-                    chatAttachments.append(
-                        ChatSendAttachmentAssembly.makeAttachment(
-                            kind: prepared.kind,
-                            previewID: preview.id,
-                            record: prepared.record,
-                            ocrText: prepared.ocrText,
-                            publicFullURL: publicURL
-                        )
-                    )
-                    continue
-                }
-
-                // 上传附件到文件服务
-                let record = try await fileTransferService.upload(
-                    ManagedFileUploadPayload(
-                        data: preview.data,
-                        fileName: preview.displayName,
-                        businessType: ChatSendAttachmentAssembly.chatAttachmentBusinessType,
-                        businessId: preview.id.uuidString,
-                        isPublic: false,
-                        onUploadProgress: { progress in
-                            onImageUploadProgress?(preview.id, progress)
-                        }
-                    )
-                )
-                
-                // 图片进行OCR识别
-                let ocrResult: OCRRecognition
-                if preview.kind == .image {
-                    ocrResult = try await ocrOrchestrator.recognize(
-                        imageData: preview.data,
-                        options: .fastPreview
-                    )
-                } else {
-                    ocrResult = OCRRecognition(text: "", selectedEngine: "none", outputs: [])
-                }
-                
-                // 获取公开访问URL
-                let publicURL = await fileTransferService.publicHTTPSURLForObjectKey(record.objectKey)
-                // 组装附件模型
-                chatAttachments.append(
-                    ChatSendAttachmentAssembly.makeAttachment(
-                        kind: preview.kind,
-                        previewID: preview.id,
-                        record: record,
-                        ocrText: ocrResult.text,
-                        publicFullURL: publicURL
-                    )
-                )
-            }
-
-            // 小任务：构建卡片附件
-            let smallTaskCardPayload = smallTask.map(ChatSmallTaskMessageCardPayload.init(task:))
-            let smallTaskCardAttachment = smallTaskCardPayload?.encodedString().map {
-                ChatAttachment(type: .smallTaskCard, text: $0)
-            }
-            // 小任务展示内容
-            let smallTaskDisplayContent = smallTask.map { task in
-                let brief = task.brief.trimmingCharacters(in: .whitespacesAndNewlines)
-                return brief.isEmpty ? "小任务：\(task.name)" : "小任务：\(task.name)\n\(brief)"
-            }
-
-            // 最终附件 = 普通附件 + 小任务卡片
-            let persistedAttachments = smallTaskCardAttachment.map { chatAttachments + [$0] } ?? chatAttachments
-            let persistedContent = smallTask == nil ? sanitizedInput : (smallTaskDisplayContent ?? "")
-            let now = Date()
-            var userBlocks: [ChatMessageBlock] = []
-            let trimmedPersistedContent = persistedContent.trimmingCharacters(in: .whitespacesAndNewlines)
-            if trimmedPersistedContent.isEmpty == false {
-                userBlocks.append(
-                    ChatMessageBlock(
-                        kind: .text,
-                        text: persistedContent,
-                        createdAt: now,
-                        updatedAt: now
-                    )
-                )
-            }
-            let galleryAttachments = persistedAttachments.filter { $0.type == .image }
-            let fileAttachments = persistedAttachments.filter { $0.type == .pdf || $0.type == .file }
-            if galleryAttachments.isEmpty == false {
-                userBlocks.append(
-                    ChatMessageBlock(
-                        kind: .imageGallery,
-                        attachments: galleryAttachments,
-                        createdAt: now,
-                        updatedAt: now
-                    )
-                )
-            }
-            if fileAttachments.isEmpty == false {
-                userBlocks.append(
-                    ChatMessageBlock(
-                        kind: .fileAttachments,
-                        attachments: fileAttachments,
-                        createdAt: now,
-                        updatedAt: now
-                    )
-                )
-            }
-            if let smallTaskCardPayload {
-                userBlocks.append(
-                    ChatMessageBlock(
-                        kind: .smallTaskCard,
-                        smallTaskCard: smallTaskCardPayload,
-                        createdAt: now,
-                        updatedAt: now
-                    )
-                )
-            }
-
-            let clientMessageID = UUID()
-            for (index, ref) in healthResourceRefs.enumerated() {
-                let payload = ref.toMessagePayload(refIndex: index + 1)
-                userBlocks.append(
-                    ChatMessageBlock(
-                        id: ChatStableBlockID.healthResource(
-                            messageID: clientMessageID,
-                            resourceType: payload.resourceType,
-                            resourceID: payload.resourceId,
-                            memberID: payload.memberId
-                        ),
-                        kind: .healthResourceReference,
-                        healthResourceReference: payload,
-                        orderKey: Double(1000 + index),
-                        createdAt: now,
-                        updatedAt: now
-                    )
-                )
-            }
-
-            // 保存用户消息到本地数据库
-            _ = try await repository.appendMessage(
-                ChatMessage(
-                    threadID: thread.id,
-                    role: .user,
-                    blocks: userBlocks,
-                    clientMessageID: clientMessageID,
-                    serverMessageID: nil,
-                    deliveryState: .pending,
-                    modelName: "user"
-                )
-            )
-            let healthBlockCount = userBlocks.filter { $0.kind == .healthResourceReference }.count
-            logger.debug(
-                "用户消息已入库，thread=\(shortID(thread.id)), clientMessageID=\(shortID(clientMessageID)), blocks=\(userBlocks.count), healthBlocks=\(healthBlockCount)",
-                module: .general
+            // 上传附件、组装消息块并落库用户消息（与消息单发链路共用）
+            try await uploadAndPersistUserMessage(
+                thread: thread,
+                sanitizedInput: sanitizedInput,
+                composerAttachments: composerAttachments,
+                preparedAttachments: preparedAttachments,
+                healthResourceRefs: healthResourceRefs,
+                smallTask: smallTask,
+                onImageUploadProgress: onImageUploadProgress
             )
 
             // 加载当前对话所有历史消息
@@ -664,6 +536,211 @@ struct SendChatMessageUseCase: Sendable {
             logger.error("regenerateReply 失败，cost=\(format(cost))s error=\(error.localizedDescription)", module: .general)
             throw error
         }
+    }
+
+    // MARK: - CHAT-000057 医生接管：消息单发（AI 不回复）
+
+    /// CHAT-000057 38.6/L1942：医生接管中仅持久化并上送患者消息，返回当前快照。
+    /// 不创建助手占位消息、不调用 AI 编排、不生成会话标题；消息经既有 outbox 链路同步服务端。
+    private func executeMessageOnlySend(
+        thread: ChatThread,
+        sanitizedInput: String,
+        composerAttachments: [ChatComposerAttachmentPreview],
+        preparedAttachments: [ChatPreparedAttachment],
+        healthResourceRefs: [HealthResourceRef],
+        smallTask: SmallTask?,
+        onImageUploadProgress: (@Sendable (UUID, Double) -> Void)?,
+        onUserMessagePersisted: (@Sendable (_ snapshot: ChatThreadSnapshot) async -> Void)?
+    ) async throws -> ChatThreadSnapshot {
+        try await uploadAndPersistUserMessage(
+            thread: thread,
+            sanitizedInput: sanitizedInput,
+            composerAttachments: composerAttachments,
+            preparedAttachments: preparedAttachments,
+            healthResourceRefs: healthResourceRefs,
+            smallTask: smallTask,
+            onImageUploadProgress: onImageUploadProgress
+        )
+        let history = await repository.loadMessages(threadID: thread.id, limit: nil, before: nil)
+        if let onUserMessagePersisted {
+            await onUserMessagePersisted(ChatThreadSnapshot(thread: thread, messages: history))
+        }
+        logger.info(
+            "医生接管中消息已发送（AI 不回复），thread=\(shortID(thread.id))",
+            module: .general
+        )
+        return ChatThreadSnapshot(thread: thread, messages: history)
+    }
+
+    // MARK: - 用户消息落库（主链路与消息单发链路共用）
+
+    /// 上传编辑区附件（图片附 OCR）、组装消息块并落库用户消息（deliveryState=.pending，由 outbox 接管网络同步）。
+    private func uploadAndPersistUserMessage(
+        thread: ChatThread,
+        sanitizedInput: String,
+        composerAttachments: [ChatComposerAttachmentPreview],
+        preparedAttachments: [ChatPreparedAttachment],
+        healthResourceRefs: [HealthResourceRef],
+        smallTask: SmallTask?,
+        onImageUploadProgress: (@Sendable (UUID, Double) -> Void)?
+    ) async throws {
+        // 把预处理附件转成字典，方便按ID查找
+        let preparedByID = Dictionary(uniqueKeysWithValues: preparedAttachments.map { ($0.previewID, $0) })
+        var chatAttachments: [ChatAttachment] = []
+
+        // 遍历所有编辑区附件，上传并组装成可发送的聊天附件
+        for preview in composerAttachments {
+            // 如果附件已经预处理完成，直接复用
+            if let prepared = preparedByID[preview.id] {
+                let publicURL = await fileTransferService.publicHTTPSURLForObjectKey(prepared.record.objectKey)
+                chatAttachments.append(
+                    ChatSendAttachmentAssembly.makeAttachment(
+                        kind: prepared.kind,
+                        previewID: preview.id,
+                        record: prepared.record,
+                        ocrText: prepared.ocrText,
+                        publicFullURL: publicURL
+                    )
+                )
+                continue
+            }
+
+            // 上传附件到文件服务
+            let record = try await fileTransferService.upload(
+                ManagedFileUploadPayload(
+                    data: preview.data,
+                    fileName: preview.displayName,
+                    businessType: ChatSendAttachmentAssembly.chatAttachmentBusinessType,
+                    businessId: preview.id.uuidString,
+                    isPublic: false,
+                    onUploadProgress: { progress in
+                        onImageUploadProgress?(preview.id, progress)
+                    }
+                )
+            )
+
+            // 图片进行OCR识别
+            let ocrResult: OCRRecognition
+            if preview.kind == .image {
+                ocrResult = try await ocrOrchestrator.recognize(
+                    imageData: preview.data,
+                    options: .fastPreview
+                )
+            } else {
+                ocrResult = OCRRecognition(text: "", selectedEngine: "none", outputs: [])
+            }
+
+            // 获取公开访问URL
+            let publicURL = await fileTransferService.publicHTTPSURLForObjectKey(record.objectKey)
+            // 组装附件模型
+            chatAttachments.append(
+                ChatSendAttachmentAssembly.makeAttachment(
+                    kind: preview.kind,
+                    previewID: preview.id,
+                    record: record,
+                    ocrText: ocrResult.text,
+                    publicFullURL: publicURL
+                )
+            )
+        }
+
+        // 小任务：构建卡片附件
+        let smallTaskCardPayload = smallTask.map(ChatSmallTaskMessageCardPayload.init(task:))
+        let smallTaskCardAttachment = smallTaskCardPayload?.encodedString().map {
+            ChatAttachment(type: .smallTaskCard, text: $0)
+        }
+        // 小任务展示内容
+        let smallTaskDisplayContent = smallTask.map { task in
+            let brief = task.brief.trimmingCharacters(in: .whitespacesAndNewlines)
+            return brief.isEmpty ? "小任务：\(task.name)" : "小任务：\(task.name)\n\(brief)"
+        }
+
+        // 最终附件 = 普通附件 + 小任务卡片
+        let persistedAttachments = smallTaskCardAttachment.map { chatAttachments + [$0] } ?? chatAttachments
+        let persistedContent = smallTask == nil ? sanitizedInput : (smallTaskDisplayContent ?? "")
+        let now = Date()
+        var userBlocks: [ChatMessageBlock] = []
+        let trimmedPersistedContent = persistedContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedPersistedContent.isEmpty == false {
+            userBlocks.append(
+                ChatMessageBlock(
+                    kind: .text,
+                    text: persistedContent,
+                    createdAt: now,
+                    updatedAt: now
+                )
+            )
+        }
+        let galleryAttachments = persistedAttachments.filter { $0.type == .image }
+        let fileAttachments = persistedAttachments.filter { $0.type == .pdf || $0.type == .file }
+        if galleryAttachments.isEmpty == false {
+            userBlocks.append(
+                ChatMessageBlock(
+                    kind: .imageGallery,
+                    attachments: galleryAttachments,
+                    createdAt: now,
+                    updatedAt: now
+                )
+            )
+        }
+        if fileAttachments.isEmpty == false {
+            userBlocks.append(
+                ChatMessageBlock(
+                    kind: .fileAttachments,
+                    attachments: fileAttachments,
+                    createdAt: now,
+                    updatedAt: now
+                )
+            )
+        }
+        if let smallTaskCardPayload {
+            userBlocks.append(
+                ChatMessageBlock(
+                    kind: .smallTaskCard,
+                    smallTaskCard: smallTaskCardPayload,
+                    createdAt: now,
+                    updatedAt: now
+                )
+            )
+        }
+
+        let clientMessageID = UUID()
+        for (index, ref) in healthResourceRefs.enumerated() {
+            let payload = ref.toMessagePayload(refIndex: index + 1)
+            userBlocks.append(
+                ChatMessageBlock(
+                    id: ChatStableBlockID.healthResource(
+                        messageID: clientMessageID,
+                        resourceType: payload.resourceType,
+                        resourceID: payload.resourceId,
+                        memberID: payload.memberId
+                    ),
+                    kind: .healthResourceReference,
+                    healthResourceReference: payload,
+                    orderKey: Double(1000 + index),
+                    createdAt: now,
+                    updatedAt: now
+                )
+            )
+        }
+
+        // 保存用户消息到本地数据库
+        _ = try await repository.appendMessage(
+            ChatMessage(
+                threadID: thread.id,
+                role: .user,
+                blocks: userBlocks,
+                clientMessageID: clientMessageID,
+                serverMessageID: nil,
+                deliveryState: .pending,
+                modelName: "user"
+            )
+        )
+        let healthBlockCount = userBlocks.filter { $0.kind == .healthResourceReference }.count
+        logger.debug(
+            "用户消息已入库，thread=\(shortID(thread.id)), clientMessageID=\(shortID(clientMessageID)), blocks=\(userBlocks.count), healthBlocks=\(healthBlockCount)",
+            module: .general
+        )
     }
 
     private func buildAssistantBlocks(

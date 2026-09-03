@@ -788,10 +788,13 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         }
     }
 
-    func startSendingCurrentDraft(sendsOriginalImagesToAI: Bool = false) {
+    func startSendingCurrentDraft(sendsOriginalImagesToAI: Bool = false, suppressAIReply: Bool = false) {
         guard currentGenerationTask == nil else { return }
         currentGenerationTask = Task { [weak self] in
-            await self?.sendCurrentDraft(sendsOriginalImagesToAI: sendsOriginalImagesToAI)
+            await self?.sendCurrentDraft(
+                sendsOriginalImagesToAI: sendsOriginalImagesToAI,
+                suppressAIReply: suppressAIReply
+            )
         }
     }
 
@@ -972,10 +975,13 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
     }
 
     /// 发送当前编辑框的草稿消息（主入口函数）
+    /// - Parameter suppressAIReply: CHAT-000057 38.6：医生接管中为 true —— 只上送患者消息，
+    ///   不触发 AI 回复、不生成 AI 会话标题、失败不渲染 AI 错误卡片。
     func sendCurrentDraft(
         smallTask: SmallTask? = nil,
         sendsOriginalImagesToAI: Bool = false,
-        programmaticInput: String? = nil
+        programmaticInput: String? = nil,
+        suppressAIReply: Bool = false
     ) async {
         // 防止重复发送：如果正在发送中，直接返回
         guard stateStore.isSending == false else { return }
@@ -1077,6 +1083,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
                 modelReasoning: modelReasoning,
                 smallTask: smallTask,
                 sendsOriginalImagesToAI: sendsOriginalImagesToAI,
+                aiReplySuppressed: suppressAIReply,
                 cancellationToken: cancellationToken,
                 
                 // 图片上传进度回调 → 更新UI
@@ -1116,7 +1123,10 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
             // 加载最终完整消息
             let finalMessages = await loadChatMessagesUseCase.execute(threadID: snapshot.thread.id)
             stateStore.setMessages(finalMessages, for: snapshot.thread.id)
-            maybeGenerateConversationTitle(threadID: snapshot.thread.id, isRegenerate: false)
+            // CHAT-000057 38.6：医生接管中不调用 AI 生成会话标题。
+            if suppressAIReply == false {
+                maybeGenerateConversationTitle(threadID: snapshot.thread.id, isRegenerate: false)
+            }
             // 清空已发送的文本/附件（程序化发送不触碰用户草稿）
             if isProgrammatic == false {
                 stateStore.clearComposerTextAndAttachments(for: snapshot.thread.id)
@@ -1142,8 +1152,8 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         // MARK: - 发送失败（网络/服务异常）
         catch {
             stateStore.setError(nil, for: threadID)
-            // 显示错误卡片
-            if shouldRenderAssistantErrorCard(for: error) {
+            // 显示错误卡片（医生接管消息单发失败不渲染 AI 错误卡片，避免误导为 AI 回复失败）
+            if suppressAIReply == false, shouldRenderAssistantErrorCard(for: error) {
                 appendAssistantErrorMessage(
                     threadID: threadID,
                     assistantClientMessageID: streamingMessageID,

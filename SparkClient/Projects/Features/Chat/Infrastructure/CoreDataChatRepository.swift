@@ -80,6 +80,11 @@ actor CoreDataChatRepository: ChatRepository {
         await store.updateMessageDeliveryState(clientMessageID: clientMessageID, state: state, notifyUI: notifyUI)
     }
 
+    @discardableResult
+    func markAssistantMessagesRead(threadID: UUID, upTo boundary: Date) async -> Int {
+        await store.markAssistantMessagesRead(threadID: threadID, upTo: boundary)
+    }
+
     func updateMessageBlocks(
         clientMessageID: UUID,
         blocks: [ChatMessageBlock],

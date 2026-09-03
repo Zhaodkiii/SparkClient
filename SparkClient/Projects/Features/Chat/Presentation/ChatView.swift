@@ -40,6 +40,9 @@ struct ChatView: View {
     @State private var showHospitalScopeResolutionFailure = false
     /// CHAT-000055：当前医院会话的能力（context 回源前为 nil，发送入口据此先回源再判定）。
     @State private var hospitalCapabilities: HospitalConversationCapabilities?
+    /// CHAT-000057 38.6：context 回源的服务端实时服务状态（如 doctor_joined）。
+    /// 统一 Manifest 未启用时，这是医生接管状态的唯一实时通道；nil 表示服务端未下发，不猜测。
+    @State private var hospitalServiceStatus: ConversationServiceStatus?
     /// CHAT-000055：当前医院会话的知识 Manifest（仅用于展示/调试；同步由 coordinator 处理）。
     @State private var hospitalKnowledgeManifest: HospitalAgentKnowledgeManifest?
     /// CHAT-000055：医院会话发送被门禁拦截的提示文案（nil 表示无拦截）。
@@ -112,6 +115,40 @@ struct ChatView: View {
     
     private var isLoadingMoreMessages: Bool {
         stateStore.isLoadingMoreMessages(for: currentThreadID)
+    }
+
+    // MARK: - CHAT-000057 unknown 会话门禁
+
+    /// CHAT-000057 34.6：当前会话的统一投影项（仅统一消息列表开启时存在）。
+    private var unifiedCurrentItem: UnifiedConversationListItem? {
+        guard listViewModel.isUnifiedMessageListEnabled else { return nil }
+        return listViewModel.unifiedItems.first { $0.threadID == currentThreadID }
+    }
+
+    /// unknown 会话的分类确认状态；非 unknown / 统一未开启为 nil（不产生门禁）。
+    private var unifiedUnknownState: ConversationClassificationState? {
+        guard let item = unifiedCurrentItem, item.conversationKind == .unknown else { return nil }
+        return item.classificationState
+    }
+
+    /// CHAT-000057 34.4：unknown 确认期间输入区、附件、快捷问题与知识库同步全部禁用。
+    private var isComposerBlockedByUnknownConfirmation: Bool {
+        unifiedUnknownState != nil
+    }
+
+    /// CHAT-000057 38.6/L1942：医生接管中（患者可发送，AI 不自动回复）。
+    /// 双通道判定（任一成立）：统一投影 capability（Manifest 通道）；
+    /// context 回源的实时 service_status（Manifest 未启用时接管状态的唯一实时通道）。
+    private var isDoctorTakeoverActive: Bool {
+        if let capability = unifiedCurrentItem?.capability,
+           capability.canSend, capability.canUseAI == false {
+            return true
+        }
+        if hospitalServiceStatus?.isDoctorTakeover == true,
+           hospitalCapabilities?.canSendMessage ?? true {
+            return true
+        }
+        return false
     }
     
     var body: some View {
@@ -378,6 +415,12 @@ struct ChatView: View {
                     .navigationTitle("授权详情")
                 }
             }
+            .safeAreaInset(edge: .top, spacing: 0) {
+                // CHAT-000057 34.6：unknown 会话顶部受控横幅（确认中 / 暂无法确认 + 重试）。
+                if let state = unifiedUnknownState {
+                    unifiedUnknownBanner(state: state)
+                }
+            }
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 0) {
                     // CHAT-000055 Q27：智能体下架/会话只读时，输入区上方固定提示，发送入口同步禁用。
@@ -385,8 +428,13 @@ struct ChatView: View {
                        let capabilities = hospitalCapabilities,
                        capabilities.canSendMessage == false {
                         hospitalReadOnlyBanner(reason: capabilities.readOnlyReason)
+                    } else if isDoctorTakeoverActive {
+                        // CHAT-000057 38.6：医生接管中轻量提示（可发送，AI 不回复），与只读横幅互斥。
+                        doctorTakeoverBanner
                     }
                     composerChrome
+                        // CHAT-000057 34.4：unknown 确认期间输入区/附件/快捷问题整体禁用。
+                        .disabled(isComposerBlockedByUnknownConfirmation)
                 }
             }
         //            .ignoresSafeArea(.container, edges: .bottom)
@@ -604,7 +652,24 @@ struct ChatView: View {
                       pulledThreadID == currentThreadID,
                       case .hospital(let scope) = hospitalScopeResolution,
                       scope.memberID == homeViewModel.memberContextStoreForBinding.context.selectedMemberID else { return }
-                Task { await refreshHospitalConversationContext(threadID: pulledThreadID, scope: scope) }
+                Task {
+                    await refreshHospitalConversationContext(threadID: pulledThreadID, scope: scope)
+                    // CHAT-000057 38.6：拉取事件后同步刷新统一 Manifest，
+                    // 使医生接管/取消接管等服务状态变化在已打开会话内即时生效（驱动 AI 回复门禁）。
+                    await listViewModel.refreshUnifiedManifest(reason: .push)
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .chatRealtimeThreadPullDidComplete)) { note in
+                // CHAT-000057 26.5：前台可读会话的新到消息按既有实时链路即时确认已读（幂等）；
+                // unknown/身份未确认时 UseCase 内部拒绝，不产生副作用。
+                guard let pulledThreadID = note.chatRealtimePulledThreadID,
+                      pulledThreadID == currentThreadID else { return }
+                Task {
+                    await markCurrentConversationReadIfAllowed(
+                        threadID: pulledThreadID,
+                        scopeResolution: hospitalScopeResolution
+                    )
+                }
             }
         // CHAT-000030：以 currentThreadID 作为生命周期 key，右上角新建后原地重启新 thread 初始化链路。
             .task(id: currentThreadID) {
@@ -637,6 +702,12 @@ struct ChatView: View {
                     let capturedScope = scope
                     Task { await refreshHospitalConversationContext(threadID: id, scope: capturedScope) }
                 }
+                // CHAT-000057 D-016/26.6：消息加载成功且身份确认后提交已读；
+                // unknown/conflict/医院身份未确认不提交（26.3），幂等可重复。
+                await markCurrentConversationReadIfAllowed(threadID: id, scopeResolution: scopeResolution)
+                // CHAT-000057 38.6：进入会话后台刷新 Manifest（single-flight），
+                // 获取最新服务状态（如医生接管 doctor_taken_over），驱动发送链路的 AI 回复门禁。
+                await listViewModel.refreshUnifiedManifest(reason: .threadOpenConfirmation)
                 // CHAT-000029：默认绑定已在 thread 创建阶段前置完成，页面不再补绑。
                 // 新建链路：保持新建标记（阻止并发 repair）→ 幂等插入 guide card → 启动生成 → 清除标记；
                 // 重新进入旧对话：只做 guide 卡片异常状态修复，绝不生成。
@@ -1118,6 +1189,8 @@ struct ChatView: View {
     
     private func sendCurrentDraftIfChatModelAvailable() {
         KeyboardDismissHelper.dismissKeyboard()
+        // CHAT-000057 34.4：unknown 确认期间禁止发送（输入区已禁用，此处为兜底门禁）。
+        guard isComposerBlockedByUnknownConfirmation == false else { return }
         // CHAT-000055 Q27/Q28：医院会话发送前必须过能力门禁。
         // 禁发时只提示、不发送；绝不自动重发、绝不改走普通 AI 链路。
         if case .hospital(let scope) = hospitalScopeResolution {
@@ -1157,12 +1230,17 @@ struct ChatView: View {
                 return
             }
         }
-        guard detailViewModel.chatScenarioModels.isEmpty == false else {
-            showNoAvailableChatModelAlert = true
-            return
+        // CHAT-000057 38.6/L1942：医生接管中允许发送但 AI 不回复；投影不可用时保持旧 AI 链路。
+        let suppressAIReply = isDoctorTakeoverActive
+        if suppressAIReply == false {
+            guard detailViewModel.chatScenarioModels.isEmpty == false else {
+                showNoAvailableChatModelAlert = true
+                return
+            }
         }
         detailViewModel.startSendingCurrentDraft(
-            sendsOriginalImagesToAI: sendsOriginalImagesToAITemporarily
+            sendsOriginalImagesToAI: sendsOriginalImagesToAITemporarily,
+            suppressAIReply: suppressAIReply
         )
     }
 
@@ -1194,6 +1272,91 @@ struct ChatView: View {
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
         .background(Color.orange.opacity(0.12))
+    }
+
+    /// CHAT-000057 38.6：医生接管中提示横幅（可发送，AI 不回复；与只读横幅互斥）。
+    private var doctorTakeoverBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "stethoscope")
+                .foregroundStyle(Color.accentColor)
+            Text(L10n.text("chat.hospital.takeover.banner", fallback: "医生已接管，消息将由医生本人回复"))
+                .font(.footnote)
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.leading)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background(Color.accentColor.opacity(0.10))
+    }
+
+    /// CHAT-000057 34.6/34.4：unknown 会话顶部受控横幅。
+    /// 历史仅以只读呈现；重试合并入账号级 single-flight，失败继续只读、不弹打断式错误框。
+    @ViewBuilder
+    private func unifiedUnknownBanner(state: ConversationClassificationState) -> some View {
+        HStack(spacing: 8) {
+            switch state {
+            case .resolving:
+                ProgressView()
+                    .controlSize(.small)
+                Text(L10n.text("chat.unified.confirming", fallback: "正在确认会话信息…"))
+                    .font(.footnote)
+                    .foregroundStyle(.primary)
+                Spacer(minLength: 0)
+            case .retryableFailure:
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                Text(L10n.text("chat.unified.confirm_failed", fallback: "暂无法确认会话信息，历史消息仅供查看"))
+                    .font(.footnote)
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
+                Button(L10n.text("chat.unified.confirm_retry", fallback: "重试")) {
+                    listViewModel.retryUnknownConfirmation(threadID: currentThreadID)
+                }
+                .font(.footnote.weight(.semibold))
+            default:
+                // conflict 等受控错误态：只读展示，不提供重试（重试无法解决绑定冲突）。
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                Text(L10n.text("chat.unified.confirm_unavailable", fallback: "会话信息异常，历史消息仅供查看"))
+                    .font(.footnote)
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.leading)
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background(Color.orange.opacity(0.12))
+    }
+
+    /// CHAT-000057 D-016/26.6：消息加载成功且身份确认后提交统一已读。
+    /// unknown/conflict 与医院身份未确认（undetermined/failed）不提交；幂等可重复调用。
+    private func markCurrentConversationReadIfAllowed(
+        threadID: UUID,
+        scopeResolution: HospitalScopeResolution
+    ) async {
+        guard currentThreadID == threadID else { return }
+        let capability: ConversationCapability
+        if listViewModel.isUnifiedMessageListEnabled,
+           let item = listViewModel.unifiedItems.first(where: { $0.threadID == threadID }) {
+            // 统一投影能力为唯一事实源（含 unknown.canMarkRead == false、撤权剔除）。
+            capability = item.capability
+        } else {
+            switch scopeResolution {
+            case .ordinary:
+                capability = .ordinaryAI
+            case .hospital:
+                capability = (hospitalCapabilities?.canSendMessage == false) ? .medicalReadOnly : .hospitalAgentActive
+            case .undetermined, .failed:
+                // 26.3：医院 scope/context 未确认完成时不得当作普通会话提前清未读。
+                return
+            }
+        }
+        await listViewModel.markConversationRead(threadID: threadID, capability: capability)
     }
 
     private func updateOverlaySetting(
@@ -1395,6 +1558,8 @@ struct ChatView: View {
             guard currentThreadID == threadID else { return }
             hospitalCapabilities = result.capabilities
             hospitalKnowledgeManifest = result.manifest
+            // CHAT-000057 38.6：服务端实时服务状态（doctor_joined → 医生接管，AI 不回复）。
+            hospitalServiceStatus = result.serviceStatus.map { ConversationServiceStatus(rawValue: $0) }
             // 知识同步：capabilities.canSyncKnowledge == false（下架）时 reconcile 内部直接返回。
             await hospitalCare.knowledgeSync.reconcileWithManifest(
                 result.manifest,
@@ -1465,6 +1630,7 @@ struct ChatView: View {
         showHospitalScopeResolutionFailure = false
         // CHAT-000055：能力与 Manifest 一并重置，避免旧会话门禁串到新会话。
         hospitalCapabilities = nil
+        hospitalServiceStatus = nil
         hospitalKnowledgeManifest = nil
         // 恢复新 thread 的卡片动作快照（forceReload 清掉旧 thread 遗留 UI 状态）
         restoreCardActionSnapshotIfNeeded(forceReload: true)

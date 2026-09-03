@@ -83,6 +83,8 @@ nonisolated struct HospitalConversationContextDTO: Codable, Sendable {
     let capabilities: HospitalConversationCapabilitiesDTO?
     /// CHAT-000055 Q22：知识 Manifest；缺省/null 表示无绑定或已全量下线。
     let knowledgeManifest: HospitalKnowledgeManifestDTO?
+    /// 服务端实时服务状态（如 active / doctor_joined）；旧服务端缺省为 nil，客户端不猜测。
+    let serviceStatus: String?
 }
 
 nonisolated struct HospitalConversationCapabilitiesDTO: Codable, Sendable {

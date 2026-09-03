@@ -58,6 +58,9 @@ protocol ChatMessageStoring: Sendable {
     func upsertLocalMessage(_ message: ChatMessage) async throws -> ChatMessage
     func softDeleteMessage(clientMessageID: UUID) async
     func updateMessageDeliveryState(clientMessageID: UUID, state: ChatDeliveryState, notifyUI: Bool) async
+    /// CHAT-000057 D-016：批量已读指定 Thread 中 boundary 之前的未读助手消息；幂等。
+    @discardableResult
+    func markAssistantMessagesRead(threadID: UUID, upTo boundary: Date) async -> Int
     func applyPushMessageAck(
         clientMessageID: UUID,
         serverMessageID: String?,

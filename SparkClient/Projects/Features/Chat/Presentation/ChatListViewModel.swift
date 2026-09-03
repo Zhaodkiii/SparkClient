@@ -11,7 +11,8 @@ enum ChatListSegment: String, CaseIterable, Hashable, Sendable {
         case .hospitalAgents:
             return L10n.text("chat.segment.hospital_agents", fallback: "院内名医")
         case .conversations:
-            return L10n.text("chat.segment.conversations", fallback: "普通对话")
+            // CHAT-000057 阶段 3：「普通对话」更名为「消息」，承载统一消息列表。
+            return L10n.text("chat.segment.messages", fallback: "消息")
         }
     }
 }
@@ -35,6 +36,21 @@ final class ChatListViewModel: ObservableObject {
     /// CHAT-000054：医院会话身份记忆；普通对话投影据此排除医院 Thread。
     private let hospitalScopeStore: HospitalConversationScopeStore?
     private let logger: Logger
+
+    // MARK: - CHAT-000057 统一消息依赖（可选注入；缺任一关键依赖即回退旧普通对话路径）
+    /// 统一消息投影器（分类、标题、能力、路由的唯一输出来源）。
+    private let unifiedProjector: UnifiedConversationProjector?
+    /// Manifest 刷新协调器（single-flight、unknown 退避重试）。
+    private let unifiedRefreshCoordinator: UnifiedConversationRefreshCoordinator?
+    /// 统一已读确认入口（unknown/撤权拒绝已读）。
+    private let markConversationReadUseCase: MarkConversationReadUseCase?
+    /// 医疗类「从消息列表移除」偏好处理。
+    private let updateVisibilityUseCase: UpdateConversationListVisibilityUseCase?
+    /// Thread 创建来源（消息页＋ 写 manual_ordinary_ai）。
+    private let provenanceStore: ThreadCreationProvenanceStore?
+    /// 统一消息发布开关。
+    private let unifiedFeatureFlags: UnifiedConversationFeatureFlags
+
     private var hasLoadedForList = false
     private var didAttemptEmptyListRemoteRefresh = false
     private var cancellables = Set<AnyCancellable>()
@@ -43,6 +59,12 @@ final class ChatListViewModel: ObservableObject {
     @Published var chatListSegment: ChatListSegment = .hospitalAgents
     /// CHAT-000054：医院 Demo 目录是否可用；不可用时隐藏分段选择器，只显示普通对话。
     @Published var hospitalCatalogAvailable: Bool = true
+    /// CHAT-000057 D-017：消息列表顶部类型筛选（纯 UI 状态，不持久化、不改写业务事实）。
+    @Published var messageListFilter: MessageListTypeFilter = .all
+    /// CHAT-000057：unknown 确认状态输入快照（RefreshCoordinator 刷新/重试后更新）。
+    @Published private(set) var unknownResolutionContext = UnifiedConversationProjector.UnknownResolutionContext()
+    /// CHAT-000057 28.6：后台静默刷新失败后的轻量提示（保留缓存展示）。
+    @Published private(set) var unifiedRefreshStaleMessage: String?
 
     /// 公共“获取可复用 Thread，必要时创建”编排器（CHAT-000041）。
     /// - Note: 单飞门在 account 级共享实例上保持，账号切换由 `resetForSessionSwitch()` 清空。
@@ -92,6 +114,12 @@ final class ChatListViewModel: ObservableObject {
         chatSyncSupervisor: ChatSyncSupervisor,
         notificationClient: any NotificationClient,
         hospitalScopeStore: HospitalConversationScopeStore? = nil,
+        unifiedProjector: UnifiedConversationProjector? = nil,
+        unifiedRefreshCoordinator: UnifiedConversationRefreshCoordinator? = nil,
+        markConversationReadUseCase: MarkConversationReadUseCase? = nil,
+        updateVisibilityUseCase: UpdateConversationListVisibilityUseCase? = nil,
+        provenanceStore: ThreadCreationProvenanceStore? = nil,
+        unifiedFeatureFlags: UnifiedConversationFeatureFlags = .current,
         logger: Logger = ConsoleLogger()
     ) {
         self.stateStore = stateStore
@@ -109,6 +137,12 @@ final class ChatListViewModel: ObservableObject {
         self.chatSyncSupervisor = chatSyncSupervisor
         self.notificationClient = notificationClient
         self.hospitalScopeStore = hospitalScopeStore
+        self.unifiedProjector = unifiedProjector
+        self.unifiedRefreshCoordinator = unifiedRefreshCoordinator
+        self.markConversationReadUseCase = markConversationReadUseCase
+        self.updateVisibilityUseCase = updateVisibilityUseCase
+        self.provenanceStore = provenanceStore
+        self.unifiedFeatureFlags = unifiedFeatureFlags
         self.logger = logger
 
         NotificationCenter.default.publisher(for: .sparkChatDatabaseDidChange)
@@ -118,6 +152,15 @@ final class ChatListViewModel: ObservableObject {
                 Task { @MainActor in
                     guard case .signedIn = self.sessionStore.state else { return }
                     if let event = note.chatConversationChangeEvent {
+                        // CHAT-000057 38.5：新患者可见消息落库后自动恢复已隐藏医疗会话（幂等）。
+                        if event.kind == .messagesAppended,
+                           let threadID = event.threadID,
+                           let accountID = self.signedInAccountID {
+                            self.updateVisibilityUseCase?.restoreOnVisibleMessage(
+                                threadID: threadID,
+                                accountID: accountID
+                            )
+                        }
                         guard event.affectsThreadList else { return }
                         if await self.tryPatchThreadList(for: event) {
                             return
@@ -206,6 +249,7 @@ final class ChatListViewModel: ObservableObject {
             memberID: memberID,
             title: title
         )
+        rememberManualOrdinaryAIProvenance(threadID: thread.id)
         await reloadThreads(selectFirstIfNeeded: false)
         stateStore.markThreadAsNewlyCreated(thread.id)
         stateStore.setSelectedThreadID(thread.id)
@@ -248,6 +292,7 @@ final class ChatListViewModel: ObservableObject {
             memberID: initialMemberID,
             title: mode.title
         )
+        rememberManualOrdinaryAIProvenance(threadID: thread.id)
         // 新会话元数据由 ChatSyncSupervisor 监听 threadsChanged 后台推送，不阻塞进入会话
         await reloadThreads(selectFirstIfNeeded: false)
         stateStore.markThreadAsNewlyCreated(thread.id)
@@ -288,6 +333,124 @@ final class ChatListViewModel: ObservableObject {
         items.filter { isHospitalThread($0.id) == false }
     }
 
+    // MARK: - CHAT-000057 统一消息列表
+
+    /// 统一消息 UI 是否生效：发布开关开启且统一投影依赖已注入；否则回退旧普通对话路径（45.1）。
+    var isUnifiedMessageListEnabled: Bool {
+        unifiedFeatureFlags.unifiedMessageListEnabled && unifiedProjector != nil
+    }
+
+    /// CHAT-000057 38.2：统一消息投影（未筛选/未搜索；撤权、删除与医疗隐藏已在投影阶段剔除）。
+    var unifiedItems: [UnifiedConversationListItem] {
+        guard isUnifiedMessageListEnabled,
+              let unifiedProjector,
+              let accountID = signedInAccountID else { return [] }
+        return unifiedProjector.project(
+            threadItems: stateStore.threadItems,
+            accountID: accountID,
+            members: memberContextStore.context.members,
+            unknownContext: unknownResolutionContext
+        )
+    }
+
+    /// 统一消息可见项：类型筛选 → 身份/标题搜索 → 置顶区优先 + 区内最近消息倒序（D-010/D-017/D-013）。
+    func unifiedVisibleItems(query: String) -> [UnifiedConversationListItem] {
+        unifiedItems.visibleItems(filter: messageListFilter, query: query)
+    }
+
+    /// CHAT-000057 D-015：消息分段未读总数。统一开启时聚合全类型（含 unknown）；
+    /// 关闭时回退旧普通对话聚合（排除医院 Thread）。
+    var messageSegmentUnreadCount: Int {
+        if isUnifiedMessageListEnabled {
+            return unifiedItems.aggregatedUnreadCount
+        }
+        return ordinaryThreadItems.reduce(0) { $0 + Swift.max(0, $1.unreadCount) }
+    }
+
+    /// CHAT-000057 28.7：进入消息分段/下拉刷新时的 Manifest 后台静默刷新。
+    ///
+    /// 通用 Chat Thread 增量由既有 `refreshThreads()` 承担；本方法只负责 Manifest 与
+    /// unknown 状态快照，失败不阻塞本地缓存展示（28.6 轻提示 + 重试入口）。
+    func refreshUnifiedManifest(reason: UnifiedConversationRefreshReason) async {
+        guard isUnifiedMessageListEnabled,
+              let accountID = signedInAccountID,
+              let coordinator = unifiedRefreshCoordinator else { return }
+        let result = await coordinator.refresh(accountID: accountID, reason: reason)
+        await refreshUnknownResolutionContext(accountID: accountID)
+        switch result {
+        case .success(let changed, let revoked, _):
+            unifiedRefreshStaleMessage = nil
+            // 绑定/服务状态变化（如医生接管 doctor_taken_over）不经过 threadItems，
+            // 显式发布以驱动全部投影型 UI（统一列表、分段角标、ChatView 发送门禁）即时刷新。
+            if changed.isEmpty == false || revoked.isEmpty == false {
+                objectWillChange.send()
+            }
+        case .endpointUnavailable, .schemaUnsupported:
+            // 成功或无服务端能力：保留缓存静默；未部署不属于患者可感知失败（30.3）。
+            unifiedRefreshStaleMessage = nil
+        case .temporaryFailure, .validationFailed:
+            unifiedRefreshStaleMessage = L10n.text(
+                "chat.unified.refresh_stale",
+                fallback: "部分消息可能不是最新"
+            )
+        }
+    }
+
+    /// CHAT-000057 38.7：unknown 确认失败后的手动重试（立即回到「确认中」并调度退避重试）。
+    func retryUnknownConfirmation(threadID: UUID) {
+        guard let accountID = signedInAccountID,
+              let coordinator = unifiedRefreshCoordinator else { return }
+        var context = unknownResolutionContext
+        context.retryableFailures.remove(threadID)
+        context.resolving.insert(threadID)
+        unknownResolutionContext = context
+        Task { @MainActor in
+            await coordinator.scheduleUnknownConfirmation(threadID: threadID, accountID: accountID)
+            await refreshUnifiedManifest(reason: .retryConfirmation)
+        }
+    }
+
+    /// CHAT-000057 D-011/D-012：医疗类「从消息列表移除」。
+    /// 仅改账号级可见性偏好；不删除 Thread/消息/服务记录。返回 false 表示持久化失败（UI 回滚）。
+    @discardableResult
+    func hideMedicalConversation(threadID: UUID) -> Bool {
+        guard let accountID = signedInAccountID,
+              let updateVisibilityUseCase else { return false }
+        let persisted = updateVisibilityUseCase.hide(threadID: threadID, accountID: accountID)
+        if persisted {
+            // 投影为计算属性：显式触发重绘使卡片立即消失。
+            objectWillChange.send()
+        }
+        return persisted
+    }
+
+    /// CHAT-000057 D-016/26.6：统一已读确认入口（详情页消息加载完成后调用）。
+    /// unknown 确认前与撤权会话拒绝已读；幂等可重复调用。
+    @discardableResult
+    func markConversationRead(
+        threadID: UUID,
+        capability: ConversationCapability
+    ) async -> MarkConversationReadUseCase.Outcome? {
+        guard let accountID = signedInAccountID,
+              let markConversationReadUseCase else { return nil }
+        return await markConversationReadUseCase.execute(
+            threadID: threadID,
+            accountID: accountID,
+            capability: capability
+        )
+    }
+
+    /// 从 RefreshCoordinator 拉取 unknown 状态快照供 Projector 使用。
+    private func refreshUnknownResolutionContext(accountID: Int64) async {
+        guard let coordinator = unifiedRefreshCoordinator else { return }
+        let unresolved = Set(
+            unifiedItems.filter { $0.conversationKind == .unknown }.map(\.threadID)
+        )
+        unknownResolutionContext = await coordinator.unknownResolutionContext(
+            unresolvedThreadIDs: unresolved
+        )
+    }
+
     func search(text: String) -> [ChatThreadListItem] {
         let source = ordinaryThreadItems
         let query = text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -299,6 +462,13 @@ final class ChatListViewModel: ObservableObject {
     }
 
     func deleteThread(_ threadID: UUID) async {
+        // CHAT-000057 D-026/31.4：真实删除（含 legacy unknown）后取消 unknown 重试、
+        // 清理本地来源与可见性偏好，拒绝延迟回包复活该会话。
+        if let accountID = signedInAccountID {
+            await unifiedRefreshCoordinator?.cancel(threadID: threadID)
+            provenanceStore?.remove(threadID: threadID, accountID: accountID)
+            updateVisibilityUseCase?.cleanup(threadID: threadID, accountID: accountID)
+        }
         await deleteThreadUseCase.execute(threadID: threadID)
         await reloadThreads(selectFirstIfNeeded: true)
     }
@@ -338,7 +508,12 @@ final class ChatListViewModel: ObservableObject {
         isRefreshingEmptyListFallback = false
         isCreatingQuickStartThread = false
         quickStartCreationError = nil
+        messageListFilter = .all
+        unknownResolutionContext = UnifiedConversationProjector.UnknownResolutionContext()
+        unifiedRefreshStaleMessage = nil
         threadAcquisitionCoordinator.reset()
+        // CHAT-000057 28.7：先取消旧账号刷新与 unknown 重试，禁止旧回包污染新账号。
+        Task { await unifiedRefreshCoordinator?.cancelAll() }
     }
 
     private func reloadThreads(selectFirstIfNeeded: Bool) async {
@@ -376,5 +551,15 @@ final class ChatListViewModel: ObservableObject {
             selectedID: preferred
         )
         memberContextStore.update(members: members, selectedMemberID: selectedID)
+    }
+
+    /// CHAT-000057 38.3/D-022：消息页＋及等价已验证普通 AI 创建路径原子写 manual_ordinary_ai
+    /// provenance，保证新建 Thread 立即投影为普通 AI、不等待 Manifest。
+    private func rememberManualOrdinaryAIProvenance(threadID: UUID) {
+        guard let provenanceStore, let accountID = signedInAccountID else { return }
+        provenanceStore.remember(
+            ThreadCreationProvenance(threadID: threadID, origin: .manualOrdinaryAI),
+            accountID: accountID
+        )
     }
 }

@@ -10,6 +10,8 @@ struct FetchHospitalConversationContextUseCase {
     struct Result: Equatable, Sendable {
         let capabilities: HospitalConversationCapabilities
         let manifest: HospitalAgentKnowledgeManifest?
+        /// 服务端实时服务状态原始值（如 "doctor_joined"）；nil 表示服务端未下发，调用方不得猜测。
+        let serviceStatus: String?
     }
 
     /// - Parameters:
@@ -22,14 +24,15 @@ struct FetchHospitalConversationContextUseCase {
             context = try await remoteAPI.fetchConversationContext(threadID: threadID, memberID: memberID)
         } catch {
             if isMemberAccessDenied(error) {
-                return Result(capabilities: .memberAccessRevoked, manifest: nil)
+                return Result(capabilities: .memberAccessRevoked, manifest: nil, serviceStatus: nil)
             }
             throw error
         }
         guard let context else { return nil }
         return Result(
             capabilities: Self.mapCapabilities(context.capabilities),
-            manifest: context.knowledgeManifest.map(Self.mapManifest)
+            manifest: context.knowledgeManifest.map(Self.mapManifest),
+            serviceStatus: context.serviceStatus
         )
     }
 

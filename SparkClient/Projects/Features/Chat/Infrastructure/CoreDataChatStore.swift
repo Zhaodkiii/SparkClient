@@ -621,6 +621,41 @@ actor CoreDataChatStore {
         }
     }
 
+    /// CHAT-000057 D-016：批量将指定 Thread 中 boundary 之前未读的助手消息标记为已读。
+    /// 只确认进入会话时已加载的消息；createdAt 晚于 boundary 的新到消息不被误清（26.4 竞态规则）。
+    /// - Returns: 实际标记为已读的消息数（幂等：重复调用返回 0）。
+    @discardableResult
+    func markAssistantMessagesRead(threadID: UUID, upTo boundary: Date) async -> Int {
+        let markedCount = try? await kernel.writeWithoutNotification { context, accountID in
+            let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.message)
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                Self.ownerPredicate(accountID),
+                NSPredicate(format: "threadID == %@", threadID as CVarArg),
+                NSPredicate(format: "isTombstone == NO"),
+                NSPredicate(format: "role == %@", ChatMessageRole.assistant.rawValue),
+                NSPredicate(format: "deliveryState != %@", ChatDeliveryState.read.rawValue),
+                NSPredicate(format: "createdAt <= %@", boundary as NSDate),
+            ])
+            let objects = try context.fetch(request)
+            for object in objects {
+                object.setValue(ChatDeliveryState.read.rawValue, forKey: "deliveryState")
+            }
+            return objects.count
+        }
+        let count = markedCount ?? 0
+        if count > 0 {
+            await kernel.postChangeNotification(
+                ChatConversationChangeEvent(
+                    threadID: threadID,
+                    kind: .messagesUpdated,
+                    affectedClientMessageIDs: [],
+                    affectsThreadList: true
+                )
+            )
+        }
+        return count
+    }
+
     func appendUsageEvent(_ event: ChatMessageUsageEvent) async {
         let threadID = try? await kernel.writeWithoutNotification { context, accountID in
             let row = NSEntityDescription.insertNewObject(forEntityName: EntityName.messageUsageEvent, into: context)

@@ -293,7 +293,11 @@ struct MainTabCoordinatorView: View {
                     .pickerStyle(.segmented)
                     .frame(minWidth: 220)
                     .fixedSize()
-                    .accessibilityLabel("院内名医或普通对话")
+                    .accessibilityLabel(messageSegmentPickerAccessibilityLabel)
+                    // CHAT-000057 D-015/25.4：「消息」分段名称右侧圆形数字角标；0 隐藏，>99 显示 99+。
+                    .overlay(alignment: .topTrailing) {
+                        messageSegmentUnreadBadge
+                    }
                 }
             }
             ToolbarItem(placement: .topBarTrailing) {
@@ -311,6 +315,36 @@ struct MainTabCoordinatorView: View {
                 EmptyView()
             }
         }
+    }
+
+    // MARK: - CHAT-000057 D-015 消息分段未读角标
+
+    /// 「消息」分段名称右侧的圆形数字角标；0 隐藏（返回空视图），>99 显示 99+。
+    /// 不拦截点击（25.4：不影响分段文本的可点击区域）。
+    @ViewBuilder
+    private var messageSegmentUnreadBadge: some View {
+        if let badgeText = unifiedUnreadBadgeText(chatListViewModel.messageSegmentUnreadCount) {
+            Text(badgeText)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .background(Capsule().fill(Color.red))
+                .offset(x: 6, y: -8)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+        }
+    }
+
+    /// CHAT-000057 25.4：分段选择器无障碍朗读；未读为 0 时不附加未读描述。
+    private var messageSegmentPickerAccessibilityLabel: String {
+        guard let badgeText = unifiedUnreadBadgeText(chatListViewModel.messageSegmentUnreadCount) else {
+            return L10n.text("chat.segment.picker", fallback: "院内名医或消息")
+        }
+        if badgeText == "99+" {
+            return L10n.text("chat.segment.messages.unread_overflow", fallback: "院内名医或消息，99 条以上未读消息")
+        }
+        return L10n.text("chat.segment.messages.unread", fallback: "院内名医或消息，\(badgeText) 条未读消息")
     }
 
     @ToolbarContentBuilder

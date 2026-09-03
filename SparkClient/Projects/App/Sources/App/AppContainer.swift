@@ -49,6 +49,20 @@ final class AppContainer {
     let hospitalConversationScopeStore = HospitalConversationScopeStore()
     /// CHAT-000055：医院知识只读仓库（账号隔离持久化，与个人知识库完全分离）。
     let hospitalKnowledgeRepository = HospitalKnowledgeUserDefaultsRepository()
+    /// CHAT-000057：统一消息 Manifest 账号级本地仓库（binding 墓碑 + cursor）。
+    let unifiedConversationManifestRepository = UnifiedConversationManifestRepository()
+    /// CHAT-000057：Thread 创建来源（消息页＋ 写 manual_ordinary_ai）。
+    let threadCreationProvenanceStore = ThreadCreationProvenanceStore()
+    /// CHAT-000057：医疗类「从消息列表移除」账号级可见性偏好。
+    let conversationListVisibilityStore = ConversationListVisibilityPreferenceStore()
+    /// CHAT-000057：统一消息发布开关（本地 override + 默认值；支持服务端关闭回退）。
+    let unifiedConversationFeatureFlags = UnifiedConversationFeatureFlags.current
+    /// CHAT-000057：Manifest 刷新协调器（single-flight、unknown 退避重试）。init 中装配。
+    let unifiedConversationRefreshCoordinator: UnifiedConversationRefreshCoordinator
+    /// CHAT-000057：统一消息投影器（分类、标题、能力、路由的唯一输出来源）。init 中装配。
+    let unifiedConversationProjector: UnifiedConversationProjector
+    /// CHAT-000057：医疗类「从消息列表移除」/自动恢复。init 中装配。
+    let updateConversationListVisibilityUseCase: UpdateConversationListVisibilityUseCase
 
     // MARK: - 路由与启动
     //
@@ -376,6 +390,30 @@ final class AppContainer {
         self.backend = backend
         self.logger = logger
 
+        // CHAT-000057：统一消息依赖（仅依赖 backend/logger 与带默认值的账号级 Store，可提前装配）。
+        self.unifiedConversationRefreshCoordinator = UnifiedConversationRefreshCoordinator(
+            syncUseCase: SyncUnifiedConversationManifestUseCase(
+                remote: UnifiedConversationManifestRemoteAPI(configuration: backend.configuration),
+                repository: unifiedConversationManifestRepository,
+                logger: logger
+            ),
+            featureFlags: unifiedConversationFeatureFlags,
+            logger: logger
+        )
+        self.unifiedConversationProjector = UnifiedConversationProjector(
+            manifestRepository: unifiedConversationManifestRepository,
+            provenanceStore: threadCreationProvenanceStore,
+            visibilityStore: conversationListVisibilityStore,
+            hospitalScopeStore: hospitalConversationScopeStore,
+            featureFlags: unifiedConversationFeatureFlags,
+            logger: logger
+        )
+        self.updateConversationListVisibilityUseCase = UpdateConversationListVisibilityUseCase(
+            store: conversationListVisibilityStore,
+            manifestRepository: unifiedConversationManifestRepository,
+            logger: logger
+        )
+
         // MARK: 领域 Assembly
         // AppContainer 只决定装配顺序；每个领域内部的真实构造逻辑下沉到对应 Assembly。
         let infrastructure = AppAssembly.makeInfrastructure(backend: backend, logger: logger)
@@ -591,7 +629,16 @@ final class AppContainer {
             aiSettingsRepository: ai.aiSettingsRepository,
             chatSyncSupervisor: chat.chatSyncSupervisor,
             notificationClient: notification.notificationClient,
-            hospitalScopeStore: hospitalConversationScopeStore
+            hospitalScopeStore: hospitalConversationScopeStore,
+            unifiedProjector: unifiedConversationProjector,
+            unifiedRefreshCoordinator: unifiedConversationRefreshCoordinator,
+            markConversationReadUseCase: MarkConversationReadUseCase(
+                repository: chat.chatRepository,
+                logger: logger
+            ),
+            updateVisibilityUseCase: updateConversationListVisibilityUseCase,
+            provenanceStore: threadCreationProvenanceStore,
+            unifiedFeatureFlags: unifiedConversationFeatureFlags
         )
         let guideQuestionHealthRepository = HealthResourceRepository(medicalQueryAPI: backend.medicalQuery)
         let guideQuestionGenerationUseCase = ChatGuideQuestionGenerationUseCase(
@@ -816,6 +863,11 @@ final class AppContainer {
         hospitalCatalogCache.clearAll()
         hospitalConversationScopeStore.clearAll()
         hospitalKnowledgeRepository.resetInMemoryState()
+        // CHAT-000057：统一消息账号级缓存与刷新任务清理（防旧账号回包污染）。
+        unifiedConversationManifestRepository.clearAll()
+        threadCreationProvenanceStore.clearAll()
+        conversationListVisibilityStore.clearAll()
+        Task { await unifiedConversationRefreshCoordinator.cancelAll() }
         logger.info("账号级 ViewModel 与主 Tab 依赖缓存已清理", module: .general)
     }
 

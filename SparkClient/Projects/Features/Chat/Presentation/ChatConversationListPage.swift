@@ -90,10 +90,20 @@ struct ChatConversationListPage: View {
     /// - Note: 避免滚动过程中多次触发键盘收起
     @State private var hasDismissedKeyboardInCurrentDrag = false
 
-    /// 根据搜索文本过滤后的会话列表项
+    /// 根据搜索文本过滤后的会话列表项（旧普通对话路径）
     private var itemsToDisplay: [ChatThreadListItem] {
         listViewModel.search(text: searchText)
     }
+
+    /// CHAT-000057：统一消息可见项（类型筛选 + 身份/标题搜索 + 统一排序）。
+    private var unifiedItemsToDisplay: [UnifiedConversationListItem] {
+        listViewModel.unifiedVisibleItems(query: searchText)
+    }
+
+    /// 医疗类「从消息列表移除」二次确认的目标会话。
+    @State private var pendingHideMedicalItem: UnifiedConversationListItem?
+    /// 医疗隐藏持久化失败后的错误提示目标（卡片保留在列表中）。
+    @State private var hideMedicalFailureItem: UnifiedConversationListItem?
 
     private var isThreadSelectionMode: Bool {
         onThreadSelected != nil
@@ -113,6 +123,12 @@ struct ChatConversationListPage: View {
                 return
             }
             await handleInitialAutoNavigationIfNeeded()
+        }
+        // CHAT-000057 28.7：进入消息分段触发 Manifest 后台静默刷新（缓存首屏不被阻塞）。
+        .task(id: listViewModel.chatListSegment) {
+            guard isThreadSelectionMode == false,
+                  listViewModel.chatListSegment == .conversations else { return }
+            await listViewModel.refreshUnifiedManifest(reason: .enterMessageSegment)
         }
         // 无可用模型警告弹窗
         .alert(L10n.text("chat.list.no_available_model.title"), isPresented: $showNoAvailableChatModelAlert) {
@@ -156,6 +172,51 @@ struct ChatConversationListPage: View {
                 onCancel: {}
             )
         }
+        // CHAT-000057 21.4：医疗类「从消息列表移除」二次确认（仅隐藏，不删除服务记录）。
+        .confirmationDialog(
+            L10n.text("chat.unified.hide_medical.title", fallback: "从消息列表移除？"),
+            isPresented: Binding(
+                get: { pendingHideMedicalItem != nil },
+                set: { if $0 == false { pendingHideMedicalItem = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(
+                L10n.text("chat.unified.hide_medical.confirm", fallback: "从消息列表移除"),
+                role: .destructive
+            ) {
+                guard let item = pendingHideMedicalItem else { return }
+                pendingHideMedicalItem = nil
+                if listViewModel.hideMedicalConversation(threadID: item.threadID) == false {
+                    // 写入失败：卡片保留（投影未变），提示受控错误（21.4.3）。
+                    hideMedicalFailureItem = item
+                }
+            }
+            Button(L10n.text("common.cancel"), role: .cancel) {
+                pendingHideMedicalItem = nil
+            }
+        } message: {
+            Text(L10n.text(
+                "chat.unified.hide_medical.message",
+                fallback: "仅从您的消息列表隐藏，不会删除医院服务记录或咨询记录。"
+            ))
+        }
+        .alert(
+            L10n.text("chat.unified.hide_medical.failed.title", fallback: "暂时无法移除"),
+            isPresented: Binding(
+                get: { hideMedicalFailureItem != nil },
+                set: { if $0 == false { hideMedicalFailureItem = nil } }
+            )
+        ) {
+            Button(L10n.text("common.confirm", fallback: "好"), role: .cancel) {
+                hideMedicalFailureItem = nil
+            }
+        } message: {
+            Text(L10n.text(
+                "chat.unified.hide_medical.failed.message",
+                fallback: "移除操作未成功保存，请稍后重试。该会话仍保留在您的消息列表中。"
+            ))
+        }
         // 手动进入会话继续使用对话 Tab 自身的 NavigationDestination。
         .navigationDestination(isPresented: Binding(
             get: { isThreadSelectionMode == false && pendingThreadNavigation != nil },
@@ -183,23 +244,25 @@ struct ChatConversationListPage: View {
         }
     }
 
+    /// CHAT-000057：消息根路径是否使用统一消息列表（Sheet 选择模式保持旧通用列表）。
+    private var usesUnifiedList: Bool {
+        listViewModel.isUnifiedMessageListEnabled && isThreadSelectionMode == false
+    }
+
     private var conversationList: some View {
         List {
-            if itemsToDisplay.isEmpty {
-                // 空状态视图
-                emptyState
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
+            if usesUnifiedList {
+                unifiedListContent
             } else {
-                // 会话列表行
-                ForEach(itemsToDisplay) { item in
-                    threadRow(item)
-                }
+                legacyListContent
             }
         }
         .listStyle(.plain)
         .refreshable {
-            await listViewModel.refreshThreads()
+            // CHAT-000057 28.6：下拉刷新复用同一 single-flight 协调器；Chat 增量与 Manifest 并行。
+            async let chatRefresh: () = listViewModel.refreshThreads()
+            async let manifestRefresh: () = listViewModel.refreshUnifiedManifest(reason: .pullToRefresh)
+            _ = await (chatRefresh, manifestRefresh)
         }
         // 对齐主流聊天应用交互：列表滚动时交互式收起键盘
         .chatScrollDismissesKeyboardInteractively()
@@ -216,6 +279,36 @@ struct ChatConversationListPage: View {
                     hasDismissedKeyboardInCurrentDrag = false
                 }
         )
+    }
+
+    /// 旧普通对话列表内容（回退路径 / Sheet 选择模式）。
+    @ViewBuilder
+    private var legacyListContent: some View {
+        if itemsToDisplay.isEmpty {
+            // 空状态视图
+            emptyState
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+        } else {
+            // 会话列表行
+            ForEach(itemsToDisplay) { item in
+                threadRow(item)
+            }
+        }
+    }
+
+    /// CHAT-000057：统一消息列表内容（混排普通 AI、医院医生智能体与 unknown）。
+    @ViewBuilder
+    private var unifiedListContent: some View {
+        if unifiedItemsToDisplay.isEmpty {
+            unifiedEmptyState
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+        } else {
+            ForEach(unifiedItemsToDisplay) { item in
+                unifiedThreadRow(item)
+            }
+        }
     }
 
     @ViewBuilder
@@ -237,7 +330,7 @@ struct ChatConversationListPage: View {
     @ViewBuilder
     private var chatTabContent: some View {
         if showsOrdinaryConversationList {
-            conversationList
+            messageSegmentContent
                 .searchable(text: $searchText, prompt: L10n.text("chat.list.search.placeholder"))
         } else if let hospitalCare {
             HospitalAgentDirectoryView(
@@ -252,9 +345,82 @@ struct ChatConversationListPage: View {
                 }
             )
         } else {
-            conversationList
+            messageSegmentContent
                 .searchable(text: $searchText, prompt: L10n.text("chat.list.search.placeholder"))
         }
+    }
+
+    /// CHAT-000057：消息分段内容。统一开启时附加类型筛选栏与静默刷新轻提示（27/28.6）。
+    @ViewBuilder
+    private var messageSegmentContent: some View {
+        if usesUnifiedList {
+            VStack(spacing: 0) {
+                messageTypeFilterBar
+                if let staleMessage = listViewModel.unifiedRefreshStaleMessage {
+                    staleRefreshBanner(staleMessage)
+                }
+                conversationList
+            }
+        } else {
+            conversationList
+        }
+    }
+
+    /// CHAT-000057 27.1：消息分段顶部横向类型筛选（全部 / AI 对话 / 医生智能体 / 线上问诊）。
+    private var messageTypeFilterBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(MessageListTypeFilter.allCases, id: \.self) { filter in
+                    messageFilterChip(filter)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+        }
+    }
+
+    /// 筛选项：选中状态同时具备文字、形状与无障碍选中态，不仅依赖颜色（27.3.7）。
+    private func messageFilterChip(_ filter: MessageListTypeFilter) -> some View {
+        let isSelected = listViewModel.messageListFilter == filter
+        return Button {
+            listViewModel.messageListFilter = filter
+        } label: {
+            Text(filter.localizedTitle)
+                .font(.subheadline)
+                .foregroundStyle(isSelected ? Color.accentColor : .secondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(isSelected ? Color.accentColor.opacity(0.12) : Color.clear))
+                .overlay(
+                    Capsule().strokeBorder(
+                        isSelected ? Color.accentColor : Color.secondary.opacity(0.3),
+                        lineWidth: 1
+                    )
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    /// CHAT-000057 28.6：有缓存、后台刷新失败的轻量提示与重试入口。
+    private func staleRefreshBanner(_ text: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle")
+                .foregroundStyle(.orange)
+            Text(text)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Button(L10n.text("chat.unified.refresh.retry", fallback: "重试")) {
+                Task {
+                    await listViewModel.refreshUnifiedManifest(reason: .pullToRefresh)
+                }
+            }
+            .buttonStyle(.borderless)
+        }
+        .font(.caption)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+        .background(.thinMaterial)
     }
 
     /// 列表空状态视图
@@ -461,6 +627,220 @@ struct ChatConversationListPage: View {
         editingIconName = thread.iconName
         editingIconColorName = thread.iconColorName
         isEditingThreadAppearance = true
+    }
+
+    // MARK: - CHAT-000057 统一消息行与空态
+
+    /// 统一消息卡片行：整行主点击区域；操作按 conversationKind 裁剪（21.1 操作矩阵）。
+    @ViewBuilder
+    private func unifiedThreadRow(_ item: UnifiedConversationListItem) -> some View {
+        Button {
+            openUnifiedConversation(item)
+        } label: {
+            UnifiedConversationRow(
+                item: item,
+                formattedDate: formattedDate(item.latestMessageAt),
+                onRetryConfirmation: {
+                    listViewModel.retryUnknownConfirmation(threadID: item.threadID)
+                }
+            )
+        }
+        .contentShape(Rectangle())
+        .buttonStyle(.plain)
+        .contextMenu {
+            unifiedContextMenuContent(item)
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            // 置顶：全部类型统一保留（20.3）。
+            unifiedPinButton(item)
+            if item.conversationKind == .ordinaryAI {
+                Button {
+                    beginEditingAppearance(for: item.thread)
+                } label: {
+                    Label(L10n.text("chat.thread.edit", fallback: "编辑"), systemImage: "paintbrush")
+                }
+                .tint(ChatThreadAppearanceResources.color(from: "hlGreen"))
+            }
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: item.isMedicalKind == false) {
+            unifiedTrailingAction(item)
+        }
+    }
+
+    /// 点击卡片：unknown 先调度受控确认（幂等），随后进入会话（确认流程不禁入，只禁发/禁已读）。
+    private func openUnifiedConversation(_ item: UnifiedConversationListItem) {
+        if case .confirmationRequired = item.route {
+            listViewModel.retryUnknownConfirmation(threadID: item.threadID)
+        }
+        pendingThreadNavigation = item.threadID
+    }
+
+    @ViewBuilder
+    private func unifiedPinButton(_ item: UnifiedConversationListItem) -> some View {
+        Button {
+            Task { await listViewModel.toggleThreadPinned(item.threadID) }
+        } label: {
+            Label(
+                item.isPinned
+                    ? L10n.text("chat.thread.unpin", fallback: "取消置顶")
+                    : L10n.text("chat.thread.pin", fallback: "置顶"),
+                systemImage: item.isPinned ? "pin.slash" : "pin"
+            )
+        }
+        .tint(ChatThreadAppearanceResources.color(from: "hlBlue"))
+    }
+
+    /// 上下文菜单：医疗类仅置顶 + 从消息列表移除；普通 AI 保留全部既有操作；
+    /// legacy unknown 允许真实「删除会话」，不出现医疗隐藏操作（3091/D-026）。
+    @ViewBuilder
+    private func unifiedContextMenuContent(_ item: UnifiedConversationListItem) -> some View {
+        unifiedPinButton(item)
+
+        switch item.conversationKind {
+        case .ordinaryAI:
+            Button {
+                beginEditingAppearance(for: item.thread)
+            } label: {
+                Label(L10n.text("chat.thread.edit", fallback: "编辑"), systemImage: "paintbrush")
+            }
+            Button(role: .destructive) {
+                Task { await listViewModel.deleteThread(item.threadID) }
+            } label: {
+                Label(L10n.text("common.delete"), systemImage: "trash")
+            }
+        case .hospitalAgent, .telemedicine:
+            Button(role: .destructive) {
+                pendingHideMedicalItem = item
+            } label: {
+                Label(
+                    L10n.text("chat.unified.hide_medical.action", fallback: "从消息列表移除"),
+                    systemImage: "eye.slash"
+                )
+            }
+        case .unknown:
+            if item.classificationState == .retryableFailure {
+                Button {
+                    listViewModel.retryUnknownConfirmation(threadID: item.threadID)
+                } label: {
+                    Label(
+                        L10n.text("chat.unified.unknown.retry", fallback: "重试确认"),
+                        systemImage: "arrow.clockwise"
+                    )
+                }
+            }
+            Button(role: .destructive) {
+                Task { await listViewModel.deleteThread(item.threadID) }
+            } label: {
+                Label(L10n.text("common.delete"), systemImage: "trash")
+            }
+        }
+    }
+
+    /// 右滑操作：医疗类为「从消息列表移除」（需二次确认，禁全滑）；
+    /// 普通 AI / legacy unknown 为真实删除（保留全滑）。
+    @ViewBuilder
+    private func unifiedTrailingAction(_ item: UnifiedConversationListItem) -> some View {
+        if item.isMedicalKind {
+            Button(role: .destructive) {
+                pendingHideMedicalItem = item
+            } label: {
+                Label(
+                    L10n.text("chat.unified.hide_medical.action", fallback: "从消息列表移除"),
+                    systemImage: "eye.slash"
+                )
+            }
+        } else {
+            Button(role: .destructive) {
+                Task { await listViewModel.deleteThread(item.threadID) }
+            } label: {
+                Label(L10n.text("common.delete"), systemImage: "trash")
+            }
+        }
+    }
+
+    /// CHAT-000057 27.4：统一消息空态矩阵（按筛选与搜索组合；线上问诊不提供假入口）。
+    @ViewBuilder
+    private var unifiedEmptyState: some View {
+        let isSearching = searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        VStack(spacing: 12) {
+            if listViewModel.isRefreshingEmptyListFallback {
+                ProgressView()
+                Text(L10n.text("chat.list.empty.syncing"))
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            } else if isSearching {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 44))
+                    .foregroundColor(.secondary)
+                Text(L10n.text("chat.unified.empty.search", fallback: "未找到相关消息"))
+                    .font(.headline)
+                    .foregroundColor(.secondary)
+            } else {
+                switch listViewModel.messageListFilter {
+                case .all:
+                    Image(systemName: "message.circle")
+                        .font(.system(size: 52))
+                        .foregroundColor(.secondary)
+                    Text(L10n.text("chat.unified.empty.all", fallback: "暂无消息"))
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    newAIConversationButton
+                    switchToHospitalButton
+                case .ordinaryAI:
+                    Image(systemName: "bubble.left.and.bubble.right")
+                        .font(.system(size: 44))
+                        .foregroundColor(.secondary)
+                    Text(L10n.text("chat.unified.empty.ai", fallback: "暂无 AI 对话"))
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    newAIConversationButton
+                case .hospitalAgent:
+                    Image(systemName: "stethoscope")
+                        .font(.system(size: 44))
+                        .foregroundColor(.secondary)
+                    Text(L10n.text("chat.unified.empty.hospital_agent", fallback: "暂无医生智能体消息"))
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    switchToHospitalButton
+                case .telemedicine:
+                    // 线上问诊未上线：受控空态，不提供服务发起按钮（27.2/27.4）。
+                    Image(systemName: "video.bubble")
+                        .font(.system(size: 44))
+                        .foregroundColor(.secondary)
+                    Text(L10n.text("chat.unified.empty.telemedicine", fallback: "暂无线上问诊消息"))
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    Text(L10n.text("chat.unified.empty.telemedicine.hint", fallback: "线上问诊服务将在接入后显示在这里"))
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .center)
+        .padding(.vertical, 48)
+    }
+
+    private var newAIConversationButton: some View {
+        Button {
+            Task {
+                await createThreadIfAvailable(source: .manualEmptyState)
+            }
+        } label: {
+            Text(L10n.text("chat.unified.empty.create_ai", fallback: "新建 AI 对话"))
+        }
+        .buttonStyle(.borderedProminent)
+    }
+
+    @ViewBuilder
+    private var switchToHospitalButton: some View {
+        if listViewModel.hospitalCatalogAvailable {
+            Button {
+                listViewModel.chatListSegment = .hospitalAgents
+            } label: {
+                Text(L10n.text("chat.unified.empty.goto_hospital", fallback: "前往院内就诊"))
+            }
+            .buttonStyle(.bordered)
+        }
     }
 
     /// 医院列表可解析出首家医院则开启「院内名医」分段并默认选中；
