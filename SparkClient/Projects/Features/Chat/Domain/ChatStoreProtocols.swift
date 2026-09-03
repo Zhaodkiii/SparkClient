@@ -101,6 +101,8 @@ protocol ChatSyncMetadataStoring: Sendable {
     func saveThreadSyncCursor(_ cursor: ChatSyncCursor) async
     func loadMessageSyncCursor(for threadID: UUID) async -> ChatSyncCursor?
     func saveMessageSyncCursor(_ cursor: ChatSyncCursor, for threadID: UUID) async
+    /// CHAT-000056 Q9：服务端明确 cursor 失效时，仅清除该 thread 的消息 cursor（不影响账号级与其他 thread）。
+    func deleteMessageSyncCursor(for threadID: UUID) async
 }
 
 protocol ChatRemoteThreadUpserting: Sendable {

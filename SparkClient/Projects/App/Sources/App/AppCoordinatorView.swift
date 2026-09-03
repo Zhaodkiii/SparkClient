@@ -31,6 +31,10 @@ struct AppCoordinatorView: View {
         .onAppear {
             networkMonitor.start()
         }
+        .onChange(of: networkMonitor.isSatisfied) { _, newValue in
+            // CHAT-000056 Q3：复用统一网络状态，把“网络恢复”转交聊天全局补偿入口。
+            lifecycle.handleNetworkPathUpdate(isSatisfied: newValue)
+        }
     }
 
     @ViewBuilder

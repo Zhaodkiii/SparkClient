@@ -20,6 +20,7 @@ final class AppLifecycleCoordinator: ObservableObject {
     private var didHandleSignedOutState = false
     private var isColdLaunchBootstrapInProgress = false
     private var lastObservedSessionState: AppSessionStore.State = .loading
+    private var lastObservedNetworkSatisfied: Bool?
     private let signedInPreparationRegistry = SignedInSessionPreparationRegistry()
 
     init(container: AppContainer) {
@@ -98,6 +99,8 @@ final class AppLifecycleCoordinator: ObservableObject {
         guard case .signedIn = sessionStore.state, isHandlingServerAuthInvalidation == false else { return }
         await container.knowledgeSyncSupervisor.scheduleForegroundSyncIfNeeded()
         await container.memorySyncSupervisor.scheduleForegroundSyncIfNeeded()
+        // CHAT-000056 Q3：App 回前台触发聊天账号级全局补偿，补齐后台期间遗漏。
+        container.chatSyncSupervisor.scheduleGlobalCompensation(source: .foreground)
         await container.taskRuntime.syncIncremental(memberID: container.memberContextStore.context.selectedMemberID)
         await container.versionUpdateCoordinator.checkOnLaunchIfNeeded()
         if case .signedIn(let session) = sessionStore.state {
@@ -107,6 +110,19 @@ final class AppLifecycleCoordinator: ObservableObject {
                 reason: "foreground_resume"
             )
         }
+    }
+
+    /// CHAT-000056 Q3：网络从不可用恢复为可用时，由 AppCoordinatorView 的统一网络状态转交到这里。
+    /// 不新建第二个 NWPathMonitor；仅在 false→true 跳变且已登录时触发聊天全局补偿。
+    func handleNetworkPathUpdate(isSatisfied: Bool) {
+        defer { lastObservedNetworkSatisfied = isSatisfied }
+        guard let previous = lastObservedNetworkSatisfied else { return }
+        guard previous == false, isSatisfied else { return }
+        guard case .signedIn = sessionStore.state else { return }
+        guard isHandlingServerAuthInvalidation == false else { return }
+        guard container.accountSessionRuntime.isAccountSwitchInProgress == false else { return }
+        logger.info("网络流程：网络恢复，触发聊天全局补偿同步", module: .general)
+        container.chatSyncSupervisor.scheduleGlobalCompensation(source: .networkRecovered)
     }
 
     func handleServerAuthInvalidationIfNeeded(invalidationMessage: String = "") async {

@@ -318,7 +318,8 @@ extension ChatMessageBlock {
             role: base.role,
             blocks: [galleryBlock],
             deliveryState: base.deliveryState,
-            modelName: base.modelName
+            modelName: base.modelName,
+            sender: base.sender
         )
     }
 

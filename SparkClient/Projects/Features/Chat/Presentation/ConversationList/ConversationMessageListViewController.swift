@@ -40,6 +40,10 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
     // MARK: - 数据缓存
     private var lastAppliedMessageIDs: [UUID] = [] // 上次应用的消息 ID 列表
     private var lastRenderedMessages: [ChatMessage] = [] // 上次渲染的消息
+
+    // MARK: - CHAT-000056 Q6 新消息计数
+    private var currentThreadID: UUID? // 当前渲染的会话 ID（apply 时更新）
+    private lazy var unseenMessageButton: UIButton = Self.makeUnseenMessageButton(target: self, action: #selector(handleUnseenMessageButtonTap))
     
     // MARK: - 键盘 & 手势
     private nonisolated(unsafe) var keyboardObservers: [NSObjectProtocol] = [] // 键盘监听
@@ -109,6 +113,13 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
         // 4. 键盘监听 + 数据源配置
         registerForKeyboardNotifications()
         configureDataSource()
+
+        // 5. CHAT-000056 Q6：「有新消息」浮动按钮（阅读历史时新消息到达可见）
+        view.addSubview(unseenMessageButton)
+        NSLayoutConstraint.activate([
+            unseenMessageButton.centerXAnchor.constraint(equalTo: view.centerXAnchor),
+            unseenMessageButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -12)
+        ])
     }
 
     // 注销监听
@@ -120,6 +131,17 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
 
     /// 切换新会话时重置所有状态
     func resetForNewThread() {
+        // CHAT-000056 Q6：切 thread 清理旧会话的「有新消息」临时计数
+        // 注意：本方法可能处于 SwiftUI 更新周期（updateUIViewController），store 变更需异步发送。
+        if let currentThreadID, let stateStore {
+            DispatchQueue.main.async {
+                stateStore.clearUnseenRemoteMessageCount(for: currentThreadID)
+            }
+        }
+        currentThreadID = nil
+        if isViewLoaded {
+            unseenMessageButton.isHidden = true
+        }
         lastAppliedMessageIDs = []
         lastScrollToBottomRequestGeneration = 0
         lastRenderedMessages = []
@@ -184,6 +206,14 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
         
         // 记录当前是否贴底（用于新增消息后判断是否继续贴底）
         let wasPinnedToBottom = ScrollAnchorPolicy.isPinnedToBottom(collectionView: collectionView)
+        // CHAT-000056 Q6：阅读历史（未贴底）时按真实新增条数累加「有新消息」计数
+        noteUnseenRemoteMessagesIfNeeded(
+            threadID: threadID,
+            updatePlan: updatePlan,
+            payload: payload,
+            wasPinnedToBottom: wasPinnedToBottom,
+            shouldForceScrollToBottom: shouldForceScrollToBottom
+        )
         // 顶部插入消息时，记录锚点（防止跳动）
         let topAnchor = updatePlan.hasPrependedItems ? captureTopAnchor() : nil
 
@@ -241,6 +271,82 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
                 }
             }
         }
+    }
+
+    // MARK: - CHAT-000056 Q6 新消息计数
+    /// 阅读历史期间到达的远端新消息按真实新增条数累加（同一批合并后一次性累加，不按 hint 次数）。
+    /// 贴底、强制触底、底部锁定、全量重 diff 或非当前成员的 thread 不计数。
+    private func noteUnseenRemoteMessagesIfNeeded(
+        threadID: UUID,
+        updatePlan: ConversationUpdatePlan,
+        payload: ConversationListApplyPayload,
+        wasPinnedToBottom: Bool,
+        shouldForceScrollToBottom: Bool
+    ) {
+        currentThreadID = threadID
+        defer { refreshUnseenMessageButton(threadID: threadID) }
+        guard payload.forceFullListRediff == false,
+              shouldForceScrollToBottom == false,
+              updatePlan.kind == .structural,
+              updatePlan.appendedItemIDs.isEmpty == false,
+              wasPinnedToBottom == false,
+              bottomViewportLockActive == false,
+              isThreadVisibleUnderCurrentMember(threadID) else { return }
+        // apply 处于 SwiftUI 更新周期（updateUIViewController），@Published 变更异步发送，
+        // 避免「Publishing changes from within view updates」；计数入库后同步按钮展示。
+        let delta = updatePlan.appendedItemIDs.count
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.stateStore?.addUnseenRemoteMessageCount(delta, for: threadID)
+            self.refreshUnseenMessageButton(threadID: threadID)
+        }
+    }
+
+    /// Q7：医院会话按 memberID 归属隔离；普通会话（无 memberID）不受成员切换影响。
+    private func isThreadVisibleUnderCurrentMember(_ threadID: UUID) -> Bool {
+        guard let memberID = stateStore?.threadItems.first(where: { $0.id == threadID })?.thread.memberID else {
+            return true
+        }
+        return memberID == memberContextStore?.context.selectedMemberID
+    }
+
+    /// 按 store 中的计数同步「有新消息」按钮（成员切换清空等场景由下一帧 apply 收敛）
+    private func refreshUnseenMessageButton(threadID: UUID) {
+        updateUnseenMessageButton(count: stateStore?.unseenRemoteMessageCount(for: threadID) ?? 0)
+    }
+
+    private func updateUnseenMessageButton(count: Int) {
+        guard count > 0 else {
+            unseenMessageButton.isHidden = true
+            return
+        }
+        var configuration = unseenMessageButton.configuration ?? .filled()
+        configuration.title = L10n.format(
+            "chat.conversation.unseen_messages",
+            fallback: "有 %lld 条新消息",
+            count
+        )
+        unseenMessageButton.configuration = configuration
+        unseenMessageButton.isHidden = false
+    }
+
+    /// 点击「有新消息」按钮：清零计数并显式递增滚动请求计数，驱动下一帧强制贴底
+    @objc private func handleUnseenMessageButtonTap() {
+        guard let threadID = currentThreadID else { return }
+        stateStore?.clearUnseenRemoteMessageCount(for: threadID)
+        updateUnseenMessageButton(count: 0)
+        stateStore?.requestScrollToBottom(for: threadID)
+    }
+
+    private static func makeUnseenMessageButton(target: AnyObject, action: Selector) -> UIButton {
+        var configuration = UIButton.Configuration.filled()
+        configuration.cornerStyle = .capsule
+        configuration.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 14, bottom: 8, trailing: 14)
+        let button = UIButton(configuration: configuration)
+        button.translatesAutoresizingMaskIntoConstraints = false
+        button.isHidden = true
+        button.addTarget(target, action: action, for: .touchUpInside)
+        return button
     }
 
     // MARK: - 顶部锚点（顶部加载历史消息时保持屏幕不动）
@@ -468,6 +574,16 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
     /// 滚动停止
     func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
         userDragging = false
+    }
+
+    /// CHAT-000056 Q6：用户手动滚回底部时清零该 thread 的新消息计数
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        guard unseenMessageButton.isHidden == false,
+              let collectionView,
+              let threadID = currentThreadID,
+              ScrollAnchorPolicy.isPinnedToBottom(collectionView: collectionView) else { return }
+        stateStore?.clearUnseenRemoteMessageCount(for: threadID)
+        updateUnseenMessageButton(count: 0)
     }
 
     /// 即将显示 Cell

@@ -134,6 +134,7 @@ struct HospitalAgentDirectoryView: View {
                     ForEach(viewModel.cards) { card in
                         HospitalAgentCardView(
                             card: card,
+                            hospitalName: viewModel.hospital?.name ?? "",
                             isOpening: viewModel.openingAgentID == card.id,
                             onOpen: {
                                 Task {
@@ -174,59 +175,107 @@ struct HospitalAgentDirectoryView: View {
 
 private struct HospitalAgentCardView: View {
     let card: HospitalAgentCard
+    let hospitalName: String
     let isOpening: Bool
     let onOpen: () -> Void
 
     var body: some View {
-        Button(action: onOpen) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(alignment: .top, spacing: 12) {
-                    avatar
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 6) {
-                            Text(card.doctorDisplayName)
-                                .font(.headline)
-                            Text("医生智能体")
-                                .font(.caption2.weight(.semibold))
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.accentColor.opacity(0.12), in: Capsule())
-                        }
-                        Text([card.doctorTitle, card.departmentName].filter { $0.isEmpty == false }.joined(separator: " · "))
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 14) {
+                avatar
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(card.doctorDisplayName)
+                            .font(.title3)
+                            .fontWeight(.semibold)
+                            .lineLimit(1)
+                        aiBadge
                     }
-                    Spacer(minLength: 0)
-                }
-                if card.specialties.isEmpty == false {
-                    Text("擅长：\(card.specialties.prefix(3).joined(separator: "、"))")
-                        .font(.footnote)
+                    Text([card.doctorTitle, card.departmentName]
+                        .filter { $0.isEmpty == false }
+                        .joined(separator: " · "))
+                        .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-                if card.serviceBoundary.isEmpty == false {
-                    Text(card.serviceBoundary)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                }
-                HStack {
-                    Spacer()
-                    if isOpening {
-                        ProgressView()
-                    } else {
-                        Text(card.ctaTitle)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(Color.accentColor)
+                    if card.name.isEmpty == false {
+                        Text(card.name)
+                            .font(.headline)
+                            .foregroundStyle(accent)
+                            .lineLimit(2)
                     }
+                }
+                Spacer(minLength: 0)
+            }
+
+            if card.specialties.isEmpty == false {
+                Label {
+                    Text(card.specialties.prefix(3).joined(separator: " · "))
+                        .font(.subheadline)
+                        .foregroundStyle(.primary)
+                        .lineLimit(2)
+                } icon: {
+                    Image(systemName: "heart.text.square")
+                        .font(.title3)
+                        .imageScale(.medium)
+                        .foregroundStyle(accent)
                 }
             }
-            .padding(14)
-            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+            Label("由医生团队维护", systemImage: "checkmark.shield")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 10) {
+                NavigationLink {
+                    DoctorLightProfileView(
+                        agentID: card.id,
+                        hospitalName: hospitalName,
+                        consultActionTitle: card.ctaTitle,
+                        onConsult: onOpen
+                    )
+                } label: {
+                    Label("查看详情", systemImage: "person.text.rectangle")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .tint(accent)
+
+                Button(action: onOpen) {
+                    if isOpening {
+                        ProgressView()
+                            .tint(.white)
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        Label(card.ctaTitle, systemImage: "message.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(accent)
+                .disabled(isOpening)
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(isOpening)
-        .accessibilityLabel("\(card.doctorDisplayName) \(card.ctaTitle)")
+        .padding(16)
+        .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color(.separator).opacity(0.55), lineWidth: 1)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(card.doctorDisplayName)，\(card.doctorTitle)，\(card.departmentName)，医生智能体")
+    }
+
+    private var accent: Color { Color(uiColor: .systemTeal) }
+
+    private var aiBadge: some View {
+        Label("AI助手", systemImage: "sparkles")
+            .font(.caption)
+            .fontWeight(.semibold)
+            .labelStyle(.titleAndIcon)
+            .foregroundStyle(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(accent, in: Capsule())
+            .fixedSize()
     }
 
     @ViewBuilder
@@ -237,7 +286,7 @@ private struct HospitalAgentCardView: View {
             } placeholder: {
                 placeholderAvatar
             }
-            .frame(width: 48, height: 48)
+            .frame(width: 72, height: 72)
             .clipShape(Circle())
         } else {
             placeholderAvatar
@@ -246,12 +295,13 @@ private struct HospitalAgentCardView: View {
 
     private var placeholderAvatar: some View {
         Circle()
-            .fill(Color.accentColor.opacity(0.16))
-            .frame(width: 48, height: 48)
+            .fill(accent.opacity(0.14))
+            .frame(width: 72, height: 72)
             .overlay {
                 Text(String(card.doctorDisplayName.prefix(1)))
-                    .font(.headline)
-                    .foregroundStyle(Color.accentColor)
+                    .font(.title2)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(accent)
             }
     }
 }

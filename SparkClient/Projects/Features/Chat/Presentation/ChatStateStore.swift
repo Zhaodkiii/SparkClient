@@ -252,6 +252,35 @@ final class ChatStateStore: ObservableObject {
         scrollToBottomRequestGenerationByThread[threadID] ?? 0
     }
 
+    // MARK: - Q6 新消息计数（CHAT-000056，仅 UI 临时状态）
+    /// 按会话ID记录「用户阅读历史期间到达、尚未跟随展示」的远端新消息条数。
+    /// 不等同于普通会话未读数：贴底自动跟随时为 0；阅读历史时按真实新增条数累加；
+    /// 点击「有新消息」按钮、手动回到底部、切 thread、退出详情、成员/账号切换时清理。
+    /// 院内名医目录不读取该值。
+    @Published private(set) var unseenRemoteMessageCountByThread: [UUID: Int] = [:]
+
+    /// 查询指定会话的未展示新消息条数
+    func unseenRemoteMessageCount(for threadID: UUID) -> Int {
+        unseenRemoteMessageCountByThread[threadID] ?? 0
+    }
+
+    /// 按真实新增消息条数累加（同一批远端消息合并后一次性累加，不按 WebSocket hint 次数）
+    func addUnseenRemoteMessageCount(_ delta: Int, for threadID: UUID) {
+        guard delta > 0 else { return }
+        unseenRemoteMessageCountByThread[threadID, default: 0] += delta
+    }
+
+    /// 清零指定会话的新消息计数
+    func clearUnseenRemoteMessageCount(for threadID: UUID) {
+        unseenRemoteMessageCountByThread.removeValue(forKey: threadID)
+    }
+
+    /// 清空全部新消息计数（成员切换等 UI 临时状态整体失效场景）
+    func clearAllUnseenRemoteMessageCounts() {
+        guard unseenRemoteMessageCountByThread.isEmpty == false else { return }
+        unseenRemoteMessageCountByThread = [:]
+    }
+
     // MARK: - 输入框草稿 文本管理
     /// 设置指定会话输入框草稿文本
     func setDraft(_ text: String, for threadID: UUID?) {
@@ -539,6 +568,7 @@ final class ChatStateStore: ObservableObject {
         composerAttachmentUploadProgress = [:]
         composerPreparedAttachmentStates = [:]
         messagePagingByThread = [:]
+        unseenRemoteMessageCountByThread = [:]
     }
 
     // MARK: - 内部工具方法

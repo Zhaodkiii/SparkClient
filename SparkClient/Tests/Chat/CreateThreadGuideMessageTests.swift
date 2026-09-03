@@ -224,6 +224,7 @@ private actor RecordingGuideRepository: ChatRepository {
     func saveThreadSyncCursor(_ cursor: ChatSyncCursor) async {}
     func loadMessageSyncCursor(for threadID: UUID) async -> ChatSyncCursor? { nil }
     func saveMessageSyncCursor(_ cursor: ChatSyncCursor, for threadID: UUID) async {}
+    func deleteMessageSyncCursor(for threadID: UUID) async {}
     func upsertRemoteThreads(_ threads: [ChatThread]) async {}
     func loadPendingAttachmentDownloadJobs(limit: Int) async -> [ChatAttachmentDownloadJobRecord] { [] }
     func updateAttachmentDownloadJob(
@@ -315,6 +316,7 @@ private actor PrefilledGuideRepository: ChatRepository {
     func saveThreadSyncCursor(_ cursor: ChatSyncCursor) async {}
     func loadMessageSyncCursor(for threadID: UUID) async -> ChatSyncCursor? { nil }
     func saveMessageSyncCursor(_ cursor: ChatSyncCursor, for threadID: UUID) async {}
+    func deleteMessageSyncCursor(for threadID: UUID) async {}
     func upsertRemoteThreads(_ threads: [ChatThread]) async {}
     func loadPendingAttachmentDownloadJobs(limit: Int) async -> [ChatAttachmentDownloadJobRecord] { [] }
     func updateAttachmentDownloadJob(

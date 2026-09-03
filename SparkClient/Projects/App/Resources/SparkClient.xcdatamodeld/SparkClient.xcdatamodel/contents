@@ -145,6 +145,7 @@
         <attribute name="modelName" optional="YES" attributeType="String"/>
         <attribute name="ownerAccountID" attributeType="Integer 64" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="role" attributeType="String" defaultValueString="user"/>
+        <attribute name="senderSnapshotData" optional="YES" attributeType="Binary"/>
         <attribute name="serverMessageID" optional="YES" attributeType="String"/>
         <attribute name="serverUpdatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="threadID" attributeType="UUID" usesScalarValueType="NO"/>

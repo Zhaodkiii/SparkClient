@@ -38,16 +38,52 @@ struct ChatConversationMessageRow: View {
     private var bubbleMaxWidth: CGFloat {
         let rowHorizontalPadding: CGFloat = 16
         let oppositeSideMinimumMargin: CGFloat = message.role == .user ? 40 : 0
+        let doctorAvatarColumn: CGFloat = isDoctorMessage ? 48 : 0
         let fallbackWidth = UIScreen.main.bounds.width
         let measuredWidth = rowWidth > 0 ? rowWidth : fallbackWidth
-        return max(1, measuredWidth - rowHorizontalPadding - oppositeSideMinimumMargin)
+        return max(1, measuredWidth - rowHorizontalPadding - oppositeSideMinimumMargin - doctorAvatarColumn)
+    }
+
+    @ViewBuilder
+    private var assistantOrSystemColumn: some View {
+        if case .doctor(let displayName, let avatarURL) = senderKind {
+            doctorMessageColumn(displayName: displayName, avatarURL: avatarURL)
+        } else {
+            VStack(alignment: .leading, spacing: 2) {
+                if shouldShowSenderHeader, let kind = senderKind {
+                    ChatMessageSenderHeaderView(kind: kind)
+                }
+                longPressableBubble
+            }
+            .frame(maxWidth: bubbleMaxWidth, alignment: .leading)
+        }
+    }
+
+    private func doctorMessageColumn(displayName: String, avatarURL: String?) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            ChatDoctorAvatarView(displayName: displayName, avatarURL: avatarURL, size: 40)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(displayName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                longPressableBubble
+                    .padding(.leading, 6)
+                    .background {
+                        ChatDoctorIncomingBubbleShape()
+                            .fill(Color(uiColor: .systemBackground))
+                    }
+            }
+            .frame(maxWidth: bubbleMaxWidth, alignment: .leading)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(displayName)
     }
 
     var body: some View {
         HStack {
             if message.role == .assistant || message.role == .system {
-                longPressableBubble
-                    .frame(maxWidth: bubbleMaxWidth, alignment: .leading)
+                assistantOrSystemColumn
                 Spacer(minLength: 0)
             } else {
                 Spacer(minLength: 40)
@@ -526,6 +562,25 @@ struct ChatConversationMessageRow: View {
     private func isLastAssistantMessage(_ message: ChatMessage) -> Bool {
         guard message.role == .assistant else { return false }
         return visibleMessages.last(where: { $0.role == .assistant })?.id == message.id
+    }
+
+    private var senderKind: ChatMessageSenderKind? {
+        ChatMessageSenderHeaderResolver.senderKind(
+            for: message,
+            scenarioModels: detailViewModel.chatScenarioModels
+        )
+    }
+
+    private var isDoctorMessage: Bool {
+        if case .doctor = senderKind { return true }
+        return false
+    }
+
+    private var shouldShowSenderHeader: Bool {
+        ChatMessageSenderHeaderResolver.shouldShowSenderHeader(
+            for: message,
+            in: visibleMessages
+        )
     }
 
     private func billingEstimate(for message: ChatMessage) -> ChatBillingEstimate? {

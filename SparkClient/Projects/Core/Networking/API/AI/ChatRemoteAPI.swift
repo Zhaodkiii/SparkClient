@@ -18,6 +18,19 @@ struct ChatRemoteMessageDTO: Codable, Sendable {
     let threadRolePrompt: String?
     let threadSystemPrompt: String?
     let modelName: String?
+    /// CHAT-000056：医院会话权威发送者快照。旧消息 / 非医院消息为 nil，不得据此推断为真人医生。
+    /// 不要给这个属性默认值：Swift 合成 Decodable 可能因此跳过 JSON 里的 `sender`。
+    let sender: ChatRemoteMessageSenderDTO?
+}
+
+nonisolated struct ChatRemoteMessageSenderDTO: Codable, Sendable {
+    let actorType: String
+    let actorId: String?
+    let displayName: String?
+    let avatarUrl: String?
+    let title: String?
+    let departmentName: String?
+    let source: String?
 }
 
 struct ChatRemoteMessageBlockUpdateDTO: Codable, Sendable {

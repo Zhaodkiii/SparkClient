@@ -922,6 +922,15 @@ actor CoreDataChatStore {
                 )
                 if let local,
                    mergeEngine.shouldSkipApplyingRemote(local: local, remote: message) {
+                    if local.sender == nil, message.sender != nil {
+                        try Self.fillMessage(
+                            object: object,
+                            message: local.applyingAuthoritativeSender(from: message),
+                            context: context,
+                            ownerAccountID: accountID,
+                            logger: self.logger
+                        )
+                    }
                     continue
                 }
 
@@ -942,7 +951,9 @@ actor CoreDataChatStore {
                         createdAt: message.createdAt,
                         serverUpdatedAt: message.serverUpdatedAt,
                         isTombstone: message.isTombstone,
-                        modelName: message.modelName
+                        modelName: message.modelName,
+                        sender: message.sender ?? local.sender,
+                        usageSummary: message.usageSummary ?? local.usageSummary
                     )
                 } else {
                     messageToApply = message
@@ -1209,6 +1220,10 @@ actor CoreDataChatStore {
         await saveSyncCursor(cursor, key: CursorKey.threadMessageSync(threadID))
     }
 
+    func deleteMessageSyncCursor(for threadID: UUID) async {
+        await deleteSyncCursor(key: CursorKey.threadMessageSync(threadID))
+    }
+
     func loadPendingAttachmentDownloadJobs(limit: Int) async -> [ChatAttachmentDownloadJobRecord] {
         (try? await kernel.read { context, accountID in
             guard let accountID else { return [] }
@@ -1272,6 +1287,19 @@ actor CoreDataChatStore {
             object.setValue(key, forKey: "key")
             object.setValue(cursor.value, forKey: "value")
             object.setValue(cursor.updatedAt, forKey: "updatedAt")
+        }
+    }
+
+    private func deleteSyncCursor(key: String) async {
+        _ = try? await kernel.writeWithoutNotification { context, accountID in
+            let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.cursor)
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                Self.ownerPredicate(accountID),
+                NSPredicate(format: "key == %@", key),
+            ])
+            for object in try context.fetch(request) {
+                context.delete(object)
+            }
         }
     }
 
@@ -1411,6 +1439,11 @@ actor CoreDataChatStore {
         object.setValue(message.threadID, forKey: "threadID")
         object.setValue(message.role.rawValue, forKey: "role")
         object.setValue(message.modelName, forKey: "modelName")
+        if let sender = message.sender {
+            object.setValue(try? JSONEncoder.default.encode(sender), forKey: "senderSnapshotData")
+        } else {
+            object.setValue(nil, forKey: "senderSnapshotData")
+        }
         object.setValue(message.clientMessageID, forKey: "clientMessageID")
         object.setValue(message.serverMessageID, forKey: "serverMessageID")
         object.setValue(message.deliveryState.rawValue, forKey: "deliveryState")
@@ -1866,12 +1899,21 @@ actor CoreDataChatStore {
             serverUpdatedAt: object.value(forKey: "serverUpdatedAt") as? Date,
             isTombstone: object.value(forKey: "isTombstone") as? Bool ?? false,
             modelName: object.value(forKey: "modelName") as? String,
+            sender: Self.decodeSenderSnapshot(
+                object.value(forKey: "senderSnapshotData") as? Data,
+                decoder: decoder
+            ),
             usageSummary: try fetchUsageSummary(
                 context: context,
                 ownerAccountID: ownerAccountID,
                 messageID: clientMessageID
             ).flatMap(toUsageSummary)
         )
+    }
+
+    private static func decodeSenderSnapshot(_ data: Data?, decoder: JSONDecoder) -> ChatMessageSender? {
+        guard let data, data.isEmpty == false else { return nil }
+        return try? decoder.decode(ChatMessageSender.self, from: data)
     }
 
     private static func toUsageSummary(_ object: NSManagedObject) -> ChatMessageUsageSummary? {

@@ -237,6 +237,10 @@ actor CoreDataChatRepository: ChatRepository {
         await store.saveMessageSyncCursor(cursor, for: threadID)
     }
 
+    func deleteMessageSyncCursor(for threadID: UUID) async {
+        await store.deleteMessageSyncCursor(for: threadID)
+    }
+
     func loadPendingAttachmentDownloadJobs(limit: Int) async -> [ChatAttachmentDownloadJobRecord] {
         await store.loadPendingAttachmentDownloadJobs(limit: limit)
     }

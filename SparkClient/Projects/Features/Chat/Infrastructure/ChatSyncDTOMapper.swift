@@ -46,7 +46,18 @@ enum ChatSyncEngineDTOMapper: Sendable {
             createdAt: remote.createdAt,
             serverUpdatedAt: remote.serverUpdatedAt,
             isTombstone: remote.tombstone,
-            modelName: remote.modelName
+            modelName: remote.modelName,
+            sender: remote.sender.map { remoteSender in
+                ChatMessageSender(
+                    actorType: ChatMessageSenderActorType(rawValue: remoteSender.actorType),
+                    actorId: remoteSender.actorId,
+                    displayName: remoteSender.displayName,
+                    avatarUrl: remoteSender.avatarUrl,
+                    title: remoteSender.title,
+                    departmentName: remoteSender.departmentName,
+                    source: remoteSender.source
+                )
+            }
         )
     }
 }

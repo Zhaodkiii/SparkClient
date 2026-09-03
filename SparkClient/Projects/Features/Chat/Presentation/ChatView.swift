@@ -593,6 +593,19 @@ struct ChatView: View {
             .onChange(of: aiSettingsViewModel.snapshot.chatComposerStartupPreferences) { preferences in
                 stateStore.setComposerStartupPreferences(preferences)
             }
+            .onChange(of: homeViewModel.memberContextStoreForBinding.context.selectedMemberID) { _ in
+                // CHAT-000056 Q7：成员切换后，旧成员的「有新消息」临时计数全部失效
+                stateStore.clearAllUnseenRemoteMessageCounts()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .chatRealtimeThreadPullDidComplete)) { note in
+                // CHAT-000056 Q8：定向拉取完成后刷新当前医院会话能力；下架/终结 → 输入立即只读。
+                // Q7：仅当拉取结果属于当前成员时才允许更新当前 UI。
+                guard let pulledThreadID = note.chatRealtimePulledThreadID,
+                      pulledThreadID == currentThreadID,
+                      case .hospital(let scope) = hospitalScopeResolution,
+                      scope.memberID == homeViewModel.memberContextStoreForBinding.context.selectedMemberID else { return }
+                Task { await refreshHospitalConversationContext(threadID: pulledThreadID, scope: scope) }
+            }
         // CHAT-000030：以 currentThreadID 作为生命周期 key，右上角新建后原地重启新 thread 初始化链路。
             .task(id: currentThreadID) {
                 // 固定本轮 ID，避免 await 期间用户再次新建导致后续步骤串到别的 thread
@@ -1108,6 +1121,15 @@ struct ChatView: View {
         // CHAT-000055 Q27/Q28：医院会话发送前必须过能力门禁。
         // 禁发时只提示、不发送；绝不自动重发、绝不改走普通 AI 链路。
         if case .hospital(let scope) = hospitalScopeResolution {
+            // CHAT-000056 Q7.4：会话绑定成员已不是当前就诊人时禁止继续发送，
+            // 患者需切回该成员或从当前成员重新进入医生卡发起咨询。
+            guard scope.memberID == homeViewModel.memberContextStoreForBinding.context.selectedMemberID else {
+                hospitalSendBlockedMessage = L10n.text(
+                    "chat.hospital.send_member_mismatch",
+                    fallback: "当前就诊人已切换，请切回原就诊人后再继续咨询"
+                )
+                return
+            }
             if let capabilities = hospitalCapabilities {
                 guard capabilities.canSendMessage else {
                     hospitalSendBlockedMessage = hospitalReadOnlyMessage(for: capabilities.readOnlyReason)
@@ -1672,5 +1694,10 @@ private struct ChatConversationMessageListContainer: View {
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .chatScrollDismissesKeyboardInteractively()
+        .onDisappear {
+            // CHAT-000056 Q6：退出详情（含被子页面覆盖）清理仅用于 UI 的临时计数；
+            // 返回后由下一帧 diff 重新累加。
+            stateStore.clearUnseenRemoteMessageCount(for: threadID)
+        }
     }
 }

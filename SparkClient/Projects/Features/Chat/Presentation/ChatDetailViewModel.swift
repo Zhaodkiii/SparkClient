@@ -143,6 +143,8 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
             .sink { [weak self] note in
                 guard let self else { return }
                 guard let threadID = self.stateStore.selectedThreadID else { return }
+                // CHAT-000056 Q7：成员切换后，非当前成员 thread 的数据库变化只完成落库，不更新当前 UI
+                guard self.isThreadVisibleUnderCurrentMember(threadID) else { return }
                 if let event = note.chatConversationChangeEvent {
                     if let changedThreadID = event.threadID, changedThreadID != threadID {
                         return
@@ -161,6 +163,8 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
                         guard affected.isEmpty == false else { return }
                         self.chatLoadCoordinator.schedule(delayMs: 60) { [weak self] in
                             guard let self else { return }
+                            // Q7：调度窗口内可能已切换成员，写 UI 前再次校验
+                            guard self.isThreadVisibleUnderCurrentMember(threadID) else { return }
                             let messages = await self.loadChatMessagesUseCase.execute(clientMessageIDs: affected)
                             await MainActor.run {
                                 self.stateStore.updateMessages(messages, for: threadID)
@@ -170,6 +174,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
                     case .messagesMerged:
                         self.chatLoadCoordinator.schedule(delayMs: 60) { [weak self] in
                             guard let self else { return }
+                            guard self.isThreadVisibleUnderCurrentMember(threadID) else { return }
                             await self.loadMessagesIfNeeded(
                                 for: threadID,
                                 lockBottomViewport: true,
@@ -181,6 +186,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
                 }
                 self.chatLoadCoordinator.schedule(delayMs: 60) { [weak self] in
                     guard let self else { return }
+                    guard self.isThreadVisibleUnderCurrentMember(threadID) else { return }
                     await self.loadMessagesIfNeeded(for: threadID, syncRemote: false)
                 }
             }
@@ -194,6 +200,15 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
 
     func updateToolInteractionPreferences(_ preferences: ChatToolInteractionPreferences) {
         toolInteractionCoordinator.updateInteractionPreferences(preferences)
+    }
+
+    /// CHAT-000056 Q7：目标 thread 是否仍属于当前选中成员。
+    /// 医院会话按 memberID 归属隔离；普通会话（无 memberID）不受成员切换影响。
+    private func isThreadVisibleUnderCurrentMember(_ threadID: UUID) -> Bool {
+        guard let memberID = stateStore.threadItems.first(where: { $0.id == threadID })?.thread.memberID else {
+            return true
+        }
+        return memberID == memberContextStore.context.selectedMemberID
     }
 
     /// 打开工具输出详情全局 Sheet（与 consent/question 共用同一呈现队列）。
@@ -1379,7 +1394,8 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
             deliveryState: deliveryState,
             createdAt: existingMessage?.createdAt ?? Date(),
             serverUpdatedAt: existingMessage?.serverUpdatedAt,
-            modelName: existingMessage?.modelName ?? role.rawValue
+            modelName: existingMessage?.modelName ?? role.rawValue,
+            sender: existingMessage?.sender
         )
         if let existingIndex = messages.firstIndex(where: { $0.clientMessageID == clientMessageID }) {
             messages[existingIndex] = local
@@ -3286,7 +3302,9 @@ extension ChatMessage {
             createdAt: createdAt,
             serverUpdatedAt: serverUpdatedAt,
             isTombstone: isTombstone,
-            modelName: modelName
+            modelName: modelName,
+            sender: sender,
+            usageSummary: usageSummary
         )
     }
 }

@@ -53,6 +53,8 @@ struct ChatSwiftUIConversationView: View {
     @StateObject private var scrollPolicy = ChatSwiftUIScrollAnchorPolicy()
     @State private var layoutGeneration: UInt64 = 0
     @State private var measuredContentHeight: CGFloat = 0
+    /// CHAT-000056 Q6：底部锚点是否在视口内（贴底判定），决定新消息自动跟随还是累加「有新消息」计数。
+    @State private var isBottomAnchorVisible = false
     /// 当前 SwiftUI 列表已经完成首次初始化的 thread。
     /// SwiftUI 的 `onAppear` 不只代表首次进入会话（子页面 pop 返回也会触发），
     /// 用它区分「首次打开/切换会话」与「同 thread 导航返回」，后者不得重置滚动策略。
@@ -162,6 +164,8 @@ struct ChatSwiftUIConversationView: View {
                     Color.clear
                         .frame(height: 1)
                         .id(ChatSwiftUIConversationLayoutConstants.bottomAnchorID)
+                        .onAppear { handleBottomAnchorVisibility(true) }
+                        .onDisappear { handleBottomAnchorVisibility(false) }
                 }
                 .padding(.vertical, verticalContentPadding)
                 .background {
@@ -195,10 +199,18 @@ struct ChatSwiftUIConversationView: View {
             .onChange(of: input) { _, newValue in
                 apply(input: newValue, reset: false)
             }
-            .onChange(of: threadID) { _, newThreadID in
+            .onChange(of: threadID) { oldThreadID, newThreadID in
                 // 会话切换需要完整重置；这是 thread 边界而非导航返回，仍允许初始触底。
+                // CHAT-000056 Q6：切 thread 时清理新旧会话的「有新消息」临时计数。
+                stateStore.clearUnseenRemoteMessageCount(for: oldThreadID)
+                stateStore.clearUnseenRemoteMessageCount(for: newThreadID)
                 apply(input: input, reset: true, openReason: .threadChanged)
                 initializedThreadID = newThreadID
+            }
+            .onDisappear {
+                // CHAT-000056 Q6：退出详情（含被子页面覆盖）清理仅用于 UI 的临时计数；
+                // 返回后由下一帧 diff 重新累加。
+                stateStore.clearUnseenRemoteMessageCount(for: threadID)
             }
             .onPreferenceChange(ChatSwiftUIContentHeightPreferenceKey.self) { height in
                 guard abs(height - measuredContentHeight) > 0.5 else { return }
@@ -216,6 +228,77 @@ struct ChatSwiftUIConversationView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .chatScrollDismissesKeyboardInteractively()
+        .overlay(alignment: .bottom) {
+            if unseenRemoteMessageCount > 0 {
+                Button(action: tapUnseenMessageButton) {
+                    Text(unseenMessageButtonTitle)
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(Capsule().fill(Color.accentColor))
+                }
+                .buttonStyle(.plain)
+                .shadow(radius: 4, y: 2)
+                .padding(.bottom, 12)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.easeOut(duration: 0.18), value: unseenRemoteMessageCount > 0)
+    }
+
+    // MARK: - CHAT-000056 Q6 新消息计数
+    /// 当前会话「阅读历史期间到达、尚未展示」的新消息条数
+    private var unseenRemoteMessageCount: Int {
+        stateStore.unseenRemoteMessageCount(for: threadID)
+    }
+
+    private var unseenMessageButtonTitle: String {
+        L10n.format(
+            "chat.conversation.unseen_messages",
+            fallback: "有 %lld 条新消息",
+            unseenRemoteMessageCount
+        )
+    }
+
+    /// 点击「有新消息」按钮：显式发起触底请求并清零计数
+    private func tapUnseenMessageButton() {
+        stateStore.clearUnseenRemoteMessageCount(for: threadID)
+        stateStore.requestScrollToBottom(for: threadID)
+    }
+
+    /// 底部锚点可见性变化：记录贴底状态；手动滚回底部时清零该 thread 的新消息计数。
+    private func handleBottomAnchorVisibility(_ isVisible: Bool) {
+        isBottomAnchorVisible = isVisible
+        if isVisible {
+            stateStore.clearUnseenRemoteMessageCount(for: threadID)
+        }
+    }
+
+    /// Q6/Q7：同一批远端消息合并后按真实新增条数累加（不按 hint 次数）；
+    /// 贴底、初始加载、全量重置或非当前成员的 thread 不计数（由滚动策略自动跟随或不展示）。
+    private func noteUnseenRemoteMessagesIfNeeded(
+        previous: ChatSwiftUIConversationFrame,
+        next: ChatSwiftUIConversationFrame,
+        reset: Bool
+    ) {
+        guard reset == false,
+              previous.threadID == next.threadID,
+              next.threadID == threadID,
+              isBottomAnchorVisible == false else { return }
+        let plan = ConversationUpdateBuilder.plan(previous: previous.visibleMessages, current: next.visibleMessages)
+        guard plan.kind == .structural, plan.appendedItemIDs.isEmpty == false else { return }
+        // Q7：仅当目标 thread 仍属于当前成员时才更新 UI 临时计数
+        guard isThreadVisibleUnderCurrentMember(next.threadID) else { return }
+        stateStore.addUnseenRemoteMessageCount(plan.appendedItemIDs.count, for: next.threadID)
+    }
+
+    /// Q7：医院会话按 memberID 归属隔离；普通会话（无 memberID）不受成员切换影响。
+    private func isThreadVisibleUnderCurrentMember(_ threadID: UUID) -> Bool {
+        guard let memberID = stateStore.threadItems.first(where: { $0.id == threadID })?.thread.memberID else {
+            return true
+        }
+        return memberID == memberContextStore.context.selectedMemberID
     }
 
     private var rowSpacing: CGFloat {
@@ -284,6 +367,11 @@ struct ChatSwiftUIConversationView: View {
                 reason: openReason
             )
         }
+        noteUnseenRemoteMessagesIfNeeded(
+            previous: frameScheduler.frame,
+            next: nextFrame,
+            reset: reset
+        )
         let priority = reset
             ? ChatSwiftUIFramePriority.immediate
             : ChatSwiftUIConversationFrameBuilder.priority(
@@ -308,7 +396,8 @@ struct ChatSwiftUIConversationView: View {
         guard scrollPolicy.shouldScrollToBottom(
             frame: frame,
             behavior: uiPreferences.swiftUIRefreshBehavior,
-            layoutGeneration: layoutGeneration
+            layoutGeneration: layoutGeneration,
+            isAtBottom: isBottomAnchorVisible
         ) else { return }
 
         let action = {

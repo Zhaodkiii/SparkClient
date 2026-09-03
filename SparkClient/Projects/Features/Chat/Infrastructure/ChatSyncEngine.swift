@@ -21,6 +21,23 @@ actor ChatSyncEngine {
     private let logger: Logger
     private var inflightSyncTasks: [SyncScope: Task<Void, Error>] = [:]
 
+    /// CHAT-000056：实时拉取调度器（per-thread debounce/dirty/retry + 全局补偿状态机）。
+    /// lazy 以便闭包在 init 完成后捕获 engine。
+    private lazy var realtimeScheduler = ChatRealtimePullScheduler(
+        pullThread: { [weak self] threadID, forceFullRefresh in
+            guard let self else { return }
+            try await self.performRealtimeThreadPull(threadID: threadID, forceFullRefresh: forceFullRefresh)
+        },
+        pullGlobal: { [weak self] in
+            guard let self else { return }
+            try await self.performGlobalCompensationCycle()
+        },
+        classifyError: { error in
+            Self.classifyRealtimePullError(error)
+        },
+        logger: logger
+    )
+
     private static var syncCursorFormatter: ISO8601DateFormatter {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -76,20 +93,29 @@ actor ChatSyncEngine {
         }
     }
 
-    /// 进入会话：只拉取当前会话的消息增量。
-    /// 若本地已有消息，从本地已知最新远端活动之后拉；若本地为空，则 cursor=nil 拉首屏远端消息。
+    /// 进入会话：拉取当前会话消息增量。
+    /// 本地已有疑似医生 assistant 却缺 `sender` 时，清 cursor 全量回填一次，避免旧缓存永远补不上身份。
     func pullThreadMessagesIncrementalOnOpen(threadID: UUID) async throws {
         try await runSingleFlight(scope: .thread(threadID)) { engine in
-            let localCount = await engine.repository.countMessages(threadID: threadID)
+            let needsSenderBackfill = await engine.needsDoctorSenderBackfill(threadID: threadID)
             let cursor: String?
-            if localCount == 0 {
+            if needsSenderBackfill {
+                await engine.repository.deleteMessageSyncCursor(for: threadID)
                 cursor = nil
-            } else if let persisted = await engine.repository.loadMessageSyncCursor(for: threadID)?.value {
-                cursor = persisted
             } else {
-                cursor = await engine.repository.latestServerActivity(for: threadID).map(Self.formatSyncCursor)
+                let localCount = await engine.repository.countMessages(threadID: threadID)
+                if localCount == 0 {
+                    cursor = nil
+                } else if let persisted = await engine.repository.loadMessageSyncCursor(for: threadID)?.value {
+                    cursor = persisted
+                } else {
+                    cursor = await engine.repository.latestServerActivity(for: threadID).map(Self.formatSyncCursor)
+                }
             }
             try await engine.pullAndMergeAllowingMissingRemoteThread(cursor: cursor, threadID: threadID)
+            if needsSenderBackfill {
+                Self.markDoctorSenderBackfillAttempted(threadID: threadID)
+            }
         }
     }
 
@@ -111,22 +137,125 @@ actor ChatSyncEngine {
 
     func startRealtimeSync() async {
         guard let realtimeClient else { return }
-        await realtimeClient.start { [weak self] hintCursor in
-            guard let self else { return }
-            Task {
-                do {
-                    try await self.runSingleFlight(scope: .global) { engine in
-                        try await engine.performRealtimeHintSync(cursor: hintCursor)
-                    }
-                } catch {
-                    self.logger.warning("chat realtime sync failed: \(error.localizedDescription)", module: .general)
+        await realtimeClient.start(
+            onSyncHint: { [weak self] hint in
+                guard let self else { return }
+                Task {
+                    await self.handleRealtimeHint(hint)
+                }
+            },
+            onConnected: { [weak self] in
+                guard let self else { return }
+                Task {
+                    // Q3：WebSocket 每次连接成功都触发全局补偿。
+                    await self.requestGlobalCompensation(source: .realtimeConnected)
                 }
             }
-        }
+        )
     }
 
     func stopRealtimeSync() async {
+        // 账号切换/登出：先取消调度与重连，旧任务结果不得再改动新账号调度状态。
+        await realtimeScheduler.cancelAll()
         await realtimeClient?.stop()
+    }
+
+    /// CHAT-000056 Q3：账号启动、连接成功、前台恢复、网络恢复统一的全局补偿入口。
+    func requestGlobalCompensation(source: ChatGlobalCompensationSource) async {
+        await realtimeScheduler.requestGlobalCompensation(source: source)
+    }
+
+    private func handleRealtimeHint(_ hint: ChatSyncHint) async {
+        await realtimeScheduler.handleHint(hint)
+    }
+
+    // MARK: - CHAT-000056 实时拉取
+
+    /// Q1/Q2：实时 hint 驱动的 thread 定向增量拉取。
+    ///
+    /// 与现有 single-flight 的关系：先等待进行中的全局任务与同 thread 任务结束，再执行一次
+    /// “hint 到达之后发起”的拉取，保证服务端已提交的消息必被本轮请求覆盖，不被复用语义吞掉。
+    private func performRealtimeThreadPull(threadID: UUID, forceFullRefresh: Bool) async throws {
+        while let globalTask = inflightSyncTasks[.global] {
+            try? await globalTask.value
+        }
+        while let existing = inflightSyncTasks[.thread(threadID)] {
+            try? await existing.value
+        }
+
+        let task = Task { () throws -> Void in
+            let cursor: String?
+            if forceFullRefresh {
+                // Q9：cursor 失效时仅清除该 thread 的消息 cursor，从首屏安全重拉。
+                await self.repository.deleteMessageSyncCursor(for: threadID)
+                cursor = nil
+            } else {
+                let localCount = await self.repository.countMessages(threadID: threadID)
+                if localCount == 0 {
+                    cursor = nil
+                } else if let persisted = await self.repository.loadMessageSyncCursor(for: threadID)?.value {
+                    cursor = persisted
+                } else {
+                    cursor = await self.repository.latestServerActivity(for: threadID).map(Self.formatSyncCursor)
+                }
+            }
+            try await self.pullAndMerge(cursor: cursor, threadID: threadID)
+        }
+        inflightSyncTasks[.thread(threadID)] = task
+        defer { inflightSyncTasks[.thread(threadID)] = nil }
+        try await task.value
+        // Q8：定向拉取成功后通知表现层；当前打开的医院会话据此刷新 context/capabilities，
+        // 若智能体下架或会话终结则立即切换只读（历史与医生最后消息保持可读）。
+        NotificationCenter.default.post(name: .chatRealtimeThreadPullDidComplete, object: threadID)
+    }
+
+    /// Q3：账号级全局补偿单轮执行。
+    ///
+    /// 注册到 `inflightSyncTasks[.global]`，让 thread 级拉取与手动刷新继续互斥；
+    /// 但不复用进行中的全局任务——等待其结束后仍执行一轮完整拉取，避免补偿触发被吞。
+    private func performGlobalCompensationCycle() async throws {
+        while let existing = inflightSyncTasks[.global] {
+            try? await existing.value
+        }
+        let task = Task { () throws -> Void in
+            try await self.performManualRefreshSync()
+        }
+        inflightSyncTasks[.global] = task
+        defer { inflightSyncTasks[.global] = nil }
+        try await task.value
+    }
+
+    /// Q9/Q16.4：实时拉取失败分类。
+    static func classifyRealtimePullError(_ error: Error) -> ChatRealtimePullScheduler.PullErrorClassification {
+        guard let network = error as? SparkNetworkError else {
+            // 非网络层错误：按可重试处理（次数有上限），避免瞬态异常直接放弃。
+            return .retryable
+        }
+        switch network {
+        case .transport, .timeout:
+            return .retryable
+        case .httpError(let statusCode, let backend, _):
+            if statusCode >= 500 {
+                return .retryable
+            }
+            if statusCode == 404 {
+                return .threadMissing
+            }
+            if statusCode == 400, let backend {
+                if backend.code == 40032 {
+                    // invalid_thread_id：该 thread 的自动重试结束。
+                    return .threadMissing
+                }
+                if backend.msg.lowercased().contains("cursor") {
+                    // 服务端明确 cursor 无效/过期：仅重置该 thread。
+                    return .cursorInvalid
+                }
+            }
+            // 401/403 等：鉴权失效、成员撤权，由既有鉴权/能力流程处理，不重置 cursor、不重试。
+            return .terminal
+        case .cancelled, .invalidResponse, .decoding, .refreshFailed:
+            return .terminal
+        }
     }
 
     private func performGlobalSync() async throws {
@@ -149,15 +278,6 @@ actor ChatSyncEngine {
             "聊天手动刷新同步完成，changedThreads=\(changedThreads.count), cost=\(format(cost))s",
             module: .general
         )
-    }
-
-    private func performRealtimeHintSync(cursor: String?) async throws {
-        _ = cursor
-        // 按当前策略：realtime 后续拉取链路已移除，仅保留本地待同步数据上送。
-        try await pushPendingThreadDeletions()
-//        try await pushThreads()
-        try await pushOutbox()
-        logger.debug("realtime 提示处理完成：仅上送，不执行拉取", module: .general)
     }
 
     private func pushPendingThreadDeletions() async throws {
@@ -289,6 +409,29 @@ actor ChatSyncEngine {
 
     private func shortID(_ id: UUID) -> String {
         String(id.uuidString.prefix(8))
+    }
+
+    private func needsDoctorSenderBackfill(threadID: UUID) async -> Bool {
+        if UserDefaults.standard.bool(forKey: Self.senderBackfillDefaultsKey(threadID)) {
+            return false
+        }
+        let messages = await repository.loadMessages(threadID: threadID, limit: nil, before: nil)
+        return messages.contains { Self.isDoctorCandidateMissingSender($0) }
+    }
+
+    private static func markDoctorSenderBackfillAttempted(threadID: UUID) {
+        UserDefaults.standard.set(true, forKey: senderBackfillDefaultsKey(threadID))
+    }
+
+    private static func senderBackfillDefaultsKey(_ threadID: UUID) -> String {
+        "chat.senderSnapshotBackfill.\(threadID.uuidString)"
+    }
+
+    /// 无 modelName 的 assistant 才是真人医生候选；普通 AI 回复都带模型名，不会触发全量回填。
+    private static func isDoctorCandidateMissingSender(_ message: ChatMessage) -> Bool {
+        guard message.role == .assistant, message.sender == nil else { return false }
+        let trimmed = message.modelName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty || trimmed == "user"
     }
 
     private func isRemoteThreadMissing(_ error: Error) -> Bool {

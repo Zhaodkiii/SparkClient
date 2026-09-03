@@ -132,6 +132,10 @@ final class AccountSessionRuntime {
         mode = .account(accountID)
         await knowledgeSyncSupervisor.startForAccount(accountID: accountID)
         await memorySyncSupervisor.startForAccount(accountID: accountID)
+        // CHAT-000056 Q3/P0：账号准备完成后建立聊天实时连接，并触发一次账号启动全局补偿；
+        // 连接建立由 WebSocket 自动重连维持，启动与每次连接成功都会走同一补偿入口。
+        await chatSyncSupervisor.startRealtimeSync()
+        chatSyncSupervisor.scheduleGlobalCompensation(source: .accountStartup)
         logger.info("账号运行时：账号切换完成 accountID=\(accountID)", module: .auth)
     }
 

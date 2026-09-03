@@ -26,14 +26,19 @@ struct ChatMergeEngine: Sendable {
             winner = remote
         }
         if winner.clientMessageID == remote.clientMessageID {
-            return winner.mergingRemotePreservingLocalHealthResourceBlocks(local)
+            return winner
+                .mergingRemotePreservingLocalHealthResourceBlocks(local)
+                .applyingAuthoritativeSender(from: remote)
         }
-        return winner
+        return winner.applyingAuthoritativeSender(from: remote)
     }
 
     /// `true` 表示**跳过**用 `remote` 覆盖本地行（本地胜出或等价于旧 `shouldKeepLocal`）。
     nonisolated func shouldSkipApplyingRemote(local: ChatMessage, remote: ChatMessage) -> Bool {
         if ChatMessage.shouldPreferRemoteUserImageSyncData(local: local, remote: remote) {
+            return false
+        }
+        if local.sender == nil, remote.sender != nil {
             return false
         }
         switch (local.serverUpdatedAt, remote.serverUpdatedAt) {

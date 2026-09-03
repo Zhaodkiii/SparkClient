@@ -972,6 +972,49 @@ extension ChatMessageBlock {
 
 }
 
+/// 服务端 `hospital_care.ChatMessageAttribution.actor_type`。未知 raw value 不崩溃，降级为 nil。
+nonisolated enum ChatMessageSenderActorType: String, Codable, Equatable, Sendable {
+    case patient
+    case aiAgent = "ai_agent"
+    case doctor
+    case system
+}
+
+/// 单条消息的权威发送者快照，随同步 payload 下发并落库。
+nonisolated struct ChatMessageSender: Codable, Equatable, Sendable {
+    let actorType: ChatMessageSenderActorType?
+    let actorId: String?
+    let displayName: String?
+    let avatarUrl: String?
+    let title: String?
+    let departmentName: String?
+    let source: String?
+
+    nonisolated init(
+        actorType: ChatMessageSenderActorType?,
+        actorId: String? = nil,
+        displayName: String? = nil,
+        avatarUrl: String? = nil,
+        title: String? = nil,
+        departmentName: String? = nil,
+        source: String? = nil
+    ) {
+        self.actorType = actorType
+        self.actorId = Self.trimmed(actorId)
+        self.displayName = Self.trimmed(displayName)
+        self.avatarUrl = Self.trimmed(avatarUrl)
+        self.title = Self.trimmed(title)
+        self.departmentName = Self.trimmed(departmentName)
+        self.source = Self.trimmed(source)
+    }
+
+    private nonisolated static func trimmed(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
 nonisolated struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     let threadId: UUID
@@ -984,6 +1027,7 @@ nonisolated struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
     let serverUpdatedAt: Date?
     let isTombstone: Bool
     let modelName: String?
+    let sender: ChatMessageSender?
     let usageSummary: ChatMessageUsageSummary?
 
     nonisolated var threadID: UUID { threadId }
@@ -1002,6 +1046,7 @@ nonisolated struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
         serverUpdatedAt: Date? = nil,
         isTombstone: Bool = false,
         modelName: String? = nil,
+        sender: ChatMessageSender? = nil,
         usageSummary: ChatMessageUsageSummary? = nil
     ) {
         self.id = id
@@ -1015,6 +1060,7 @@ nonisolated struct ChatMessage: Identifiable, Codable, Equatable, Sendable {
         self.serverUpdatedAt = serverUpdatedAt
         self.isTombstone = isTombstone
         self.modelName = modelName
+        self.sender = sender
         self.usageSummary = usageSummary
     }
 
@@ -1034,6 +1080,28 @@ extension ChatMessage {
             serverUpdatedAt: serverUpdatedAt,
             isTombstone: isTombstone,
             modelName: modelName,
+            sender: sender,
+            usageSummary: usageSummary
+        )
+    }
+
+    /// 服务端 `sender` 是身份权威：远端带快照时覆盖本地缺失/过期值。
+    nonisolated func applyingAuthoritativeSender(from remote: ChatMessage) -> ChatMessage {
+        guard let remoteSender = remote.sender else { return self }
+        if sender == remoteSender { return self }
+        return ChatMessage(
+            id: id,
+            threadID: threadID,
+            role: role,
+            blocks: blocks,
+            clientMessageID: clientMessageID,
+            serverMessageID: serverMessageID,
+            deliveryState: deliveryState,
+            createdAt: createdAt,
+            serverUpdatedAt: serverUpdatedAt,
+            isTombstone: isTombstone,
+            modelName: modelName,
+            sender: remoteSender,
             usageSummary: usageSummary
         )
     }
@@ -1068,6 +1136,7 @@ extension ChatMessage {
             serverUpdatedAt: serverUpdatedAt,
             isTombstone: isTombstone,
             modelName: modelName,
+            sender: sender,
             usageSummary: usageSummary
         )
     }
@@ -1105,6 +1174,7 @@ extension ChatMessage {
             serverUpdatedAt: remote.serverUpdatedAt,
             isTombstone: remote.isTombstone,
             modelName: remote.modelName,
+            sender: remote.sender ?? sender,
             usageSummary: remote.usageSummary ?? usageSummary
         )
     }

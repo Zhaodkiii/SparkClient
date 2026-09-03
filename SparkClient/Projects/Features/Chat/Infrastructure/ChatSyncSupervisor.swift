@@ -89,6 +89,14 @@ actor ChatSyncSupervisor {
         await syncEngine.stopRealtimeSync()
     }
 
+    /// CHAT-000056 Q3：账号启动、连接成功、前台恢复、网络恢复统一的全局补偿入口。
+    /// 非阻塞调度：由同步引擎 single-flight + dirty 合并并发触发，不增加定时轮询。
+    nonisolated func scheduleGlobalCompensation(source: ChatGlobalCompensationSource) {
+        Task { [syncEngine] in
+            await syncEngine.requestGlobalCompensation(source: source)
+        }
+    }
+
     /// 登录/会话引导后可选调用：不阻塞 UI 地消化积压图片任务。
     func kickAttachmentDrain() async {
         await attachmentPipeline.processPendingJobs(limit: 32)

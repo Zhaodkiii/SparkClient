@@ -114,7 +114,8 @@ struct ChatOutboxPipeline: Sendable {
                         threadMaxMessages: threadsByID[message.threadID]?.maxMessages,
                         threadRolePrompt: threadsByID[message.threadID]?.rolePrompt,
                         threadSystemPrompt: nil,
-                        modelName: message.modelName
+                        modelName: message.modelName,
+                        sender: nil
                     )
                 }
 

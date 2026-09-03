@@ -43,10 +43,14 @@ final class ChatSwiftUIScrollAnchorPolicy: ObservableObject {
         hasUserInteractedSinceOpen = true
     }
 
+    /// - Parameter isAtBottom: 列表当前是否贴底（底部锚点可见）。
+    ///   CHAT-000056 Q6：贴底时即使发生过用户交互也继续自动跟随新消息；
+    ///   阅读历史（未贴底）时不抢占滚动位置，由视图层累加「有新消息」计数。
     func shouldScrollToBottom(
         frame: ChatSwiftUIConversationFrame,
         behavior: ChatSwiftUIRefreshBehavior,
-        layoutGeneration: UInt64
+        layoutGeneration: UInt64,
+        isAtBottom: Bool
     ) -> Bool {
         defer {
             lastScrollRequestGeneration = frame.scrollToBottomRequestGeneration
@@ -88,7 +92,7 @@ final class ChatSwiftUIScrollAnchorPolicy: ObservableObject {
 
         switch behavior {
         case .stable:
-            let shouldScroll = hasUserInteractedSinceOpen == false
+            let shouldScroll = hasUserInteractedSinceOpen == false || isAtBottom
             hasScrolledToBottomSinceOpen = hasScrolledToBottomSinceOpen || shouldScroll
             return shouldScroll
         case .followBottom:
