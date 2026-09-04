@@ -282,28 +282,11 @@ private struct HospitalAgentCardView: View {
 
     @ViewBuilder
     private var avatar: some View {
-        if let url = URL(string: card.doctorAvatarURL), card.doctorAvatarURL.isEmpty == false {
-            AsyncImage(url: url) { image in
-                image.resizable().scaledToFill()
-            } placeholder: {
-                placeholderAvatar
-            }
-            .frame(width: 72, height: 72)
-            .clipShape(Circle())
-        } else {
-            placeholderAvatar
-        }
-    }
-
-    private var placeholderAvatar: some View {
-        Circle()
-            .fill(accent.opacity(0.14))
-            .frame(width: 72, height: 72)
-            .overlay {
-                Text(String(card.doctorDisplayName.prefix(1)))
-                    .font(.title2)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(accent)
-            }
+        HospitalAvatarImageView(
+            urlString: card.avatarURL,
+            size: 72,
+            placeholderText: String(card.name.prefix(1)),
+            accent: accent
+        )
     }
 }

@@ -55,7 +55,8 @@ final class HospitalDoctorIntroCardPayloadCodableTests: XCTestCase {
           "agent": {
             "agent_id": "\(agentID.uuidString)",
             "agent_name": "李医生智能体",
-            "service_boundary": "仅提供健康信息"
+            "service_boundary": "仅提供健康信息",
+            "avatar_url": "https://cdn.example.test/agent.webp?v=abc"
           },
           "professional_directions": ["胸痛评估"],
           "introduction_excerpt": "从事心血管内科临床工作多年。",
@@ -66,8 +67,35 @@ final class HospitalDoctorIntroCardPayloadCodableTests: XCTestCase {
         let decoded = try JSONDecoder.chatRemote.decode(HospitalDoctorIntroCardPayload.self, from: data)
         XCTAssertEqual(decoded.doctor.displayName, "李医生")
         XCTAssertEqual(decoded.agent.agentId, agentID)
+        XCTAssertEqual(decoded.agent.avatarUrl, "https://cdn.example.test/agent.webp?v=abc")
         XCTAssertEqual(decoded.professionalDirections, ["胸痛评估"])
         XCTAssertEqual(decoded.detailRoute.agentId, agentID)
+    }
+
+    func testLegacySnapshotWithoutAgentAvatarDecodes() throws {
+        let agentID = UUID()
+        let json = """
+        {
+          "doctor": {
+            "display_name": "李医生",
+            "title": "主任医师",
+            "hospital_name": "测试医院",
+            "department_name": "心内科",
+            "avatar_url": ""
+          },
+          "agent": {
+            "agent_id": "\(agentID.uuidString)",
+            "agent_name": "李医生智能体",
+            "service_boundary": "仅提供健康信息"
+          },
+          "professional_directions": [],
+          "introduction_excerpt": "",
+          "detail_route": { "agent_id": "\(agentID.uuidString)" }
+        }
+        """
+        let data = try XCTUnwrap(json.data(using: .utf8))
+        let decoded = try JSONDecoder.chatRemote.decode(HospitalDoctorIntroCardPayload.self, from: data)
+        XCTAssertNil(decoded.agent.avatarUrl)
     }
 }
 #endif

@@ -176,5 +176,84 @@ final class HospitalCareDirectoryUseCaseTests: XCTestCase {
         XCTAssertNotNil(cards[0].recentThreadID)
         XCTAssertFalse(cards[1].hasRecentConversation)
     }
+    // MARK: - BACKOFFICE-HOSPITAL-AGENT-000002：智能体头像映射
+
+    func testAgentAvatarPrefersServerResolvedURL() async throws {
+        let hospitalID = UUID()
+        let remote = StubHospitalCareRemoteAPI()
+        remote.agentsResult = .success([
+            HospitalCareTestFixtures.agentDTO(
+                hospitalID: hospitalID,
+                doctorName: "王医生",
+                doctorAvatarUrl: "https://oss.test/doctor.webp?v=1",
+                agentAvatarUrl: "https://oss.test/agent.webp?v=2",
+                agentAvatarVersion: "custom:1:abc"
+            )
+        ])
+        let useCase = LoadHospitalAgentDirectoryUseCase(
+            remoteAPI: remote,
+            catalogCache: HospitalCatalogMemoryCache()
+        )
+
+        let cards = try await useCase.loadAgents(
+            accountID: accountID,
+            hospitalID: hospitalID,
+            departmentID: nil,
+            keyword: "",
+            memberID: nil
+        )
+
+        XCTAssertEqual(cards.first?.avatarURL, "https://oss.test/agent.webp?v=2")
+        XCTAssertEqual(cards.first?.avatarVersion, "custom:1:abc")
+    }
+
+    func testAgentAvatarFallsBackToDoctorAvatar() async throws {
+        let hospitalID = UUID()
+        let remote = StubHospitalCareRemoteAPI()
+        remote.agentsResult = .success([
+            HospitalCareTestFixtures.agentDTO(
+                hospitalID: hospitalID,
+                doctorName: "王医生",
+                doctorAvatarUrl: "https://oss.test/doctor.webp?v=1"
+            )
+        ])
+        let useCase = LoadHospitalAgentDirectoryUseCase(
+            remoteAPI: remote,
+            catalogCache: HospitalCatalogMemoryCache()
+        )
+
+        let cards = try await useCase.loadAgents(
+            accountID: accountID,
+            hospitalID: hospitalID,
+            departmentID: nil,
+            keyword: "",
+            memberID: nil
+        )
+
+        XCTAssertEqual(cards.first?.avatarURL, "https://oss.test/doctor.webp?v=1")
+        XCTAssertEqual(cards.first?.avatarVersion, "")
+    }
+
+    func testAgentAvatarEmptyWhenNeitherAvailable() async throws {
+        let hospitalID = UUID()
+        let remote = StubHospitalCareRemoteAPI()
+        remote.agentsResult = .success([
+            HospitalCareTestFixtures.agentDTO(hospitalID: hospitalID, doctorName: "王医生")
+        ])
+        let useCase = LoadHospitalAgentDirectoryUseCase(
+            remoteAPI: remote,
+            catalogCache: HospitalCatalogMemoryCache()
+        )
+
+        let cards = try await useCase.loadAgents(
+            accountID: accountID,
+            hospitalID: hospitalID,
+            departmentID: nil,
+            keyword: "",
+            memberID: nil
+        )
+
+        XCTAssertEqual(cards.first?.avatarURL, "")
+    }
 }
 #endif

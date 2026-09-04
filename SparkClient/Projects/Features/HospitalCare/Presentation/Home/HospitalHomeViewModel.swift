@@ -155,6 +155,8 @@ final class HospitalHomeViewModel: ObservableObject {
                 doctorDisplayName: dto.doctor.displayName,
                 doctorTitle: dto.doctor.title ?? "",
                 doctorAvatarURL: dto.doctor.avatarUrl ?? "",
+                avatarURL: resolvedAgentAvatarURL(dto),
+                avatarVersion: dto.avatarVersion ?? "",
                 specialties: dto.doctor.specialties ?? [],
                 departmentID: dto.department?.id,
                 departmentName: dto.department?.name ?? "",

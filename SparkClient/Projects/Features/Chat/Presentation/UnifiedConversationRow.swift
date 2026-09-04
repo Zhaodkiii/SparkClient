@@ -75,32 +75,20 @@ struct UnifiedConversationRow: View {
         }
     }
 
-    /// 医生/问诊头像：真实头像优先，缺失时姓名首字占位（17.6）。
+    /// 医生/问诊头像：真实头像优先，缺失时姓名首字占位（17.6）。加载复用通用文件缓存。
     @ViewBuilder
     private func doctorAvatar(displayName: String?, avatarURL: URL?) -> some View {
         ZStack {
             Circle().fill(.thinMaterial)
-            if let avatarURL {
-                AsyncImage(url: avatarURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    default:
-                        namePlaceholder(displayName)
-                    }
-                }
-            } else {
-                namePlaceholder(displayName)
-            }
+            HospitalAvatarImageView(
+                urlString: avatarURL?.absoluteString ?? "",
+                size: 46,
+                placeholderText: String(displayName?.prefix(1) ?? ""),
+                accent: .secondary
+            )
         }
         .frame(width: 46, height: 46)
         .clipShape(Circle())
-    }
-
-    private func namePlaceholder(_ displayName: String?) -> some View {
-        Text(String(displayName?.prefix(1) ?? ""))
-            .font(.headline)
-            .foregroundStyle(.secondary)
     }
 
     // MARK: - 第一行：主标题 + 置顶 + 时间

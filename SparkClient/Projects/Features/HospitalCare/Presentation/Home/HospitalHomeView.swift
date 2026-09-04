@@ -514,19 +514,12 @@ struct HospitalHomeView: View {
 
     private func doctorAvatar(_ card: HospitalAgentCard) -> some View {
         ZStack(alignment: .bottomTrailing) {
-            Group {
-                if let url = URL(string: card.doctorAvatarURL), card.doctorAvatarURL.isEmpty == false {
-                    AsyncImage(url: url) { image in
-                        image.resizable().scaledToFill()
-                    } placeholder: {
-                        doctorAvatarPlaceholder(card)
-                    }
-                } else {
-                    doctorAvatarPlaceholder(card)
-                }
-            }
-            .frame(width: 52, height: 52)
-            .clipShape(Circle())
+            HospitalAvatarImageView(
+                urlString: card.avatarURL,
+                size: 52,
+                placeholderAsset: "avatarDoctor",
+                accent: accent
+            )
 
             Image(systemName: "sparkles")
                 .font(.system(size: 9, weight: .bold))
@@ -535,12 +528,6 @@ struct HospitalHomeView: View {
                 .background(accent, in: Circle())
                 .offset(x: 2, y: 2)
         }
-    }
-
-    private func doctorAvatarPlaceholder(_ card: HospitalAgentCard) -> some View {
-        Image("avatarDoctor")
-            .resizable()
-            .scaledToFill()
     }
 
     private func openAgentCard(_ card: HospitalAgentCard) {

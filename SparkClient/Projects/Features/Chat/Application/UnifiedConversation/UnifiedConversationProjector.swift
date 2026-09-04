@@ -26,6 +26,8 @@ struct UnifiedConversationProjector: Sendable {
     let hospitalScopeStore: HospitalConversationScopeStore?
     let featureFlags: UnifiedConversationFeatureFlags
     let logger: Logger
+    /// 服务端 Manifest 未上线时，用医院目录缓存按 (agentID, hospitalID, accountID) 补全智能体身份与头像。
+    let hospitalAgentResolver: (@Sendable (UUID, UUID, Int64) -> HospitalAgentPublicDTO?)?
 
     nonisolated init(
         manifestRepository: UnifiedConversationManifestRepository,
@@ -33,7 +35,8 @@ struct UnifiedConversationProjector: Sendable {
         visibilityStore: ConversationListVisibilityPreferenceStore,
         hospitalScopeStore: HospitalConversationScopeStore?,
         featureFlags: UnifiedConversationFeatureFlags,
-        logger: Logger = ConsoleLogger()
+        logger: Logger = ConsoleLogger(),
+        hospitalAgentResolver: (@Sendable (UUID, UUID, Int64) -> HospitalAgentPublicDTO?)? = nil
     ) {
         self.manifestRepository = manifestRepository
         self.provenanceStore = provenanceStore
@@ -41,6 +44,7 @@ struct UnifiedConversationProjector: Sendable {
         self.hospitalScopeStore = hospitalScopeStore
         self.featureFlags = featureFlags
         self.logger = logger
+        self.hospitalAgentResolver = hospitalAgentResolver
     }
 
     /// 投影整个账号的可见列表（未做筛选/搜索/排序；由 `Array.visibleItems` 完成）。
@@ -111,7 +115,12 @@ struct UnifiedConversationProjector: Sendable {
             threadID: threadID,
             unknownContext: unknownContext
         )
-        let identity = classification.binding?.identity
+        let identity = enrichedIdentity(
+            base: classification.binding?.identity,
+            kind: kind,
+            threadID: threadID,
+            accountID: accountID
+        )
         let serviceStatus = classification.binding?.serviceStatus
         let capability = Self.resolveCapability(
             kind: kind,
@@ -294,6 +303,38 @@ struct UnifiedConversationProjector: Sendable {
                 thread: threadTitle.isEmpty ? nil : threadTitle
             )
         }
+    }
+
+    // MARK: - 头像补全（服务端 Manifest 未上线/identity 无头像时走医院目录缓存）
+
+    private func enrichedIdentity(
+        base: UnifiedConversationIdentity?,
+        kind: ConversationKind,
+        threadID: UUID,
+        accountID: Int64
+    ) -> UnifiedConversationIdentity? {
+        guard kind == .hospitalAgent || kind == .telemedicine else { return base }
+        let existing = base?.doctorAvatarURLString?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        guard existing.isEmpty else { return base }
+        guard let resolver = hospitalAgentResolver else { return base }
+        let scope = hospitalScopeStore?.scope(for: threadID, accountID: accountID)
+        guard let agentID = base?.agentID ?? scope?.agentID,
+              let hospitalID = base?.hospitalID ?? scope?.hospitalID,
+              let dto = resolver(agentID, hospitalID, accountID) else { return base }
+        let avatarURL = resolvedAgentAvatarURL(dto)
+        guard avatarURL.isEmpty == false else { return base }
+        return UnifiedConversationIdentity(
+            hospitalID: hospitalID,
+            doctorID: base?.doctorID ?? dto.doctor.id,
+            agentID: agentID,
+            doctorDisplayName: base?.doctorDisplayName ?? dto.doctor.displayName,
+            agentDisplayName: base?.agentDisplayName ?? dto.name,
+            departmentDisplayName: base?.departmentDisplayName ?? dto.department?.name,
+            hospitalDisplayName: base?.hospitalDisplayName,
+            doctorAvatarURLString: avatarURL,
+            consultationID: base?.consultationID,
+            consultationDisplayName: base?.consultationDisplayName
+        )
     }
 
     // MARK: - 成员显示（D-006：本人 / 成员姓名 / 加载中 / 不可用；不泄露 memberID）

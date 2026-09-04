@@ -1,7 +1,8 @@
 import Foundation
 
 /// 账号隔离的医院目录内存缓存：命中立即返回，后台可静默刷新（stale-while-revalidate）。
-final class HospitalCatalogMemoryCache: @unchecked Sendable {
+/// nonisolated：内部已用 NSLock 保证线程安全，允许统一消息投影器等非 MainActor 上下文读取。
+nonisolated final class HospitalCatalogMemoryCache: @unchecked Sendable {
     private struct Entry<Value> {
         let value: Value
         let storedAt: Date

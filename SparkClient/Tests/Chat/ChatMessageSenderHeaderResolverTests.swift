@@ -50,6 +50,37 @@ final class ChatMessageSenderHeaderResolverTests: XCTestCase {
         XCTAssertEqual(kind, .doctor(displayName: "李医生", avatarURL: "https://cdn.example.test/li.png"))
     }
 
+    // BACKOFFICE-HOSPITAL-AGENT-000002：医生智能体发言带头像时展示智能体头像头部。
+    func testSenderKindShowsAgentAvatarForAIAgentWithAvatar() {
+        let kind = ChatMessageSenderHeaderResolver.senderKind(
+            for: makeAssistantMessage(
+                modelName: "qwen-plus",
+                sender: makeAIAgentSenderWithAvatar("https://cdn.example.test/agent.webp?v=1")
+            ),
+            scenarioModels: [makeModelRow(name: "qwen-plus", displayName: "Qwen-Plus", company: "QWEN")]
+        )
+        XCTAssertEqual(kind, .aiAgent(displayName: "开开医生智能体", avatarURL: "https://cdn.example.test/agent.webp?v=1"))
+    }
+
+    func testSenderKindFallsBackToModelForAIAgentWithoutAvatar() {
+        let kind = ChatMessageSenderHeaderResolver.senderKind(
+            for: makeAssistantMessage(
+                modelName: "qwen-plus",
+                sender: makeAIAgentSender()
+            ),
+            scenarioModels: [makeModelRow(name: "qwen-plus", displayName: "Qwen-Plus", company: "QWEN")]
+        )
+        XCTAssertEqual(kind, .aiModel(displayName: "Qwen-Plus", icon: .companyLogo(companyIconName(for: "QWEN"))))
+    }
+
+    func testSenderIdentityKeyUsesAgentKeyWhenAvatarPresent() {
+        let message = makeAssistantMessage(
+            modelName: "qwen-plus",
+            sender: makeAIAgentSenderWithAvatar("https://cdn.example.test/agent.webp?v=1")
+        )
+        XCTAssertEqual(ChatMessageSenderHeaderResolver.senderIdentityKey(for: message), "agent:agent-37")
+    }
+
     func testSenderKindTreatsBlankSenderAvatarAsNil() {
         let kind = ChatMessageSenderHeaderResolver.senderKind(
             for: makeAssistantMessage(
@@ -320,6 +351,16 @@ final class ChatMessageSenderHeaderResolverTests: XCTestCase {
             actorType: .aiAgent,
             actorId: "agent-37",
             displayName: "开开医生智能体",
+            source: "hospital_care"
+        )
+    }
+
+    private func makeAIAgentSenderWithAvatar(_ avatarURL: String) -> ChatMessageSender {
+        ChatMessageSender(
+            actorType: .aiAgent,
+            actorId: "agent-37",
+            displayName: "开开医生智能体",
+            avatarUrl: avatarURL,
             source: "hospital_care"
         )
     }

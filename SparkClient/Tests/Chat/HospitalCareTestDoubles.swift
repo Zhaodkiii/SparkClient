@@ -127,7 +127,10 @@ enum HospitalCareTestFixtures {
         hospitalID: UUID = UUID(),
         doctorID: UUID = UUID(),
         doctorName: String = "李医生",
-        publishedAt: Date? = nil
+        publishedAt: Date? = nil,
+        doctorAvatarUrl: String? = nil,
+        agentAvatarUrl: String? = nil,
+        agentAvatarVersion: String? = nil
     ) -> HospitalAgentPublicDTO {
         HospitalAgentPublicDTO(
             id: id,
@@ -145,8 +148,11 @@ enum HospitalCareTestFixtures {
                 title: "主任医师",
                 specialties: nil,
                 introduction: nil,
-                avatarUrl: nil
-            )
+                avatarUrl: doctorAvatarUrl
+            ),
+            avatarSource: agentAvatarUrl == nil ? nil : "custom",
+            avatarUrl: agentAvatarUrl,
+            avatarVersion: agentAvatarVersion
         )
     }
 

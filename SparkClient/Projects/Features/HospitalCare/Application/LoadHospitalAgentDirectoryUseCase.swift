@@ -141,6 +141,8 @@ struct LoadHospitalAgentDirectoryUseCase: Sendable {
                 doctorDisplayName: dto.doctor.displayName,
                 doctorTitle: dto.doctor.title ?? "",
                 doctorAvatarURL: dto.doctor.avatarUrl ?? "",
+                avatarURL: resolvedAgentAvatarURL(dto),
+                avatarVersion: dto.avatarVersion ?? "",
                 specialties: dto.doctor.specialties ?? [],
                 departmentID: dto.department?.id,
                 departmentName: dto.department?.name ?? "",
@@ -160,4 +162,13 @@ struct LoadHospitalAgentDirectoryUseCase: Sendable {
         }
         return consulted + others
     }
+}
+
+/// 智能体头像地址：优先服务端解析后的 agent.avatar_url（专属或复用医生），
+/// 为空时回退医生头像；再空由 UI 用名称首字兜底。
+func resolvedAgentAvatarURL(_ dto: HospitalAgentPublicDTO) -> String {
+    if let url = dto.avatarUrl, url.isEmpty == false {
+        return url
+    }
+    return dto.doctor.avatarUrl ?? ""
 }

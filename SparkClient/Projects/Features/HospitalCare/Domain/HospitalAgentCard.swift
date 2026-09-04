@@ -25,6 +25,10 @@ nonisolated struct HospitalAgentCard: Equatable, Sendable, Identifiable {
     let doctorDisplayName: String
     let doctorTitle: String
     let doctorAvatarURL: String
+    /// 智能体最终头像地址（服务端按 avatar_source 解析；为空时回退医生头像，再由名称首字兜底）。
+    let avatarURL: String
+    /// 头像版本标识：URL 已带版本参数，变化后自然形成新的缓存键。
+    let avatarVersion: String
     let specialties: [String]
     let departmentID: UUID?
     let departmentName: String

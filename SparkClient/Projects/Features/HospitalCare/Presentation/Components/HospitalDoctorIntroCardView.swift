@@ -13,6 +13,8 @@ nonisolated struct HospitalDoctorIntroCardPayload: Codable, Equatable, Sendable 
         var agentId: UUID
         var agentName: String
         var serviceBoundary: String
+        /// BACKOFFICE-HOSPITAL-AGENT-000002：服务端解析后的智能体头像（专属或复用医生）；旧快照无此字段。
+        var avatarUrl: String? = nil
     }
 
     struct DetailRoute: Codable, Equatable, Sendable {
@@ -191,34 +193,15 @@ struct HospitalDoctorIntroCardView: View {
 
     @ViewBuilder
     private var avatar: some View {
-        if let url = URL(string: payload.doctor.avatarUrl), payload.doctor.avatarUrl.isEmpty == false {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case .success(let image):
-                    image.resizable().scaledToFill()
-                case .empty, .failure:
-                    placeholder
-                @unknown default:
-                    placeholder
-                }
-            }
-            .frame(width: 120, height: 120)
-            .clipShape(Circle())
-        } else {
-            placeholder
-        }
-    }
-
-    private var placeholder: some View {
-        Circle()
-            .fill(accent.opacity(0.12))
-            .frame(width: 120, height: 120)
-            .overlay {
-                Text(doctorSurname)
-                    .font(.largeTitle)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(accent)
-            }
+        // 智能体头像优先（专属或复用医生），缺失时回退医生本人头像，最终姓氏字兜底。
+        let agentURL = payload.agent.avatarUrl?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let urlString = agentURL.isEmpty == false ? agentURL : payload.doctor.avatarUrl
+        HospitalAvatarImageView(
+            urlString: urlString,
+            size: 120,
+            placeholderText: doctorSurname,
+            accent: accent
+        )
     }
 
     private var doctorSurname: String {

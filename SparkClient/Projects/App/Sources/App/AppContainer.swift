@@ -61,6 +61,8 @@ final class AppContainer {
     let unifiedConversationRefreshCoordinator: UnifiedConversationRefreshCoordinator
     /// CHAT-000057：统一消息投影器（分类、标题、能力、路由的唯一输出来源）。init 中装配。
     let unifiedConversationProjector: UnifiedConversationProjector
+    /// 医院智能体目录预取（消息列表头像补全）：缓存未命中时后台回源并返回更新的 hospitalID 集合。
+    let hospitalAgentCatalogPrefetcher: @Sendable (Int64, Set<UUID>) async -> Set<UUID>
     /// CHAT-000057：医疗类「从消息列表移除」/自动恢复。init 中装配。
     let updateConversationListVisibilityUseCase: UpdateConversationListVisibilityUseCase
 
@@ -406,8 +408,36 @@ final class AppContainer {
             visibilityStore: conversationListVisibilityStore,
             hospitalScopeStore: hospitalConversationScopeStore,
             featureFlags: unifiedConversationFeatureFlags,
-            logger: logger
+            logger: logger,
+            hospitalAgentResolver: { [hospitalCatalogCache] agentID, hospitalID, accountID in
+                hospitalCatalogCache.agents(accountID: accountID, hospitalID: hospitalID)?
+                    .first(where: { $0.id == agentID })
+            }
         )
+        // 统一消息头像补全依赖医院目录内存缓存；缓存未命中（如直接进入消息 Tab）时
+        // 后台回源智能体目录并写入缓存，返回实际更新的 hospitalID 集合以驱动重投影。
+        let loadHospitalAgentDirectoryUseCase = LoadHospitalAgentDirectoryUseCase(
+            remoteAPI: backend.hospitalCare,
+            catalogCache: hospitalCatalogCache
+        )
+        self.hospitalAgentCatalogPrefetcher = { [hospitalCatalogCache] accountID, hospitalIDs in
+            var updated: Set<UUID> = []
+            for hospitalID in hospitalIDs {
+                guard hospitalCatalogCache.agents(accountID: accountID, hospitalID: hospitalID) == nil else {
+                    continue
+                }
+                if (try? await loadHospitalAgentDirectoryUseCase.loadAgents(
+                    accountID: accountID,
+                    hospitalID: hospitalID,
+                    departmentID: nil,
+                    keyword: "",
+                    memberID: nil
+                )) != nil {
+                    updated.insert(hospitalID)
+                }
+            }
+            return updated
+        }
         self.updateConversationListVisibilityUseCase = UpdateConversationListVisibilityUseCase(
             store: conversationListVisibilityStore,
             manifestRepository: unifiedConversationManifestRepository,
@@ -638,7 +668,8 @@ final class AppContainer {
             ),
             updateVisibilityUseCase: updateConversationListVisibilityUseCase,
             provenanceStore: threadCreationProvenanceStore,
-            unifiedFeatureFlags: unifiedConversationFeatureFlags
+            unifiedFeatureFlags: unifiedConversationFeatureFlags,
+            hospitalAgentCatalogPrefetcher: hospitalAgentCatalogPrefetcher
         )
         let guideQuestionHealthRepository = HealthResourceRepository(medicalQueryAPI: backend.medicalQuery)
         let guideQuestionGenerationUseCase = ChatGuideQuestionGenerationUseCase(

@@ -50,9 +50,13 @@ final class ChatListViewModel: ObservableObject {
     private let provenanceStore: ThreadCreationProvenanceStore?
     /// 统一消息发布开关。
     private let unifiedFeatureFlags: UnifiedConversationFeatureFlags
+    /// 医院智能体目录预取：统一消息投影为同步纯函数，头像依赖医院目录内存缓存；
+    /// 缓存未命中时由该闭包后台回源，返回实际写入缓存的 hospitalID 集合。
+    private let hospitalAgentCatalogPrefetcher: (@Sendable (Int64, Set<UUID>) async -> Set<UUID>)?
 
     private var hasLoadedForList = false
     private var didAttemptEmptyListRemoteRefresh = false
+    private var hospitalAgentCatalogPrefetchInFlight = false
     private var cancellables = Set<AnyCancellable>()
 
     /// CHAT-000054：对话 Tab 当前分段（院内名医 / 普通对话）。
@@ -120,6 +124,7 @@ final class ChatListViewModel: ObservableObject {
         updateVisibilityUseCase: UpdateConversationListVisibilityUseCase? = nil,
         provenanceStore: ThreadCreationProvenanceStore? = nil,
         unifiedFeatureFlags: UnifiedConversationFeatureFlags = .current,
+        hospitalAgentCatalogPrefetcher: (@Sendable (Int64, Set<UUID>) async -> Set<UUID>)? = nil,
         logger: Logger = ConsoleLogger()
     ) {
         self.stateStore = stateStore
@@ -143,6 +148,7 @@ final class ChatListViewModel: ObservableObject {
         self.updateVisibilityUseCase = updateVisibilityUseCase
         self.provenanceStore = provenanceStore
         self.unifiedFeatureFlags = unifiedFeatureFlags
+        self.hospitalAgentCatalogPrefetcher = hospitalAgentCatalogPrefetcher
         self.logger = logger
 
         NotificationCenter.default.publisher(for: .sparkChatDatabaseDidChange)
@@ -523,6 +529,31 @@ final class ChatListViewModel: ObservableObject {
         if selectFirstIfNeeded,
            stateStore.selectedThreadID == nil {
             stateStore.setSelectedThreadID(threads.first?.id)
+        }
+        prefetchHospitalAgentCatalogsIfNeeded()
+    }
+
+    /// 统一消息投影为同步纯函数，智能体头像依赖医院目录内存缓存；
+    /// 缓存未命中（如直接进入消息 Tab 未访问医院目录）时后台回源补齐，
+    /// 完成后触发重投影以展示头像。请求失败静默，下一轮 reload 自动重试。
+    private func prefetchHospitalAgentCatalogsIfNeeded() {
+        guard isUnifiedMessageListEnabled,
+              let accountID = signedInAccountID,
+              let hospitalScopeStore,
+              let hospitalAgentCatalogPrefetcher,
+              hospitalAgentCatalogPrefetchInFlight == false else { return }
+        let hospitalIDs = Set(stateStore.threadItems.compactMap {
+            hospitalScopeStore.scope(for: $0.id, accountID: accountID)?.hospitalID
+        })
+        guard hospitalIDs.isEmpty == false else { return }
+        hospitalAgentCatalogPrefetchInFlight = true
+        Task { @MainActor in
+            let updated = await hospitalAgentCatalogPrefetcher(accountID, hospitalIDs)
+            hospitalAgentCatalogPrefetchInFlight = false
+            if updated.isEmpty == false {
+                // 缓存已补齐：显式发布以驱动投影型 UI（列表头像/标题）重算。
+                objectWillChange.send()
+            }
         }
     }
 

@@ -10,6 +10,8 @@ enum ChatSenderIcon: Equatable, Sendable {
 enum ChatMessageSenderKind: Equatable, Sendable {
     case aiModel(displayName: String, icon: ChatSenderIcon)
     case doctor(displayName: String, avatarURL: String?)
+    /// 医生智能体（AI 发言）：展示服务端解析后的智能体头像。
+    case aiAgent(displayName: String, avatarURL: String?)
 }
 
 /// assistant 消息气泡上方的发送者头部：头像 + 名称（仅 AI 模型使用）。
@@ -37,6 +39,8 @@ struct ChatMessageSenderHeaderView: View {
             return displayName
         case .doctor(let displayName, _):
             return displayName
+        case .aiAgent(let displayName, _):
+            return displayName
         }
     }
 
@@ -46,6 +50,8 @@ struct ChatMessageSenderHeaderView: View {
         case .aiModel(_, let icon):
             modelAvatar(icon)
         case .doctor(let displayName, let avatarURL):
+            ChatDoctorAvatarView(displayName: displayName, avatarURL: avatarURL, size: avatarSize)
+        case .aiAgent(let displayName, let avatarURL):
             ChatDoctorAvatarView(displayName: displayName, avatarURL: avatarURL, size: avatarSize)
         }
     }
@@ -69,46 +75,19 @@ struct ChatMessageSenderHeaderView: View {
     }
 }
 
-/// 真人医生头像：圆角方图；无 URL 时用姓氏字。
+/// 真人医生头像：圆角方图；无 URL 时用姓氏字。加载复用通用文件缓存并按比例保留上半部分。
 struct ChatDoctorAvatarView: View {
     let displayName: String
     let avatarURL: String?
     var size: CGFloat = 40
 
-    private var cornerRadius: CGFloat { max(6, size * 0.18) }
-
     var body: some View {
-        Group {
-            if let avatarURL,
-               avatarURL.isEmpty == false,
-               let url = URL(string: avatarURL) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    default:
-                        surnamePlaceholder
-                    }
-                }
-            } else {
-                surnamePlaceholder
-            }
-        }
-        .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .accessibilityHidden(true)
-    }
-
-    private var surnamePlaceholder: some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(Color.accentColor.opacity(0.16))
-            .overlay {
-                Text(ChatMessageSenderHeaderResolver.surnameCharacter(from: displayName))
-                    .font(size >= 36 ? .headline.weight(.semibold) : .caption.weight(.semibold))
-                    .foregroundStyle(Color.accentColor)
-            }
+        HospitalAvatarImageView(
+            urlString: avatarURL ?? "",
+            size: size,
+            shape: .roundedSquare(ratio: 0.18),
+            placeholderText: ChatMessageSenderHeaderResolver.surnameCharacter(from: displayName)
+        )
     }
 }
 

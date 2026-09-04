@@ -15,6 +15,15 @@ enum ChatMessageSenderHeaderResolver {
             return doctorKind(from: sender)
         }
 
+        // 医生智能体发言：服务端已下发解析后的智能体头像时，头部展示智能体头像与名称。
+        if let sender = message.sender, sender.actorType == .aiAgent {
+            let avatarURL = sender.avatarUrl ?? ""
+            if avatarURL.isEmpty == false {
+                let name = sender.displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                return .aiAgent(displayName: name.isEmpty ? "智能体" : name, avatarURL: sender.avatarUrl)
+            }
+        }
+
         return aiModelKind(for: message, scenarioModels: scenarioModels)
     }
 
@@ -60,7 +69,7 @@ enum ChatMessageSenderHeaderResolver {
         return trimmed.isEmpty ? "医生" : trimmed
     }
 
-    /// 医生用 `doctor:{actorId}`，AI 用 `model:{modelName}`。
+    /// 医生用 `doctor:{actorId}`，带头像的智能体用 `agent:{actorId}`，其余 AI 用 `model:{modelName}`。
     static func senderIdentityKey(for message: ChatMessage) -> String? {
         guard message.role == .assistant else { return nil }
         if message.sender?.actorType == .doctor {
@@ -70,6 +79,16 @@ enum ChatMessageSenderHeaderResolver {
             }
             let displayName = message.sender?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return "doctor:\(displayName.isEmpty ? "doctor" : displayName)"
+        }
+        if message.sender?.actorType == .aiAgent,
+           let avatarURL = message.sender?.avatarUrl,
+           avatarURL.isEmpty == false {
+            let actorId = message.sender?.actorId?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            if actorId.isEmpty == false {
+                return "agent:\(actorId)"
+            }
+            let displayName = message.sender?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return "agent:\(displayName.isEmpty ? "agent" : displayName)"
         }
         let trimmed = message.modelName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         if trimmed.isEmpty == false, trimmed != "user" {

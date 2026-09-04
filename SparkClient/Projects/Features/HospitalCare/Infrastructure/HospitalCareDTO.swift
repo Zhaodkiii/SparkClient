@@ -47,6 +47,10 @@ nonisolated struct HospitalAgentPublicDTO: Codable, Sendable {
     let publishedAt: Date?
     let department: HospitalDepartmentPublicDTO?
     let doctor: HospitalDoctorPublicDTO
+    /// BACKOFFICE-HOSPITAL-AGENT-000002：服务端按头像来源解析后的最终展示地址与版本标识。
+    let avatarSource: String?
+    let avatarUrl: String?
+    let avatarVersion: String?
 }
 
 nonisolated struct HospitalConversationAgentDTO: Codable, Sendable {

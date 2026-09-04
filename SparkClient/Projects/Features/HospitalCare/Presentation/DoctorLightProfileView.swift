@@ -109,24 +109,11 @@ struct DoctorLightProfileView: View {
 
     @ViewBuilder
     private func avatar(_ profile: HospitalDoctorLightProfile) -> some View {
-        if let url = URL(string: profile.avatarURL), profile.avatarURL.isEmpty == false {
-            AsyncImage(url: url) { image in
-                image.resizable().scaledToFill()
-            } placeholder: {
-                Circle().fill(Color.accentColor.opacity(0.16))
-            }
-            .frame(width: 72, height: 72)
-            .clipShape(Circle())
-        } else {
-            Circle()
-                .fill(Color.accentColor.opacity(0.16))
-                .frame(width: 72, height: 72)
-                .overlay {
-                    Text(String(profile.displayName.prefix(1)))
-                        .font(.title2.weight(.semibold))
-                        .foregroundStyle(Color.accentColor)
-                }
-        }
+        HospitalAvatarImageView(
+            urlString: profile.avatarURL,
+            size: 72,
+            placeholderText: String(profile.displayName.prefix(1))
+        )
     }
 
     private func load() async {
