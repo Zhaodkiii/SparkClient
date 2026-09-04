@@ -1,7 +1,7 @@
 import Foundation
 
 /// CHAT-000056：结构化实时同步提示。
-/// 网络层只负责解析与鉴权，不直接访问 Core Data 或 ViewModel。
+/// 网络层只负责解析实时同步提示，不直接访问 Core Data 或 ViewModel。
 nonisolated struct ChatSyncHint: Sendable {
     /// 单次通知关联 ID，仅用于诊断与日志关联，不作为消息 ID。
     let eventID: UUID?
@@ -21,7 +21,7 @@ actor ChatRealtimeSyncClient {
     typealias SyncHintHandler = @Sendable (ChatSyncHint) -> Void
     typealias ConnectedHandler = @Sendable () -> Void
 
-    private let socket: SparkWebSocketClient
+    private let socket: any SparkWebSocketClientProtocol
     private let tokenProvider: AuthTokenProvider
     private let baseURL: URL
     private let logger: Logger
@@ -33,7 +33,7 @@ actor ChatRealtimeSyncClient {
     private var connectedHandler: ConnectedHandler?
 
     init(
-        socket: SparkWebSocketClient = SparkWebSocketClient(),
+        socket: any SparkWebSocketClientProtocol = SparkWebSocketClient(),
         tokenProvider: AuthTokenProvider,
         baseURL: URL,
         logger: Logger = ConsoleLogger()
@@ -74,12 +74,11 @@ actor ChatRealtimeSyncClient {
                 }
             }
         } catch {
-            logger.warning("chat realtime connect failed: \(error.localizedDescription)", module: .general)
-            if Self.shouldInvalidateSession(for: error.localizedDescription) {
-                postAuthSessionInvalidation(message: error.localizedDescription, source: "ChatRealtimeSyncClient.connect")
-                await stop()
-                return
-            }
+            // CHAT-000059 C-001/C-006：建连失败只作为实时通道失败，永远不触发全局鉴权失效。
+            logger.warning(
+                "chat realtime connect failed: \(error.localizedDescription) source=chat_realtime event=connect_failed auth_invalidation_emitted=false reconnect_scheduled=true",
+                module: .general
+            )
             scheduleReconnect()
         }
     }
@@ -112,30 +111,20 @@ actor ChatRealtimeSyncClient {
             connectedHandler?()
 
         case .text(let text):
+            // CHAT-000059 C-005：鉴权相关文本不做特殊处理；仅投递 chat.sync.updated。
             guard let data = text.data(using: .utf8) else { return }
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
             guard let type = json["type"] as? String else { return }
-
-            if Self.shouldInvalidateSession(in: json) {
-                let message = (json["msg"] as? String) ?? type
-                postAuthSessionInvalidation(message: message, source: "ChatRealtimeSyncClient.text")
-                await stop()
-                return
-            }
-
-            if type == "chat.sync.updated" {
-                let hint = Self.parseHint(json: json, logger: logger)
-                hintHandler?(hint)
-            }
+            guard type == "chat.sync.updated" else { return }
+            let hint = Self.parseHint(json: json, logger: logger)
+            hintHandler?(hint)
 
         case .disconnected(let reason):
-            logger.warning("chat realtime disconnected: \(reason ?? "-")", module: .general)
-            if Self.shouldInvalidateSessionOnDisconnect(reason: reason) {
-                let message = reason ?? "websocket_auth_close_4401"
-                postAuthSessionInvalidation(message: message, source: "ChatRealtimeSyncClient.disconnected")
-                await stop()
-                return
-            }
+            // CHAT-000059 C-001：任意断开（含 Code=57、-1005、无 close code、4401 文本）只重连，不退出登录。
+            logger.warning(
+                "chat realtime disconnected: \(reason ?? "-") source=chat_realtime event=disconnected auth_invalidation_emitted=false reconnect_scheduled=true",
+                module: .general
+            )
             scheduleReconnect()
         }
     }
@@ -195,48 +184,5 @@ actor ChatRealtimeSyncClient {
             try? await Task.sleep(nanoseconds: UInt64(delaySeconds) * 1_000_000_000)
             await connectIfNeeded()
         }
-    }
-
-    private static func shouldInvalidateSession(in json: [String: Any]) -> Bool {
-        let type = (json["type"] as? String) ?? ""
-        if type == "auth.session.invalidated" || type.hasPrefix("device_session.") {
-            return true
-        }
-        let message = (json["msg"] as? String) ?? ""
-        return shouldInvalidateSession(for: message)
-    }
-
-    private static func shouldInvalidateSession(for message: String) -> Bool {
-        let normalized = message.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard normalized.isEmpty == false else { return false }
-        return AuthSessionInvalidation.shouldInvalidate(
-            statusCode: 401,
-            backendCode: nil,
-            message: normalized
-        )
-    }
-
-    private static func shouldInvalidateSessionOnDisconnect(reason: String?) -> Bool {
-        guard let reason else {
-            return false
-        }
-        if isWebSocketAuthCloseCode(reason) {
-            return true
-        }
-        return shouldInvalidateSession(for: reason)
-    }
-
-    private static func isWebSocketAuthCloseCode(_ reason: String) -> Bool {
-        let normalized = reason.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return normalized.contains("4401")
-    }
-
-    private func postAuthSessionInvalidation(message: String, source: String) {
-        AuthSessionInvalidation.postIfNeeded(
-            statusCode: 401,
-            backendCode: nil,
-            message: message,
-            source: source
-        )
     }
 }

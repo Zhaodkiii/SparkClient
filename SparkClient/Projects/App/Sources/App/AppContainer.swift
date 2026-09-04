@@ -47,6 +47,8 @@ final class AppContainer {
     let hospitalCatalogCache = HospitalCatalogMemoryCache()
     /// 医院会话 threadID → agent/member 映射，账号隔离持久化。
     let hospitalConversationScopeStore = HospitalConversationScopeStore()
+    /// CHAT-000058：医院医生智能体专用运行配置存取（内存 + Keychain，账号/成员/医院隔离）。
+    let hospitalAgentRuntimeConfigStore = HospitalAgentRuntimeConfigStore()
     /// CHAT-000055：医院知识只读仓库（账号隔离持久化，与个人知识库完全分离）。
     let hospitalKnowledgeRepository = HospitalKnowledgeUserDefaultsRepository()
     /// CHAT-000057：统一消息 Manifest 账号级本地仓库（binding 墓碑 + cursor）。
@@ -722,6 +724,8 @@ final class AppContainer {
             guideCardPayloadBuilder: guideCardPayloadBuilder,
             healthDataAccessGate: .shared,
             guideQuestionClickReporter: backend.chatGuideQuestion,
+            hospitalRuntimeConfigStore: hospitalAgentRuntimeConfigStore,
+            fetchHospitalRuntimeConfigUseCase: FetchHospitalAgentRuntimeConfigUseCase(remoteAPI: backend.hospitalCare),
             logger: logger
         )
         logger.info("AppContainer 组合完成：容器仅持有 Assembly facade 与共享运行时", module: .general)
@@ -893,6 +897,9 @@ final class AppContainer {
         mainTabDependenciesCache.clear()
         hospitalCatalogCache.clearAll()
         hospitalConversationScopeStore.clearAll()
+        // CHAT-000058：退出/切换账号清理全部医院专用运行配置（内存 + Keychain + 索引）。
+        hospitalAgentRuntimeConfigStore.clearAll()
+        chatDetailViewModel.clearAllHospitalRuntimeSessions()
         hospitalKnowledgeRepository.resetInMemoryState()
         // CHAT-000057：统一消息账号级缓存与刷新任务清理（防旧账号回包污染）。
         unifiedConversationManifestRepository.clearAll()
@@ -1042,6 +1049,7 @@ final class AppContainer {
             backend: backend,
             catalogCache: hospitalCatalogCache,
             scopeStore: hospitalConversationScopeStore,
+            runtimeConfigStore: hospitalAgentRuntimeConfigStore,
             knowledgeRepository: hospitalKnowledgeRepository,
             logger: logger
         ).makeFacade()

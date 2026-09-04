@@ -92,6 +92,49 @@ final class CoreDataStack: @unchecked Sendable {
         }
     }
 
+    // MARK: - 串行写入上下文（修复 check-then-insert 并发重复插入）
+    /// `performBackgroundTask` 每次创建独立上下文，多个写入可能并发执行：
+    /// 两个任务同时「查不到 → 插入」会产生重复行（曾导致 Dictionary 唯一键崩溃）。
+    /// 写入统一走这个长期持有的单一后台上下文（其私有队列天然串行）。
+    private var writeContextStorage: NSManagedObjectContext?
+
+    private func serializedWriteContext() -> NSManagedObjectContext {
+        stateQueue.sync {
+            if let existing = writeContextStorage {
+                return existing
+            }
+            let context = containerStorage.newBackgroundContext()
+            context.mergePolicy = NSMergePolicy(merge: .mergeByPropertyObjectTrumpMergePolicyType)
+            context.name = "serializedWriteContext"
+            writeContextStorage = context
+            return context
+        }
+    }
+
+    /// 在共享串行写入上下文上执行写任务（自动保存/回滚）。
+    /// 注意：work 内不得再次调用本方法或 `performBackgroundTask` 做嵌套写，否则死锁。
+    func performSerializedBackgroundTask<T: Sendable>(
+        _ work: @escaping @Sendable (NSManagedObjectContext) throws -> T
+    ) async throws -> T {
+        let context = serializedWriteContext()
+        return try await withCheckedThrowingContinuation { continuation in
+            context.perform {
+                do {
+                    let value = try work(context)
+                    if context.hasChanges {
+                        try context.save()
+                    }
+                    // 长期持有的上下文每次任务后复位，避免注册对象无限累积。
+                    context.reset()
+                    continuation.resume(returning: value)
+                } catch {
+                    context.rollback()
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
     // MARK: - 创建并配置 CoreData 容器
     /// 创建 NSPersistentContainer
     /// 自动配置：迁移、存储路径、内存模式、合并策略

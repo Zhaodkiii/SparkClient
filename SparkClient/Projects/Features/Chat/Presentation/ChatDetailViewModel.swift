@@ -38,6 +38,14 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
     /// 已登记引导问题点击上送（后台异步 best-effort；nil 表示不上送点击统计）。
     private let guideQuestionClickReporter: (any ChatGuideQuestionClickReporting)?
     private let logger: Logger
+    /// CHAT-000058：医院专用运行配置存取（内存 + Keychain）；nil 表示医院特性未装配。
+    private let hospitalRuntimeConfigStore: HospitalAgentRuntimeConfigStore?
+    /// CHAT-000058：医院专用运行配置查询（single-flight + 业务码映射）。
+    private let fetchHospitalRuntimeConfigUseCase: FetchHospitalAgentRuntimeConfigUseCase?
+    /// CHAT-000058：threadID → 进入时固定的专用运行配置（前台会话不无感换模）。
+    private var hospitalConfigsByThread: [UUID: HospitalAgentRuntimeConfig] = [:]
+    /// CHAT-000058：threadID → 后台静默校验任务。
+    private var hospitalValidationTasks: [UUID: Task<Void, Never>] = [:]
     private var composerAttachmentTasks: [UUID: Task<Void, Never>] = [:]
     private var currentGenerationTask: Task<Void, Never>?
     private var currentGenerationCancellationToken: AIRuntimeCancellationToken?
@@ -57,6 +65,11 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
 
     /// 对话场景可选模型行（远程场景 + 本地/智能体模型），供 Hanlin 输入栏展示。
     @Published private(set) var chatScenarioModels: [AIScenarioRemoteModelRow] = []
+    /// CHAT-000058：医院会话单项目录（threadID → 进入时固定的专用模型行）。
+    /// 与普通 `chatScenarioModels` 完全隔离：不互相覆盖、不共享选中态与错误态。
+    @Published private(set) var hospitalComposerModelRows: [UUID: AIScenarioRemoteModelRow] = [:]
+    /// CHAT-000058：后台校验失败或配置缺失导致不可发送的医院 thread 集合（C-013/C-014）。
+    @Published private(set) var hospitalRuntimeUnavailableThreadIDs: Set<UUID> = []
     /// 对话场景可消费的小任务（本地 + 服务端，以 code 为唯一标识）。
     @Published private(set) var chatSmallTasks: [SmallTask] = []
     /// 系统提示词编辑器可直接消费的提示词库模板。
@@ -102,6 +115,8 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         healthDataAccessGate: HealthDataAccessGate = .shared,
         taskManager: TaskManager = .shared,
         guideQuestionClickReporter: (any ChatGuideQuestionClickReporting)? = nil,
+        hospitalRuntimeConfigStore: HospitalAgentRuntimeConfigStore? = nil,
+        fetchHospitalRuntimeConfigUseCase: FetchHospitalAgentRuntimeConfigUseCase? = nil,
         logger: Logger = ConsoleLogger()
     ) {
         self.stateStore = stateStore
@@ -136,6 +151,8 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         self.healthDataAccessGate = healthDataAccessGate
         self.taskManager = taskManager
         self.guideQuestionClickReporter = guideQuestionClickReporter
+        self.hospitalRuntimeConfigStore = hospitalRuntimeConfigStore
+        self.fetchHospitalRuntimeConfigUseCase = fetchHospitalRuntimeConfigUseCase
         self.logger = logger
 
         NotificationCenter.default.publisher(for: .sparkChatDatabaseDidChange)
@@ -359,7 +376,9 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
     /// 并返回当前线程/场景下的推荐初始模型名（用于首次进入会话时恢复选中状态）
     /// 列表数据源与校验规则：以客户端 + 服务端 Pro 合并后的场景模型 effectiveScenarioBundles().chat.models 为准
     /// 不经过本地目录/试用模型筛选
-    func refreshChatModelPicker(for threadID: UUID) async -> String? {
+    /// - Parameter skipSelectionCorrection: CHAT-000058：医院会话为 true ——
+    ///   普通目录刷新不得修正/覆盖医院线程的草稿选中与线程模型（目录完全隔离）。
+    func refreshChatModelPicker(for threadID: UUID, skipSelectionCorrection: Bool = false) async -> String? {
         // 获取生效的场景模型配置，获取失败则清空模型列表并返回 nil
         guard let bundles = try? await aiConfigCenter.effectiveScenarioBundles() else {
             chatScenarioModels = []
@@ -367,7 +386,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
             chatPromptTemplates = []
             return nil
         }
-        
+
         // 提取聊天场景可用模型列表
         chatScenarioModels = bundles.chat.models
         chatSmallTasks = await aiConfigCenter.effectiveSmallTasks()
@@ -375,7 +394,9 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         chatPromptTemplates = snapshot.promptRepo
 
         // 校验并修正当前选中的模型（确保在可选列表内）
-        await validateCurrentSelection(for: threadID)
+        if skipSelectionCorrection == false {
+            await validateCurrentSelection(for: threadID)
+        }
 
         // 提取当前可选模型名称集合，为空则直接返回 nil
         let namesInPicker = Set(chatScenarioModels.map(\.name))
@@ -435,6 +456,8 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
 
     /// 将所选模型立即写入线程并尝试上送同步（不等待发送消息）。
     func updateThreadModel(_ preferredModelName: String?, for threadID: UUID) async {
+        // CHAT-000058：医院线程模型固定为进入时的专用配置，普通目录不得改写。
+        guard hospitalComposerModelRows[threadID] == nil else { return }
         guard let bundles = try? await aiConfigCenter.effectiveScenarioBundles() else { return }
 
         let trimmedSelected = preferredModelName?.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -469,6 +492,132 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
             stateStore.upsertThreadListItem(item)
         }
 
+    }
+
+    // MARK: - CHAT-000058 医院医生智能体专用运行配置会话
+
+    /// 医院会话当前可发送的专用模型行（未配置或已失效返回 nil，调用方据此阻断发送）。
+    func hospitalModelRow(for threadID: UUID) -> AIScenarioRemoteModelRow? {
+        guard hospitalRuntimeUnavailableThreadIDs.contains(threadID) == false else { return nil }
+        return hospitalComposerModelRows[threadID]
+    }
+
+    /// 进入医院会话：装载专用运行配置（内存 → Keychain → 服务端），配置单项锁定目录。
+    /// Keychain 命中时先返回可用并注册后台静默校验（C-012）；全部失败标记服务不可用（C-003/C-013）。
+    /// - Returns: true 表示当前会话可发送。
+    @discardableResult
+    func prepareHospitalRuntimeSession(
+        threadID: UUID,
+        scope: HospitalConversationScope,
+        accountID: Int64
+    ) async -> Bool {
+        if hospitalConfigsByThread[threadID] != nil {
+            // 再次进入仍按 C-012 重启后台静默校验；当前会话继续使用进入时固定配置（C-005）。
+            startHospitalRuntimeValidation(threadID: threadID, scope: scope, accountID: accountID)
+            return hospitalRuntimeUnavailableThreadIDs.contains(threadID) == false
+        }
+        guard let store = hospitalRuntimeConfigStore else {
+            markHospitalRuntimeUnavailable(for: threadID)
+            return false
+        }
+        let configScope = HospitalAgentRuntimeConfigStore.Scope(
+            accountID: accountID,
+            hospitalID: scope.hospitalID,
+            memberID: scope.memberID,
+            agentID: scope.agentID
+        )
+        if let cached = store.cachedConfig(for: configScope) {
+            adoptHospitalConfig(cached, for: threadID)
+            startHospitalRuntimeValidation(threadID: threadID, scope: scope, accountID: accountID)
+            return true
+        }
+        guard let fetchUseCase = fetchHospitalRuntimeConfigUseCase else {
+            markHospitalRuntimeUnavailable(for: threadID)
+            return false
+        }
+        do {
+            let config = try await fetchUseCase.execute(
+                agentID: scope.agentID,
+                memberID: scope.memberID,
+                hospitalID: scope.hospitalID,
+                accountID: accountID
+            )
+            store.save(config, accountID: accountID)
+            adoptHospitalConfig(config, for: threadID)
+            return true
+        } catch {
+            if error is CancellationError { return false }
+            logger.warning(
+                "医院专用运行配置装载失败，thread=\(shortID(threadID)) error=\(error.localizedDescription)",
+                module: .general
+            )
+            markHospitalRuntimeUnavailable(for: threadID)
+            return false
+        }
+    }
+
+    /// 成员/医院/账号切换：清空全部医院专用会话状态（单项目录、固定配置、后台校验任务、不可用标记）。
+    func clearAllHospitalRuntimeSessions() {
+        for task in hospitalValidationTasks.values {
+            task.cancel()
+        }
+        hospitalValidationTasks.removeAll()
+        hospitalConfigsByThread.removeAll()
+        hospitalComposerModelRows.removeAll()
+        hospitalRuntimeUnavailableThreadIDs.removeAll()
+    }
+
+    private func adoptHospitalConfig(_ config: HospitalAgentRuntimeConfig, for threadID: UUID) {
+        hospitalConfigsByThread[threadID] = config
+        hospitalComposerModelRows[threadID] = config.modelRow
+        hospitalRuntimeUnavailableThreadIDs.remove(threadID)
+    }
+
+    private func markHospitalRuntimeUnavailable(for threadID: UUID) {
+        hospitalRuntimeUnavailableThreadIDs.insert(threadID)
+    }
+
+    /// C-012/C-013/C-014：Keychain 命中后的后台静默校验。
+    /// 成功：更新 Keychain（当前前台会话继续使用进入时固定配置）；
+    /// 失败：删除 Keychain 条目，立即停止后续发送（进行中的请求允许完成）。
+    private func startHospitalRuntimeValidation(
+        threadID: UUID,
+        scope: HospitalConversationScope,
+        accountID: Int64
+    ) {
+        hospitalValidationTasks[threadID]?.cancel()
+        guard let store = hospitalRuntimeConfigStore,
+              let fetchUseCase = fetchHospitalRuntimeConfigUseCase else { return }
+        hospitalValidationTasks[threadID] = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let fresh = try await fetchUseCase.execute(
+                    agentID: scope.agentID,
+                    memberID: scope.memberID,
+                    hospitalID: scope.hospitalID,
+                    accountID: accountID
+                )
+                guard Task.isCancelled == false else { return }
+                store.save(fresh, accountID: accountID)
+                self.hospitalValidationTasks[threadID] = nil
+            } catch {
+                if error is CancellationError || Task.isCancelled { return }
+                logger.warning(
+                    "医院专用运行配置后台校验失败，thread=\(shortID(threadID)) error=\(error.localizedDescription)",
+                    module: .general
+                )
+                store.delete(
+                    for: HospitalAgentRuntimeConfigStore.Scope(
+                        accountID: accountID,
+                        hospitalID: scope.hospitalID,
+                        memberID: scope.memberID,
+                        agentID: scope.agentID
+                    )
+                )
+                self.hospitalValidationTasks[threadID] = nil
+                self.markHospitalRuntimeUnavailable(for: threadID)
+            }
+        }
     }
 
     /// 当远程模型列表变化时，丢弃已不在可选列表中的选择并回退为场景默认。
@@ -987,6 +1136,10 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         guard stateStore.isSending == false else { return }
         // 必须选中对话线程，否则无法发送
         guard let threadID = stateStore.selectedThreadID else { return }
+        // CHAT-000058：医院会话后台校验失效后立即停止后续发送（进行中的请求允许完成，不取消）。
+        guard hospitalRuntimeUnavailableThreadIDs.contains(threadID) == false else { return }
+        // CHAT-000058：医院会话使用进入时固定的专用模型行；普通会话为 nil（走通用目录解析）。
+        let hospitalRow = hospitalModelRow(for: threadID)
 
         // 程序化发送（引导卡片问题）：不消费草稿附件/健康资料引用，不校验草稿内容
         let isProgrammatic = programmaticInput?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
@@ -1059,9 +1212,18 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         do {
             // 清除运行时配置覆盖
             await aiConfigCenter.clearRuntimeOverride(for: .chat)
-            // 获取当前模型推理配置
-            let modelReasoning = (try? await aiConfigCenter.effectiveScenarioBundles())?
-                .chatReasoningContext(selectedModelName: flags.selectedChatModelName) ?? .unknown
+            // 获取当前模型推理配置（医院会话来自专用模型行，普通会话来自通用目录）
+            let modelReasoning: ChatModelReasoningContext
+            if let hospitalRow {
+                modelReasoning = ChatModelReasoningContext(
+                    providerCompany: hospitalRow.providerID.isEmpty ? nil : hospitalRow.providerID,
+                    supportsReasoning: hospitalRow.supportsReasoning,
+                    reasoningControllable: hospitalRow.reasoningControllable
+                )
+            } else {
+                modelReasoning = (try? await aiConfigCenter.effectiveScenarioBundles())?
+                    .chatReasoningContext(selectedModelName: flags.selectedChatModelName) ?? .unknown
+            }
             
             // 清空附件上传进度
             let stateStore = self.stateStore
@@ -1078,6 +1240,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
                 preparedAttachments: isProgrammatic ? [] : stateStore.preparedAttachments(for: threadID),
                 healthResourceRefs: pendingHealthRefs,
                 selectedChatModelName: flags.selectedChatModelName,
+                hospitalModelRow: hospitalRow,
                 assistantClientMessageID: streamingMessageID,
                 inference: inference,
                 modelReasoning: modelReasoning,
@@ -1233,6 +1396,10 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
 
     func regenerateLatestAssistantReply(for threadID: UUID) async {
         guard stateStore.isSending == false else { return }
+        // CHAT-000058：医院会话后台校验失效后禁止重试/自动重试。
+        guard hospitalRuntimeUnavailableThreadIDs.contains(threadID) == false else { return }
+        // CHAT-000058：医院会话使用进入时固定的专用模型行；普通会话为 nil。
+        let hospitalRow = hospitalModelRow(for: threadID)
 
         let flags = stateStore.composerDraft(for: threadID).runtimeFlags
         let inference = ChatOrchestratorInferenceOptions(
@@ -1262,13 +1429,23 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
 
         do {
             await aiConfigCenter.clearRuntimeOverride(for: .chat)
-            let modelReasoning = (try? await aiConfigCenter.effectiveScenarioBundles())?
-                .chatReasoningContext(selectedModelName: flags.selectedChatModelName) ?? .unknown
+            let modelReasoning: ChatModelReasoningContext
+            if let hospitalRow {
+                modelReasoning = ChatModelReasoningContext(
+                    providerCompany: hospitalRow.providerID.isEmpty ? nil : hospitalRow.providerID,
+                    supportsReasoning: hospitalRow.supportsReasoning,
+                    reasoningControllable: hospitalRow.reasoningControllable
+                )
+            } else {
+                modelReasoning = (try? await aiConfigCenter.effectiveScenarioBundles())?
+                    .chatReasoningContext(selectedModelName: flags.selectedChatModelName) ?? .unknown
+            }
             stateStore.setError(nil, for: threadID)
             let snapshot = try await sendMessageUseCase.executeRegenerateReply(
                 threadID: threadID,
                 memberID: memberContextStore.context.selectedMemberID,
                 selectedChatModelName: flags.selectedChatModelName,
+                hospitalModelRow: hospitalRow,
                 assistantClientMessageID: streamingMessageID,
                 inference: inference,
                 modelReasoning: modelReasoning,

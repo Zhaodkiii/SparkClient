@@ -8,6 +8,10 @@ struct HospitalCareFeatureDependencies {
     let resolveDemoHospital: ResolveDemoHospitalUseCase
     let resolveOrCreate: ResolveOrCreateHospitalConversationUseCase
     let resolveScope: ResolveHospitalConversationScopeUseCase
+    /// CHAT-000058：医院医生智能体专用运行配置查询（single-flight + 业务码映射）。
+    let fetchRuntimeConfig: FetchHospitalAgentRuntimeConfigUseCase
+    /// CHAT-000058：医院医生智能体专用运行配置存取（内存 + Keychain，含切换清理）。
+    let runtimeConfigStore: HospitalAgentRuntimeConfigStore
     let hydrateScopes: HydrateHospitalConversationScopesUseCase
     let loadDoctorProfile: LoadHospitalDoctorProfileUseCase
     /// CHAT-000055：会话 context（能力 + 知识 Manifest）回源。

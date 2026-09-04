@@ -51,6 +51,7 @@ struct SendChatMessageUseCase: Sendable {
         preparedAttachments: [ChatPreparedAttachment] = [],        // 已预处理的附件
         healthResourceRefs: [HealthResourceRef] = [],
         selectedChatModelName: String? = nil, // 用户选择的模型名称
+        hospitalModelRow: AIScenarioRemoteModelRow? = nil, // CHAT-000058：医院专用模型行（命中时跳过 bundles 按名解析）
         assistantClientMessageID: UUID,      // 助手消息客户端ID
         inference: ChatOrchestratorInferenceOptions = .default,    // 推理选项
         modelReasoning: ChatModelReasoningContext = .unknown,      // 模型推理上下文
@@ -77,7 +78,13 @@ struct SendChatMessageUseCase: Sendable {
         // 获取AI配置快照
         let catalogSnapshot = await aiConfigCenter.currentSnapshot()
         // 获取生效的场景模型配置
-        let bundles = try await aiConfigCenter.effectiveScenarioBundles()
+        // CHAT-000058：医院会话使用专用模型行时不依赖通用 bundles（普通 bootstrap 失败不得阻断医院发送）。
+        let bundles: AIScenarioRemoteBundlesCollection?
+        if hospitalModelRow != nil {
+            bundles = try? await aiConfigCenter.effectiveScenarioBundles()
+        } else {
+            bundles = try await aiConfigCenter.effectiveScenarioBundles()
+        }
         let start = Date()
         // 日志：发送消息开始
         logger.info(
@@ -119,18 +126,30 @@ struct SendChatMessageUseCase: Sendable {
                 ? trimmedSelected
                 : ((trimmedThreadModel?.isEmpty == false) ? trimmedThreadModel : nil)
             // 获取匹配的模型配置，找不到则抛错
-            guard let resolvedRow = bundles.resolveRow(for: .chat, preferredModelName: preferredName) else {
-                throw AIConfigError.missingModelForScenario(.chat)
+            // CHAT-000058：医院会话直接使用专用模型行，绝不在通用目录解析、不回退普通模型。
+            let resolvedRow: AIScenarioRemoteModelRow
+            if let hospitalModelRow {
+                resolvedRow = hospitalModelRow
+            } else {
+                guard let row = bundles?.resolveRow(for: .chat, preferredModelName: preferredName) else {
+                    throw AIConfigError.missingModelForScenario(.chat)
+                }
+                resolvedRow = row
             }
             // 最终要持久化的模型名称
-            let persistedModelName = trimmedSelected?.isEmpty == false
-                ? trimmedSelected
-                : (trimmedThreadModel?.isEmpty == false ? trimmedThreadModel : resolvedRow.name)
+            let persistedModelName: String
+            if hospitalModelRow != nil {
+                persistedModelName = resolvedRow.name
+            } else {
+                persistedModelName = trimmedSelected?.isEmpty == false
+                    ? trimmedSelected ?? resolvedRow.name
+                    : (trimmedThreadModel?.isEmpty == false ? trimmedThreadModel ?? resolvedRow.name : resolvedRow.name)
+            }
             let generationParameters = Self.resolveGenerationParameters(
                 thread: thread,
                 modelRow: resolvedRow
             )
-            
+
             // 构建系统提示词
             let systemPrompt = await systemPromptWithRelevantMemory(
                 base: ChatSystemPromptResolver().resolve(
@@ -155,7 +174,16 @@ struct SendChatMessageUseCase: Sendable {
             }
 
             // 获取模型是否支持多模态、厂商信息
-            let (supportsMultimodal, providerCompany) = bundles.chatMultimodalCapabilities(selectedModelName: resolvedRow.name)
+            let supportsMultimodal: Bool
+            let providerCompany: String?
+            if let hospitalModelRow {
+                supportsMultimodal = hospitalModelRow.supportsMultimodal
+                providerCompany = hospitalModelRow.providerID.isEmpty ? nil : hospitalModelRow.providerID
+            } else {
+                let capabilities = bundles?.chatMultimodalCapabilities(selectedModelName: resolvedRow.name)
+                supportsMultimodal = capabilities?.supportsMultimodal ?? false
+                providerCompany = capabilities?.providerCompanyUppercased ?? nil
+            }
             // 确定图片传递模式
             let effectiveMode = effectiveChatImageDeliveryMode(
                 threadMode: thread.imageDeliveryMode,
@@ -280,6 +308,7 @@ struct SendChatMessageUseCase: Sendable {
                 deliverMultimodalImages: smallTask == nil && deliverMultimodal,
                 sendsOriginalImagesToAI: sendsOriginalImagesToAI,
                 providerCompanyUppercased: providerCompany,
+                modelRowOverride: hospitalModelRow,
                 onPartial: { delta in
                     await messageRunActor.apply(
                         .assistantPartial(delta, assistantClientMessageID: assistantClientMessageID)
@@ -343,6 +372,7 @@ struct SendChatMessageUseCase: Sendable {
         threadID: UUID,
         memberID: Int? = nil,
         selectedChatModelName: String? = nil,
+        hospitalModelRow: AIScenarioRemoteModelRow? = nil, // CHAT-000058：医院专用模型行（命中时跳过 bundles 按名解析）
         assistantClientMessageID: UUID,
         inference: ChatOrchestratorInferenceOptions = .default,
         modelReasoning: ChatModelReasoningContext = .unknown,
@@ -351,7 +381,12 @@ struct SendChatMessageUseCase: Sendable {
         onAssistantPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil,
         cachedMemberCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData? = nil
     ) async throws -> ChatThreadSnapshot {
-        let bundles = try await aiConfigCenter.effectiveScenarioBundles()
+        let bundles: AIScenarioRemoteBundlesCollection?
+        if hospitalModelRow != nil {
+            bundles = try? await aiConfigCenter.effectiveScenarioBundles()
+        } else {
+            bundles = try await aiConfigCenter.effectiveScenarioBundles()
+        }
         let start = Date()
         logger.info(
             "regenerateReply 开始，thread=\(shortID(threadID)), member=\(shortID(memberID))",
@@ -368,12 +403,23 @@ struct SendChatMessageUseCase: Sendable {
             let preferredName = (trimmedSelected?.isEmpty == false)
                 ? trimmedSelected
                 : ((trimmedThreadModel?.isEmpty == false) ? trimmedThreadModel : nil)
-            guard let resolvedRow = bundles.resolveRow(for: .chat, preferredModelName: preferredName) else {
-                throw AIConfigError.missingModelForScenario(.chat)
+            let resolvedRow: AIScenarioRemoteModelRow
+            if let hospitalModelRow {
+                resolvedRow = hospitalModelRow
+            } else {
+                guard let row = bundles?.resolveRow(for: .chat, preferredModelName: preferredName) else {
+                    throw AIConfigError.missingModelForScenario(.chat)
+                }
+                resolvedRow = row
             }
-            let persistedModelName = trimmedSelected?.isEmpty == false
-                ? trimmedSelected
-                : (trimmedThreadModel?.isEmpty == false ? trimmedThreadModel : resolvedRow.name)
+            let persistedModelName: String
+            if hospitalModelRow != nil {
+                persistedModelName = resolvedRow.name
+            } else {
+                persistedModelName = trimmedSelected?.isEmpty == false
+                    ? trimmedSelected ?? resolvedRow.name
+                    : (trimmedThreadModel?.isEmpty == false ? trimmedThreadModel ?? resolvedRow.name : resolvedRow.name)
+            }
             let generationParameters = Self.resolveGenerationParameters(
                 thread: thread,
                 modelRow: resolvedRow
@@ -410,7 +456,16 @@ struct SendChatMessageUseCase: Sendable {
                 query: replayUserInput
             )
 
-            let (supportsMultimodal, providerCompany) = bundles.chatMultimodalCapabilities(selectedModelName: resolvedRow.name)
+            let supportsMultimodal: Bool
+            let providerCompany: String?
+            if let hospitalModelRow {
+                supportsMultimodal = hospitalModelRow.supportsMultimodal
+                providerCompany = hospitalModelRow.providerID.isEmpty ? nil : hospitalModelRow.providerID
+            } else {
+                let capabilities = bundles?.chatMultimodalCapabilities(selectedModelName: resolvedRow.name)
+                supportsMultimodal = capabilities?.supportsMultimodal ?? false
+                providerCompany = capabilities?.providerCompanyUppercased ?? nil
+            }
             let effectiveMode = effectiveChatImageDeliveryMode(
                 threadMode: thread.imageDeliveryMode,
                 supportsMultimodal: supportsMultimodal
@@ -487,6 +542,7 @@ struct SendChatMessageUseCase: Sendable {
                 deliverMultimodalImages: deliverMultimodal,
                 sendsOriginalImagesToAI: sendsOriginalImagesToAI,
                 providerCompanyUppercased: providerCompany,
+                modelRowOverride: hospitalModelRow,
                 onPartial: { delta in
                     await messageRunActor.apply(
                         .assistantPartial(delta, assistantClientMessageID: assistantClientMessageID)

@@ -1,6 +1,6 @@
 import Foundation
 
-struct HospitalConversationScope: Codable, Equatable, Sendable {
+nonisolated struct HospitalConversationScope: Codable, Equatable, Sendable {
     let threadID: UUID
     let agentID: UUID
     let memberID: Int
@@ -8,7 +8,7 @@ struct HospitalConversationScope: Codable, Equatable, Sendable {
 }
 
 /// 记录医院会话 `threadID -> agentID/memberID`，供跳过通用引导卡和会话内新建继承智能体。
-final class HospitalConversationScopeStore: @unchecked Sendable {
+nonisolated final class HospitalConversationScopeStore: @unchecked Sendable {
     private let defaults: UserDefaults
     private let lock = NSLock()
     private var memory: [String: [String: HospitalConversationScope]] = [:]

@@ -93,8 +93,10 @@ struct ChatOutboxPipeline: Sendable {
                         module: .general
                     )
                 }
-                let messagesByClientID = Dictionary(uniqueKeysWithValues: messagesToPush.map { ($0.clientMessageID, $0) })
-                let threadsByID = Dictionary(uniqueKeysWithValues: await repository.loadThreads().map { ($0.id, $0) })
+                // 防御：历史数据可能存在同 clientMessageID/同 threadID 重复行，
+                // 唯一键初始化会直接崩溃；保留首条并继续上送。
+                let messagesByClientID = Dictionary(messagesToPush.map { ($0.clientMessageID, $0) }, uniquingKeysWith: { first, _ in first })
+                let threadsByID = Dictionary(await repository.loadThreads().map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
                 let payload: [ChatRemoteMessageDTO] = pending.compactMap { queued in
                     guard let message = messagesByClientID[queued.clientMessageID] else { return nil }
                     return ChatRemoteMessageDTO(

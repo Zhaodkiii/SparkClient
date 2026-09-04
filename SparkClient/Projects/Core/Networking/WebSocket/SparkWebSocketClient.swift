@@ -6,7 +6,14 @@ enum SparkWebSocketEvent: Sendable {
     case disconnected(String?)
 }
 
-actor SparkWebSocketClient {
+/// CHAT-000059：最小 WebSocket 抽象，便于实时通道单测注入 Fake，不改变生产连接行为。
+nonisolated protocol SparkWebSocketClientProtocol: Actor {
+    func connect(request: URLRequest, eventHandler: @escaping @Sendable (SparkWebSocketEvent) -> Void)
+    func send(text: String) async
+    func disconnect()
+}
+
+actor SparkWebSocketClient: SparkWebSocketClientProtocol {
     typealias EventHandler = @Sendable (SparkWebSocketEvent) -> Void
 
     private let session: URLSession

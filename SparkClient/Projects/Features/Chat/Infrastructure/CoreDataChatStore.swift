@@ -76,7 +76,7 @@ actor CoreDataChatStore {
     }
 
     func loadThreads() async -> [ChatThread] {
-        (try? await kernel.read { context, accountID in
+        let threads: [ChatThread] = (try? await kernel.read { context, accountID in
             guard let accountID else { return [] }
             let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.thread)
             request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
@@ -86,6 +86,52 @@ actor CoreDataChatStore {
             request.sortDescriptors = [NSSortDescriptor(key: "updatedAt", ascending: false)]
             return try context.fetch(request).compactMap(Self.toThread)
         }) ?? []
+
+        // 历史并发写入可能留下同 id 重复行（曾导致 Dictionary 唯一键崩溃）：
+        // 读取时去重保证下游安全，并异步删除多余副本（消息按 threadID 值关联，不受影响）。
+        var seen = Set<UUID>()
+        var unique: [ChatThread] = []
+        var duplicateIDs = Set<UUID>()
+        unique.reserveCapacity(threads.count)
+        for thread in threads {
+            if seen.insert(thread.id).inserted {
+                unique.append(thread)
+            } else {
+                duplicateIDs.insert(thread.id)
+            }
+        }
+        if duplicateIDs.isEmpty == false {
+            logger.warning(
+                "聊天仓储：检测到重复会话行，ids=\(duplicateIDs.map { String($0.uuidString.prefix(8)) }.joined(separator: ","))，将清理多余副本",
+                module: .general
+            )
+            await deleteDuplicateThreadCopies(ids: duplicateIDs)
+        }
+        return unique
+    }
+
+    /// 删除同 id 会话的多余副本（保留 createdAt 最早的一行）。
+    private func deleteDuplicateThreadCopies(ids: Set<UUID>) async {
+        _ = try? await kernel.writeWithoutNotification { context, accountID in
+            let request = NSFetchRequest<NSManagedObject>(entityName: EntityName.thread)
+            request.predicate = NSCompoundPredicate(andPredicateWithSubpredicates: [
+                Self.ownerPredicate(accountID),
+                NSPredicate(format: "id IN %@", ids),
+            ])
+            request.sortDescriptors = [NSSortDescriptor(key: "createdAt", ascending: true)]
+            let objects = try context.fetch(request)
+            var kept = Set<UUID>()
+            var removed = 0
+            for object in objects {
+                guard let id = object.value(forKey: "id") as? UUID else { continue }
+                if kept.insert(id).inserted {
+                    continue
+                }
+                context.delete(object)
+                removed += 1
+            }
+            return removed
+        }
     }
 
     func loadThreadListItems() async -> [ChatThreadListItem] {

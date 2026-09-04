@@ -11,6 +11,8 @@ struct HanlinChatComposerView: View {
     @ObservedObject var aiSettingsViewModel: AISettingsViewModel
     let boundMemberID: Int?
     let modelRows: [AIScenarioRemoteModelRow]
+    /// CHAT-000058：医院会话单项锁定模型行（非 nil 时在 Release 也渲染锁定态选择器；nil 不渲染）。
+    var lockedHospitalModelRow: AIScenarioRemoteModelRow? = nil
     let smallTasks: [SmallTask]
     let initialCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
     let memberCompleteDataFetcher: any MemberCompleteDataFetching
@@ -107,8 +109,17 @@ struct HanlinChatComposerView: View {
                 }
             )
 
+            // CHAT-000058：医院会话单项锁定模型行（Release 也渲染；置灰、不可点击、不可展开）。
+            if let lockedHospitalModelRow, !isKeyboardVisible {
+                ChatComposerModelPickerRow(
+                    models: [lockedHospitalModelRow],
+                    selectedModelName: .constant(lockedHospitalModelRow.name),
+                    isSelectionLocked: true
+                )
+            }
+
 #if DEBUG
-            if !isKeyboardVisible {
+            if lockedHospitalModelRow == nil, !isKeyboardVisible {
                 ChatComposerModelPickerRow(
                     models: modelRows,
                     selectedModelName: selectedModelBinding

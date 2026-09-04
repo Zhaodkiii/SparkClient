@@ -143,6 +143,7 @@ final class HospitalConversationScopeResolutionTests: XCTestCase {
 
     // MARK: - 普通对话投影排除医院 Thread
 
+    @MainActor
     func testOrdinaryProjectionExcludesHospitalThreads() {
         let store = makeStore()
         let ordinaryID = UUID()

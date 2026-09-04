@@ -119,6 +119,12 @@ final class HospitalHomeViewModelTests: XCTestCase {
         remote.hospitalsResult = .success([hospitalDTO])
         let agentDTO = HospitalCareTestFixtures.agentDTO(hospitalID: hospitalDTO.id)
         remote.agentsResult = .success([agentDTO])
+        // CHAT-000058 C-017：复用最近会话前仍需专用运行配置成功。
+        remote.runtimeConfigResult = .success(HospitalCareTestFixtures.runtimeConfigDTO(
+            agentID: agentDTO.id,
+            hospitalID: hospitalDTO.id,
+            memberID: 7
+        ))
         let existingThreadID = UUID()
         remote.conversationsResult = .success([
             HospitalCareTestFixtures.conversationDTO(
@@ -160,14 +166,26 @@ final class HospitalHomeViewModelTests: XCTestCase {
         let configuration = SparkBackendConfiguration(engine: engine)
         let concreteRemote = HospitalCareRemoteAPI(configuration: configuration)
         let knowledgeRepository = HospitalKnowledgeInMemoryRepository()
+        let runtimeConfigStore = HospitalAgentRuntimeConfigStore(
+            keychain: InMemoryHospitalAgentRuntimeConfigKeychain(),
+            defaults: UserDefaults(suiteName: "HospitalHomeViewModelTests.\(UUID().uuidString)")!
+        )
+        let fetchRuntimeConfig = FetchHospitalAgentRuntimeConfigUseCase(remoteAPI: remote)
         let dependencies = HospitalCareFeatureDependencies(
             remoteAPI: concreteRemote,
             catalogCache: cache,
             scopeStore: scopeStore,
             loadDirectory: LoadHospitalAgentDirectoryUseCase(remoteAPI: remote, catalogCache: cache),
             resolveDemoHospital: ResolveDemoHospitalUseCase(remoteAPI: remote, catalogCache: cache),
-            resolveOrCreate: ResolveOrCreateHospitalConversationUseCase(remoteAPI: concreteRemote, scopeStore: scopeStore),
+            resolveOrCreate: ResolveOrCreateHospitalConversationUseCase(
+                remoteAPI: remote,
+                scopeStore: scopeStore,
+                fetchRuntimeConfig: fetchRuntimeConfig,
+                runtimeConfigStore: runtimeConfigStore
+            ),
             resolveScope: ResolveHospitalConversationScopeUseCase(remoteAPI: remote, scopeStore: scopeStore),
+            fetchRuntimeConfig: fetchRuntimeConfig,
+            runtimeConfigStore: runtimeConfigStore,
             hydrateScopes: HydrateHospitalConversationScopesUseCase(remoteAPI: remote, scopeStore: scopeStore),
             loadDoctorProfile: LoadHospitalDoctorProfileUseCase(remoteAPI: remote, catalogCache: cache),
             fetchContext: FetchHospitalConversationContextUseCase(remoteAPI: remote),

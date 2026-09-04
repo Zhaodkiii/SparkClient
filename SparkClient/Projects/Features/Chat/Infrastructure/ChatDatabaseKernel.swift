@@ -33,6 +33,8 @@ actor ChatDatabaseKernel {
     }
 
     /// 写入路径；未登录时抛出 ``ChatDatabaseKernelError/notAuthenticated``。
+    /// 走共享串行写入上下文：actor 在 await 处会让出，若每次写都用独立上下文，
+    /// 两个「查不到 → 插入」的写任务会并发产生重复行。
     func write<T: Sendable>(
         postChangeNotification: Bool = true,
         _ work: @Sendable @escaping (NSManagedObjectContext, Int64) throws -> T
@@ -40,7 +42,7 @@ actor ChatDatabaseKernel {
         guard let accountID = await currentAccountID() else {
             throw ChatDatabaseKernelError.notAuthenticated
         }
-        let value = try await stack.performBackgroundTask { context in
+        let value = try await stack.performSerializedBackgroundTask { context in
             try work(context, accountID)
         }
         if postChangeNotification {

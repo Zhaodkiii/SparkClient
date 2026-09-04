@@ -102,6 +102,18 @@ struct ChatView: View {
     private var composerStyle: ChatComposerStyle {
         ChatComposerStyle(rawValue: composerStyleRaw) ?? .hanlin
     }
+
+    /// CHAT-000058：医院会话单项锁定模型行（配置缺失为 nil，此时不渲染可用选择器）。
+    private var hospitalLockedComposerModelRow: AIScenarioRemoteModelRow? {
+        guard case .hospital = hospitalScopeResolution else { return nil }
+        return detailViewModel.hospitalComposerModelRows[currentThreadID]
+    }
+
+    /// CHAT-000058：医院会话后台校验失败/配置失效 → 输入区与发送整体禁用（C-013/C-014）。
+    private var isHospitalRuntimeUnavailable: Bool {
+        guard case .hospital = hospitalScopeResolution else { return false }
+        return detailViewModel.hospitalRuntimeUnavailableThreadIDs.contains(currentThreadID)
+    }
     
     /// CHAT-000030：消息列表必须按 currentThreadID 读取，不能跟随全局 selectedMessages，
     /// 避免局部 activeThreadID 与全局 selectedThreadID 短暂不同步时显示错线程消息。
@@ -229,6 +241,7 @@ struct ChatView: View {
                 aiSettingsViewModel: aiSettingsViewModel,
                 boundMemberID: stateStore.selectedThread?.memberID,
                 modelRows: detailViewModel.chatScenarioModels,
+                lockedHospitalModelRow: hospitalLockedComposerModelRow,
                 smallTasks: composerAssociatedSmallTasks,
                 initialCompleteData: homeViewModel.dashboard?.medical.completeData,
                 memberCompleteDataFetcher: detailViewModel,
@@ -423,10 +436,13 @@ struct ChatView: View {
             }
             .safeAreaInset(edge: .bottom) {
                 VStack(spacing: 0) {
-                    // CHAT-000055 Q27：智能体下架/会话只读时，输入区上方固定提示，发送入口同步禁用。
-                    if case .hospital = hospitalScopeResolution,
+                    // CHAT-000058 C-013/C-014：后台校验失败 → 输入区上方固定“当前服务已不可用”，发送整体禁用。
+                    if isHospitalRuntimeUnavailable {
+                        hospitalRuntimeUnavailableBanner
+                    } else if case .hospital = hospitalScopeResolution,
                        let capabilities = hospitalCapabilities,
                        capabilities.canSendMessage == false {
+                        // CHAT-000055 Q27：智能体下架/会话只读时，输入区上方固定提示，发送入口同步禁用。
                         hospitalReadOnlyBanner(reason: capabilities.readOnlyReason)
                     } else if isDoctorTakeoverActive {
                         // CHAT-000057 38.6：医生接管中轻量提示（可发送，AI 不回复），与只读横幅互斥。
@@ -434,7 +450,8 @@ struct ChatView: View {
                     }
                     composerChrome
                         // CHAT-000057 34.4：unknown 确认期间输入区/附件/快捷问题整体禁用。
-                        .disabled(isComposerBlockedByUnknownConfirmation)
+                        // CHAT-000058：医院配置失效时输入区/发送/重试同步禁用。
+                        .disabled(isComposerBlockedByUnknownConfirmation || isHospitalRuntimeUnavailable)
                 }
             }
         //            .ignoresSafeArea(.container, edges: .bottom)
@@ -644,6 +661,12 @@ struct ChatView: View {
             .onChange(of: homeViewModel.memberContextStoreForBinding.context.selectedMemberID) { _ in
                 // CHAT-000056 Q7：成员切换后，旧成员的「有新消息」临时计数全部失效
                 stateStore.clearAllUnseenRemoteMessageCounts()
+                // CHAT-000058 C-022：成员切换清空医院专用会话状态（单项目录、固定配置、
+                // 后台校验任务、不可用标记），并失效本账号 Keychain 专用配置引用；保留医院名医列表。
+                detailViewModel.clearAllHospitalRuntimeSessions()
+                if let hospitalCare, let accountID = listViewModel.signedInAccountID {
+                    hospitalCare.runtimeConfigStore.clearAccount(accountID)
+                }
             }
             .onReceive(NotificationCenter.default.publisher(for: .chatRealtimeThreadPullDidComplete)) { note in
                 // CHAT-000056 Q8：定向拉取完成后刷新当前医院会话能力；下架/终结 → 输入立即只读。
@@ -680,8 +703,18 @@ struct ChatView: View {
                     module: .general
                 )
                 listViewModel.selectThread(id)
-                if let initialModel = await detailViewModel.refreshChatModelPicker(for: id) {
-                    if stateStore.composerDraft(for: id).runtimeFlags.selectedChatModelName == nil {
+                // CHAT-000058：本地 scope 命中的医院线程使用单项锁定目录；
+                // 普通目录刷新不得修正其草稿选中态与线程模型（目录完全隔离，C-019）。
+                let isHospitalThreadByLocalScope: Bool = {
+                    guard let hospitalCare, let accountID = listViewModel.signedInAccountID else { return false }
+                    return hospitalCare.scopeStore.scope(for: id, accountID: accountID) != nil
+                }()
+                if let initialModel = await detailViewModel.refreshChatModelPicker(
+                    for: id,
+                    skipSelectionCorrection: isHospitalThreadByLocalScope
+                ) {
+                    if isHospitalThreadByLocalScope == false,
+                       stateStore.composerDraft(for: id).runtimeFlags.selectedChatModelName == nil {
                         stateStore.setSelectedChatModelName(initialModel, for: id)
                     }
                 }
@@ -701,6 +734,17 @@ struct ChatView: View {
                 if case .hospital(let scope) = scopeResolution {
                     let capturedScope = scope
                     Task { await refreshHospitalConversationContext(threadID: id, scope: capturedScope) }
+                    // CHAT-000058：装载专用运行配置（内存 → Keychain → 服务端），
+                    // Keychain 命中时先可用并注册后台静默校验；失败标记服务不可用并阻断发送。
+                    if let accountID = listViewModel.signedInAccountID {
+                        Task {
+                            await detailViewModel.prepareHospitalRuntimeSession(
+                                threadID: id,
+                                scope: capturedScope,
+                                accountID: accountID
+                            )
+                        }
+                    }
                 }
                 // CHAT-000057 D-016/26.6：消息加载成功且身份确认后提交已读；
                 // unknown/conflict/医院身份未确认不提交（26.3），幂等可重复。
@@ -1203,6 +1247,32 @@ struct ChatView: View {
                 )
                 return
             }
+            // CHAT-000058 C-013/C-014：后台校验失败 → 立即停止后续发送（不中断进行中请求，不改投普通 AI）。
+            if detailViewModel.hospitalRuntimeUnavailableThreadIDs.contains(currentThreadID) {
+                hospitalSendBlockedMessage = L10n.text(
+                    "chat.hospital.runtime_unavailable",
+                    fallback: "当前服务已不可用"
+                )
+                return
+            }
+            // CHAT-000058 C-003：专用配置未就绪（无缓存且查询失败/进行中）时不发送，先补装载。
+            guard detailViewModel.hospitalComposerModelRows[currentThreadID] != nil else {
+                hospitalSendBlockedMessage = L10n.text(
+                    "chat.hospital.runtime_preparing",
+                    fallback: "医生智能体服务尚未就绪，请稍候重试"
+                )
+                if let accountID = listViewModel.signedInAccountID {
+                    let threadID = currentThreadID
+                    Task {
+                        await detailViewModel.prepareHospitalRuntimeSession(
+                            threadID: threadID,
+                            scope: scope,
+                            accountID: accountID
+                        )
+                    }
+                }
+                return
+            }
             if let capabilities = hospitalCapabilities {
                 guard capabilities.canSendMessage else {
                     hospitalSendBlockedMessage = hospitalReadOnlyMessage(for: capabilities.readOnlyReason)
@@ -1233,9 +1303,14 @@ struct ChatView: View {
         // CHAT-000057 38.6/L1942：医生接管中允许发送但 AI 不回复；投影不可用时保持旧 AI 链路。
         let suppressAIReply = isDoctorTakeoverActive
         if suppressAIReply == false {
-            guard detailViewModel.chatScenarioModels.isEmpty == false else {
-                showNoAvailableChatModelAlert = true
-                return
+            // CHAT-000058：医院会话可用性以单项锁定目录为准（上文已校验），普通会话仍以通用目录为准。
+            if case .hospital = hospitalScopeResolution {
+                guard detailViewModel.hospitalModelRow(for: currentThreadID) != nil else { return }
+            } else {
+                guard detailViewModel.chatScenarioModels.isEmpty == false else {
+                    showNoAvailableChatModelAlert = true
+                    return
+                }
             }
         }
         detailViewModel.startSendingCurrentDraft(
@@ -1256,7 +1331,24 @@ struct ChatView: View {
         }
     }
 
-    /// CHAT-000055 Q27：只读横幅（输入区上方固定展示）。
+    /// CHAT-000058 C-013/C-014：后台校验失败后固定展示“当前服务已不可用”。
+    private var hospitalRuntimeUnavailableBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            Text(L10n.text("chat.hospital.runtime_unavailable", fallback: "当前服务已不可用"))
+                .font(.footnote)
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.leading)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background(Color.orange.opacity(0.12))
+    }
+
+    /// CHAT-000055：只读横幅（输入区上方固定展示）。
     @ViewBuilder
     private func hospitalReadOnlyBanner(reason: String?) -> some View {
         HStack(spacing: 8) {

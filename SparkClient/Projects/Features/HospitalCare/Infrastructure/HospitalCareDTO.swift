@@ -64,6 +64,9 @@ nonisolated struct HospitalConversationDTO: Codable, Sendable {
     let agent: HospitalConversationAgentDTO
     let memberId: Int?
     let hospital: HospitalPublicDTO?
+    /// CHAT-000058：服务端创建/查询时固定的运行绑定（旧服务端缺省为 nil，客户端不猜测）。
+    var bindingId: Int? = nil
+    var bindingVersion: Int? = nil
 }
 
 nonisolated struct HospitalCreateConversationRequestDTO: Encodable, Sendable {
@@ -149,4 +152,42 @@ nonisolated struct HospitalKnowledgeChunkDTO: Codable, Sendable {
     let documentRevision: Int64
     let vectorPayload: [Float]
     let embeddingBindingId: String?
+}
+
+// MARK: - CHAT-000058 医院医生智能体专用运行配置
+
+/// GET /api/v1/hospital-care/agents/{agent_id}/runtime-config/?member_id={member_id} 的响应。
+/// 该响应携带模型 endpoint / 凭证 / systemProvision，禁止写入日志、埋点、UserDefaults 或 Core Data；
+/// 只允许内存持有或经 `HospitalAgentRuntimeConfigStore` 写入 Keychain。
+nonisolated struct HospitalAgentRuntimeConfigDTO: Codable, Sendable {
+    let agentId: UUID
+    let hospitalId: UUID
+    let memberId: Int
+    let doctor: HospitalAgentRuntimeDoctorDTO
+    let profile: HospitalAgentRuntimeProfileDTO
+    let runtime: HospitalAgentRuntimeDTO
+}
+
+nonisolated struct HospitalAgentRuntimeDoctorDTO: Codable, Sendable {
+    let doctorId: UUID?
+    let name: String
+    let title: String?
+    let departmentName: String?
+    let avatarUrl: String?
+}
+
+nonisolated struct HospitalAgentRuntimeProfileDTO: Codable, Sendable {
+    let name: String
+    let description: String?
+    let status: String?
+    let profileVersion: Int?
+}
+
+nonisolated struct HospitalAgentRuntimeDTO: Codable, Sendable {
+    let bindingId: Int
+    let bindingVersion: Int
+    let configVersion: String
+    let streaming: Bool?
+    /// 与 Pro bootstrap `chat.models` 行字段完全一致，直接复用宽容解码。
+    let model: AIScenarioRemoteModelRow
 }

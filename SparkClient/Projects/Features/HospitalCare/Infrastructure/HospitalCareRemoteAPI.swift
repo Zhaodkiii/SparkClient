@@ -64,6 +64,17 @@ struct HospitalCareRemoteAPI: Sendable {
         )
     }
 
+    /// CHAT-000058：按 agent_id + member_id 查询医生智能体唯一直连运行配置。
+    /// 响应包含 endpoint/凭证/systemProvision，调用方不得写入日志或普通缓存。
+    func fetchAgentRuntimeConfig(agentID: UUID, memberID: Int) async throws -> HospitalAgentRuntimeConfigDTO {
+        try await get(
+            name: "HospitalCare.AgentRuntimeConfig",
+            path: "/api/v1/hospital-care/agents/\(agentID.hospitalCarePathID)/runtime-config/",
+            queryItems: [URLQueryItem(name: "member_id", value: String(memberID))],
+            serialKey: "hospital_care.agent.runtime_config.\(agentID.hospitalCarePathID).\(memberID)"
+        )
+    }
+
     func listConversations(memberID: Int, page: Int = 1, pageSize: Int = 100) async throws -> [HospitalConversationDTO] {
         let payload: HospitalCarePageDTO<HospitalConversationDTO> = try await get(
             name: "HospitalCare.Conversations",
@@ -217,6 +228,8 @@ protocol HospitalCareRemoteServing: Sendable {
         pageSize: Int
     ) async throws -> [HospitalAgentPublicDTO]
     func fetchAgent(agentID: UUID) async throws -> HospitalAgentPublicDTO
+    /// CHAT-000058：按 agent_id + member_id 查询医生智能体专用直连运行配置。
+    func fetchAgentRuntimeConfig(agentID: UUID, memberID: Int) async throws -> HospitalAgentRuntimeConfigDTO
     func listConversations(memberID: Int, page: Int, pageSize: Int) async throws -> [HospitalConversationDTO]
     func listAllConversations(pageSize: Int) async throws -> [HospitalConversationDTO]
     func createConversation(agentID: UUID, memberID: Int) async throws -> HospitalCreateConversationResponseDTO

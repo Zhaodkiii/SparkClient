@@ -243,6 +243,9 @@ nonisolated struct AIRuntimeTextRequest: Sendable {
     let topP: Double?                            // 线程级 top_p 覆盖
     let maxTokens: Int?                          // 线程级最大回复长度覆盖
     let cancellationToken: AIRuntimeCancellationToken? // 当前 AI 生成/抽取流程的协作式取消令牌
+    /// CHAT-000058：请求级显式模型行覆盖（医院医生智能体专用配置）。
+    /// 命中时跳过配置中心按名称解析，仅作用于本次请求，绝不写入通用目录。
+    let catalogRowOverride: AIScenarioRemoteModelRow?
 
     /// 构造方法（提供默认值）
     init(
@@ -256,7 +259,8 @@ nonisolated struct AIRuntimeTextRequest: Sendable {
         temperature: Double? = nil,
         topP: Double? = nil,
         maxTokens: Int? = nil,
-        cancellationToken: AIRuntimeCancellationToken? = nil
+        cancellationToken: AIRuntimeCancellationToken? = nil,
+        catalogRowOverride: AIScenarioRemoteModelRow? = nil
     ) {
         self.scenario = scenario
         self.messages = messages
@@ -269,6 +273,7 @@ nonisolated struct AIRuntimeTextRequest: Sendable {
         self.topP = topP
         self.maxTokens = maxTokens
         self.cancellationToken = cancellationToken
+        self.catalogRowOverride = catalogRowOverride
     }
 }
 

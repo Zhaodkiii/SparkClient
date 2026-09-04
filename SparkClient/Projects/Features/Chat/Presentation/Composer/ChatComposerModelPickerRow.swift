@@ -4,6 +4,9 @@ import SwiftUI
 struct ChatComposerModelPickerRow: View {
     let models: [AIScenarioRemoteModelRow]
     @Binding var selectedModelName: String?
+    /// CHAT-000058：医院会话单项锁定模式 —— 只展示当前医生智能体，
+    /// 置灰、不可点击、不可展开，不提供“默认模型”入口（C-004）。
+    var isSelectionLocked: Bool = false
 
     var body: some View {
         Group {
@@ -18,6 +21,14 @@ struct ChatComposerModelPickerRow: View {
                 .frame(height: 36)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 12)
+            } else if isSelectionLocked {
+                HStack(spacing: 6) {
+                    ForEach(models) { row in
+                        lockedModelItem(row)
+                    }
+                }
+                .padding(.horizontal, 12)
+                .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
@@ -44,6 +55,30 @@ struct ChatComposerModelPickerRow: View {
                 .padding(.horizontal, 12)
             }
         }
+    }
+
+    /// CHAT-000058：锁定单项 —— 置灰展示、无点击动作、无展开/切换。
+    private func lockedModelItem(_ row: AIScenarioRemoteModelRow) -> some View {
+        HStack(spacing: 6) {
+            modelLeadingIcon(icon: composerIcon(for: row), isSelected: false)
+            Text(row.displayTitle)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Image(systemName: "lock.fill")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .padding(10)
+        .background(Color(.secondarySystemFill))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            L10n.text(
+                "chat.composer.model.hospital_locked_a11y",
+                fallback: "当前医生智能体 \(row.displayTitle)，已固定，不可切换"
+            )
+        )
     }
 
     private enum ComposerModelIcon {

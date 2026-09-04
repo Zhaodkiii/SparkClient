@@ -51,12 +51,21 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
 
         let start = Date()
         // 解析当前场景对应的模型配置
-        let resolved = try await configCenter.resolve(
-            for: request.scenario,
-            preferredModelName: request.preferredModelName
-        )
-        let bundles = try await configCenter.effectiveScenarioBundles()
-        let allRows = bundles.allRows
+        // CHAT-000058：请求级显式模型行覆盖（医院医生智能体）跳过配置中心按名称解析，
+        // 医院行不写入通用 bundle，仅临时并入本次请求的行集合供能力/厂商查找。
+        let resolved: AIResolvedConfig
+        let allRows: [AIScenarioRemoteModelRow]
+        if let overrideRow = request.catalogRowOverride {
+            resolved = try overrideRow.asScenarioConfig().toResolvedConfig(source: .proOverlay)
+            let baseRows = (try? await configCenter.effectiveScenarioBundles())?.allRows ?? []
+            allRows = baseRows.contains(where: { $0.name == overrideRow.name }) ? baseRows : baseRows + [overrideRow]
+        } else {
+            resolved = try await configCenter.resolve(
+                for: request.scenario,
+                preferredModelName: request.preferredModelName
+            )
+            allRows = try await configCenter.effectiveScenarioBundles().allRows
+        }
         // 判断模型是否支持工具调用（Function Call）
         let supportsToolUse = modelSupportsTools(modelName: resolved.model, allRows: allRows)
         // 从模型目录获取厂商名称（大写）
@@ -83,7 +92,8 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
                     temperature: request.temperature,
                     topP: request.topP,
                     maxTokens: request.maxTokens,
-                    cancellationToken: request.cancellationToken
+                    cancellationToken: request.cancellationToken,
+                    catalogRowOverride: request.catalogRowOverride
                 )
             }
             logger.info(
@@ -101,7 +111,8 @@ final class AIRuntimeService: AIRuntimeServing, @unchecked Sendable {
                 temperature: request.temperature,
                 topP: request.topP,
                 maxTokens: request.maxTokens,
-                cancellationToken: request.cancellationToken
+                cancellationToken: request.cancellationToken,
+                catalogRowOverride: request.catalogRowOverride
             )
         }()
 

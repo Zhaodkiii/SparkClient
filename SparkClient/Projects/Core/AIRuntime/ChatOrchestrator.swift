@@ -79,6 +79,7 @@ struct ChatOrchestrator: Sendable {
         deliverMultimodalImages: Bool = false,                // 是否发送多模态图片
         sendsOriginalImagesToAI: Bool = false,                 // 多模态图片是否使用原图
         providerCompanyUppercased: String? = nil,              // 模型厂商
+        modelRowOverride: AIScenarioRemoteModelRow? = nil,      // CHAT-000058：医院专用模型行覆盖（跳过按名解析）
         resumeLoopMessages: [AIRuntimeMessage]? = nil,        // AskUser 提交后继续同一 turn
         onPartial: (@Sendable (ChatAssistantPartialDelta) async -> Void)? = nil, // 流式回调
         messageRunActor: MessageRunActor? = nil               // 工具 UI 副作用串行落库
@@ -246,7 +247,8 @@ struct ChatOrchestrator: Sendable {
                             temperature: temperature,
                             topP: topP,
                             maxTokens: maxTokens,
-                            cancellationToken: cancellationToken
+                            cancellationToken: cancellationToken,
+                            catalogRowOverride: modelRowOverride
                         )
                     ),
                     cancellationToken: cancellationToken,

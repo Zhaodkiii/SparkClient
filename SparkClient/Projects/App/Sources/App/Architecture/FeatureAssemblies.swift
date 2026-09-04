@@ -416,6 +416,7 @@ struct HospitalCareAssembly: FeatureAssembly {
     let backend: Backend
     let catalogCache: HospitalCatalogMemoryCache
     let scopeStore: HospitalConversationScopeStore
+    let runtimeConfigStore: HospitalAgentRuntimeConfigStore
     let knowledgeRepository: any HospitalKnowledgeRepository
     let logger: Logger
     let scope: DependencyScope = .accountScoped
@@ -423,6 +424,8 @@ struct HospitalCareAssembly: FeatureAssembly {
     func makeFacade() -> HospitalCareFeatureDependencies {
         logger.debug("HospitalCareAssembly 输出医院智能体 facade", module: .general)
         let remoteAPI = backend.hospitalCare
+        // CHAT-000058：专用运行配置查询（single-flight），供创建会话与会话页后台校验共用。
+        let fetchRuntimeConfig = FetchHospitalAgentRuntimeConfigUseCase(remoteAPI: remoteAPI)
         return HospitalCareFeatureDependencies(
             remoteAPI: remoteAPI,
             catalogCache: catalogCache,
@@ -437,12 +440,16 @@ struct HospitalCareAssembly: FeatureAssembly {
             ),
             resolveOrCreate: ResolveOrCreateHospitalConversationUseCase(
                 remoteAPI: remoteAPI,
-                scopeStore: scopeStore
+                scopeStore: scopeStore,
+                fetchRuntimeConfig: fetchRuntimeConfig,
+                runtimeConfigStore: runtimeConfigStore
             ),
             resolveScope: ResolveHospitalConversationScopeUseCase(
                 remoteAPI: remoteAPI,
                 scopeStore: scopeStore
             ),
+            fetchRuntimeConfig: fetchRuntimeConfig,
+            runtimeConfigStore: runtimeConfigStore,
             hydrateScopes: HydrateHospitalConversationScopesUseCase(
                 remoteAPI: remoteAPI,
                 scopeStore: scopeStore
