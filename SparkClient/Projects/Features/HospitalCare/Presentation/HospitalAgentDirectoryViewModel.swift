@@ -38,11 +38,13 @@ final class HospitalAgentDirectoryViewModel: ObservableObject {
     init(
         dependencies: HospitalCareFeatureDependencies,
         memberContextStore: MemberContextStore,
-        sessionStore: AppSessionStore
+        sessionStore: AppSessionStore,
+        initialDepartmentID: UUID? = nil
     ) {
         self.dependencies = dependencies
         self.memberContextStore = memberContextStore
         self.sessionStore = sessionStore
+        self.selectedDepartmentID = initialDepartmentID
     }
 
     func onAppear() async {

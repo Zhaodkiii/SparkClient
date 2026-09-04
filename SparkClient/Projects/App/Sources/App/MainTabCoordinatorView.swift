@@ -34,9 +34,11 @@ struct MainTabCoordinatorView: View {
 
     @ObservedObject private var homeStylePreferenceStore = HomeStylePreferenceStore.shared
     @ObservedObject private var homeSectionPreferenceStore = HomeSectionPreferenceStore.shared
+    @Environment(\.hospitalCare) private var hospitalCareDependencies
     @State private var showsDeviceAccountUpgradeSheet = false
     @State private var showsChatNoModelAlert = false
     @State private var showsChatAPIKeysSettingsSheet = false
+    @State private var showsHospitalNoticeAlert = false
     @State private var homeSafeAreaRefreshRevision = 0
 
     private var destinationBuilder: MainTabRouteDestinationBuilder {
@@ -46,6 +48,7 @@ struct MainTabCoordinatorView: View {
             homeDependencies: homeDependencies,
             knowledgeDependencies: knowledgeDependencies,
             popularScienceDependencies: popularScienceDependencies,
+            hospitalCareDependencies: hospitalCareDependencies,
             homeViewModel: homeViewModel,
             knowledgeViewModel: knowledgeViewModel,
             taskManager: taskManager,
@@ -78,15 +81,16 @@ struct MainTabCoordinatorView: View {
 
     private var visibleTabs: Set<AppRouteStore.RootTab> {
         if usesDashboardHomeStyle {
-            return [.healthHome, .chat, .settings]
+            return [.healthHome, .hospital, .chat, .settings]
         }
-        return [.healthHome, .chat, .nutrition, .fitness, .settings]
+        return [.healthHome, .hospital, .chat, .nutrition, .fitness, .settings]
     }
 
     var body: some View {
         CompatibleRouteNavigationContainer(path: routePath(routeStore.selectedTab)) {
             TabView(selection: $routeStore.selectedTab) {
                 healthHomeTab
+                hospitalTab
                 chatTab
                 if usesDashboardHomeStyle == false {
                     nutritionTab
@@ -109,6 +113,12 @@ struct MainTabCoordinatorView: View {
             Button(L10n.text("common.cancel"), role: .cancel) {}
         } message: {
             Text(L10n.text("chat.list.no_available_model.message"))
+        }
+        // IOS26-TABBAR-000009：医院 Tab 右上角通知占位，点击提示"功能正在实现"（原型 §3）。
+        .alert("医院通知", isPresented: $showsHospitalNoticeAlert) {
+            Button("知道了", role: .cancel) {}
+        } message: {
+            Text("功能正在实现，敬请期待")
         }
         .sheet(isPresented: $showsChatAPIKeysSettingsSheet) {
             NavigationView {
@@ -199,6 +209,45 @@ struct MainTabCoordinatorView: View {
             autoSmallTaskIntentStore: chatAutoSmallTaskIntentStore,
             activeFullScreenCover: $activeHomeFullScreenCover
         )
+    }
+
+    /// IOS26-TABBAR-000009：医院服务首页根 Tab（健康｜医院｜消息｜设置）。
+    /// Tab 内容常驻 TabView，离开医院 Tab 再返回时保留滚动位置与页面状态（Q21）。
+    @ViewBuilder
+    private var hospitalTab: some View {
+        Group {
+            if let dependencies = hospitalCareDependencies {
+                HospitalHomeView(
+                    dependencies: dependencies,
+                    homeDependencies: homeDependencies,
+                    onOpenReportInterpretation: {
+                        // 复用既有报告解读快捷入口：新建会话 → 自动发送小任务 → 报告上传卡片。
+                        actionHandler.handle(.reportInterpretation)
+                    },
+                    onOpenDirectory: { departmentID in
+                        routeStore.route(to: .hospitalAgentDirectory(departmentID: departmentID))
+                    },
+                    onOpenThread: { threadID in
+                        routeStore.route(to: .chatThread(threadID))
+                    }
+                )
+            } else {
+                VStack(spacing: 12) {
+                    Spacer()
+                    Text("医院服务暂不可用")
+                        .font(.headline)
+                    Text("请稍后重试或检查网络连接")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .tabItem {
+            Label(L10n.text("tab.hospital"), systemImage: "cross.case.fill")
+        }
+        .tag(AppRouteStore.RootTab.hospital)
     }
 
     private var chatTab: some View {
@@ -310,6 +359,16 @@ struct MainTabCoordinatorView: View {
             }
         case .nutrition:
             nutritionToolbarItems
+        case .hospital:
+            // 医院首页右上角通知入口，样式与其他 Tab 头部保持一致（原型 §2.1 铃铛）。
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showsHospitalNoticeAlert = true
+                } label: {
+                    Image(systemName: "bell")
+                }
+                .accessibilityLabel("医院通知")
+            }
         default:
             ToolbarItem(placement: .automatic) {
                 EmptyView()

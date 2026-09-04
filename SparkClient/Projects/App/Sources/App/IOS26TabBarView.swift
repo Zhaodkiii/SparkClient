@@ -33,6 +33,7 @@ struct IOS26TabBarView: View {
 
     @ObservedObject private var homeStylePreferenceStore = HomeStylePreferenceStore.shared
     @ObservedObject private var homeSectionPreferenceStore = HomeSectionPreferenceStore.shared
+    @Environment(\.hospitalCare) private var hospitalCareDependencies
 
     @State private var showsDeviceAccountUpgradeSheet = false
     @State private var showsChatNoModelAlert = false
@@ -43,9 +44,9 @@ struct IOS26TabBarView: View {
     /// 当前布局下实际渲染的根 Tab 集合：classic 含饮食/运动独立 Tab，dashboard 含设置 Tab。
     private var visibleTabs: Set<AppRouteStore.RootTab> {
         if homeStylePreferenceStore.style == .classic {
-            return [.healthHome, .chat, .nutrition, .fitness]
+            return [.healthHome, .hospital, .chat, .nutrition, .fitness]
         }
-        return [.healthHome, .chat, .settings]
+        return [.healthHome, .hospital, .chat, .settings]
     }
 
     private var destinationBuilder: MainTabRouteDestinationBuilder {
@@ -55,6 +56,7 @@ struct IOS26TabBarView: View {
             homeDependencies: homeDependencies,
             knowledgeDependencies: knowledgeDependencies,
             popularScienceDependencies: popularScienceDependencies,
+            hospitalCareDependencies: hospitalCareDependencies,
             homeViewModel: homeViewModel,
             knowledgeViewModel: knowledgeViewModel,
             taskManager: taskManager,
@@ -90,6 +92,10 @@ struct IOS26TabBarView: View {
                     } else {
                         healthContainer
                     }
+                }
+
+                Tab(L10n.text("tab.hospital"), systemImage: "cross.case.fill", value: AppRouteStore.RootTab.hospital) {
+                    hospitalContainer
                 }
 
                 if homeStylePreferenceStore.style == .classic {
@@ -229,6 +235,8 @@ struct IOS26TabBarView: View {
         switch routeStore.selectedTab {
         case .healthHome:
             return L10n.text("ios26.home.title")
+        case .hospital:
+            return L10n.text("tab.hospital")
         case .nutrition:
             return L10n.text("nutrition.home.title")
         case .fitness:
@@ -484,6 +492,38 @@ struct IOS26TabBarView: View {
         // destination temporarily hides, then restores, the main tab bar.
 //        .ignoresSafeArea(.container, edges: .bottom)
 //        .toolbar(.visible, for: .tabBar)
+    }
+
+    /// IOS26-TABBAR-000009：医院服务首页根 Tab 内容；Tab 常驻，返回时保留滚动位置（Q21）。
+    @ViewBuilder
+    private var hospitalContainer: some View {
+        if let dependencies = hospitalCareDependencies {
+            HospitalHomeView(
+                dependencies: dependencies,
+                homeDependencies: homeDependencies,
+                onOpenReportInterpretation: {
+                    // 复用既有报告解读快捷入口：新建会话 → 自动发送小任务 → 报告上传卡片。
+                    homeDashboardActionHandler.handle(.reportInterpretation)
+                },
+                onOpenDirectory: { departmentID in
+                    routeStore.route(to: .hospitalAgentDirectory(departmentID: departmentID))
+                },
+                onOpenThread: { threadID in
+                    routeStore.route(to: .chatThread(threadID))
+                }
+            )
+        } else {
+            VStack(spacing: 12) {
+                Spacer()
+                Text("医院服务暂不可用")
+                    .font(.headline)
+                Text("请稍后重试或检查网络连接")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
     }
 
     private var chatContainer: some View {

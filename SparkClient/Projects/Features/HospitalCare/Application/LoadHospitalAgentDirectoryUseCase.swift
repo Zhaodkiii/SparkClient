@@ -7,8 +7,9 @@ struct LoadHospitalAgentDirectoryUseCase: Sendable {
 
     /// CHAT-000055：科室目录 stale-while-revalidate——命中缓存先返回，过期时后台静默刷新；
     /// 刷新失败继续使用旧缓存。
-    func loadDepartments(accountID: Int64, hospitalID: UUID) async throws -> [HospitalDepartmentSummary] {
-        if let cached = catalogCache.departments(accountID: accountID, hospitalID: hospitalID) {
+    /// `forceRefresh` 为 true 时跳过缓存读取直接回源（医院首页显式刷新使用），成功后会写入缓存。
+    func loadDepartments(accountID: Int64, hospitalID: UUID, forceRefresh: Bool = false) async throws -> [HospitalDepartmentSummary] {
+        if forceRefresh == false, let cached = catalogCache.departments(accountID: accountID, hospitalID: hospitalID) {
             if catalogCache.isDepartmentsStale(accountID: accountID, hospitalID: hospitalID) {
                 scheduleRefreshDepartments(accountID: accountID, hospitalID: hospitalID)
             }
@@ -19,15 +20,19 @@ struct LoadHospitalAgentDirectoryUseCase: Sendable {
 
     /// CHAT-000055：智能体目录 stale-while-revalidate——仅无筛选（无关键字、无科室）场景
     /// 使用缓存；命中先返回并后台静默刷新，失败回落缓存。
+    /// `forceRefresh` 为 true 时跳过缓存读取直接回源（医院首页显式刷新使用），成功后写入缓存；
+    /// 回源失败时调用方决定继续使用旧内容。
     func loadAgents(
         accountID: Int64,
         hospitalID: UUID,
         departmentID: UUID?,
         keyword: String,
-        memberID: Int?
+        memberID: Int?,
+        forceRefresh: Bool = false
     ) async throws -> [HospitalAgentCard] {
         let trimmedKeyword = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
-        let useCache = trimmedKeyword.isEmpty && departmentID == nil
+        let isUnfiltered = trimmedKeyword.isEmpty && departmentID == nil
+        let useCache = isUnfiltered && forceRefresh == false
         let agents: [HospitalAgentPublicDTO]
         if useCache, let cached = catalogCache.agents(accountID: accountID, hospitalID: hospitalID) {
             if catalogCache.isAgentsStale(accountID: accountID, hospitalID: hospitalID) {
@@ -44,7 +49,7 @@ struct LoadHospitalAgentDirectoryUseCase: Sendable {
                     throw error
                 }
             }
-            if useCache {
+            if isUnfiltered {
                 catalogCache.storeAgents(agents, accountID: accountID, hospitalID: hospitalID)
             }
         }

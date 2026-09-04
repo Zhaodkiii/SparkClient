@@ -13,6 +13,8 @@ struct MainTabRouteDestinationBuilder {
     let knowledgeDependencies: KnowledgeFeatureDependencies
     /// 科普文章功能模块依赖容器
     let popularScienceDependencies: PopularScienceFeatureDependencies
+    /// 医院功能模块依赖容器（IOS26-TABBAR-000009 医院首页与目录路由）；注入失败时医院路由降级为空视图。
+    var hospitalCareDependencies: HospitalCareFeatureDependencies? = nil
     /// 首页视图模型
     let homeViewModel: HomeViewModel
     /// 知识库页面视图模型
@@ -117,8 +119,24 @@ struct MainTabRouteDestinationBuilder {
             PopularScienceArticleDetailView(
                 viewModel: popularScienceDependencies.makeDetailViewModel(articleID)
             )
+        /// 医院医生智能体目录（IOS26-TABBAR-000009）：可携带首页固定科室的初始筛选；
+        /// 点击医生卡片创建/继续医院会话后，按既有契约路由到对话 Tab 的 ChatView。
+        case .hospitalAgentDirectory(let departmentID):
+            if let hospitalCareDependencies {
+                HospitalAgentDirectoryView(
+                    dependencies: hospitalCareDependencies,
+                    memberContextStore: homeDependencies.memberContextStore,
+                    sessionStore: homeDependencies.sessionStore,
+                    initialDepartmentID: departmentID,
+                    onOpenThread: { threadID in
+                        routeStore.route(to: .chatThread(threadID))
+                    }
+                )
+            } else {
+                EmptyView()
+            }
         /// Tab 根页面路由，无需构建导航目的地，返回空视图
-        case .home, .knowledge, .nutrition, .fitness, .chatList, .popularScience, .settings:
+        case .home, .knowledge, .nutrition, .fitness, .chatList, .popularScience, .settings, .hospitalHome:
             EmptyView()
         }
     }

@@ -22,6 +22,10 @@ enum AppRoute: Hashable, Sendable {
     /// 首页家庭药箱入口。
     case homeFamilyMedicineCabinet(memberID: Int)
     case taskDetail(memberID: Int, taskID: Int)
+    /// 医院服务首页根路由（IOS26-TABBAR-000009）。
+    case hospitalHome
+    /// 医院医生智能体目录；可携带初始科室筛选（来自首页固定科室点击）。
+    case hospitalAgentDirectory(departmentID: UUID?)
 
     var rootTab: AppRouteStore.RootTab {
         switch self {
@@ -39,14 +43,16 @@ enum AppRoute: Hashable, Sendable {
             return .popularScience
         case .settings, .aiSettings, .accountManagement:
             return .settings
+        case .hospitalHome, .hospitalAgentDirectory:
+            return .hospital
         }
     }
 
     var isRootDestination: Bool {
         switch self {
-        case .home, .knowledge, .nutrition, .fitness, .chatList, .popularScience, .settings:
+        case .home, .knowledge, .nutrition, .fitness, .chatList, .popularScience, .settings, .hospitalHome:
             return true
-        case .chatThread, .automaticChatThread, .popularScienceArticle, .aiSettings, .accountManagement, .homeMedicalList, .homeFamilyMedicineCabinet, .taskDetail:
+        case .chatThread, .automaticChatThread, .popularScienceArticle, .aiSettings, .accountManagement, .homeMedicalList, .homeFamilyMedicineCabinet, .taskDetail, .hospitalAgentDirectory:
             return false
         }
     }
@@ -68,6 +74,8 @@ final class AppRouteStore: ObservableObject {
         case nutrition = 8
         /// 运动健康 Tab，使用新 raw value，避免影响历史 Tab 选中态。
         case fitness = 9
+        /// 医院服务首页 Tab（IOS26-TABBAR-000009），使用新 raw value，避免影响历史 Tab 选中态。
+        case hospital = 10
     }
 
     private let preferenceStore: RootTabPreferenceStore

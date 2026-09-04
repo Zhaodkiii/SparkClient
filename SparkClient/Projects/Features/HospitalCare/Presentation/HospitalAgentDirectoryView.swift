@@ -9,13 +9,15 @@ struct HospitalAgentDirectoryView: View {
         dependencies: HospitalCareFeatureDependencies,
         memberContextStore: MemberContextStore,
         sessionStore: AppSessionStore,
+        initialDepartmentID: UUID? = nil,
         onOpenThread: @escaping (UUID) -> Void
     ) {
         _viewModel = StateObject(
             wrappedValue: HospitalAgentDirectoryViewModel(
                 dependencies: dependencies,
                 memberContextStore: memberContextStore,
-                sessionStore: sessionStore
+                sessionStore: sessionStore,
+                initialDepartmentID: initialDepartmentID
             )
         )
         self.memberContextStore = memberContextStore
