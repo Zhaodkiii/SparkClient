@@ -418,6 +418,9 @@ struct HospitalCareAssembly: FeatureAssembly {
     let scopeStore: HospitalConversationScopeStore
     let runtimeConfigStore: HospitalAgentRuntimeConfigStore
     let knowledgeRepository: any HospitalKnowledgeRepository
+    let chatRepository: any ChatRepository
+    let chatStateStore: ChatStateStore
+    let fileTransferService: FileTransferService
     let logger: Logger
     let scope: DependencyScope = .accountScoped
 
@@ -442,7 +445,9 @@ struct HospitalCareAssembly: FeatureAssembly {
                 remoteAPI: remoteAPI,
                 scopeStore: scopeStore,
                 fetchRuntimeConfig: fetchRuntimeConfig,
-                runtimeConfigStore: runtimeConfigStore
+                runtimeConfigStore: runtimeConfigStore,
+                chatRepository: chatRepository,
+                chatStateStore: chatStateStore
             ),
             resolveScope: ResolveHospitalConversationScopeUseCase(
                 remoteAPI: remoteAPI,
@@ -463,7 +468,13 @@ struct HospitalCareAssembly: FeatureAssembly {
                 remoteAPI: remoteAPI,
                 repository: knowledgeRepository
             ),
-            knowledgeRepository: knowledgeRepository
+            knowledgeRepository: knowledgeRepository,
+            submitConsultation: SubmitConsultationUseCase(
+                remoteAPI: remoteAPI,
+                scopeStore: scopeStore
+            ),
+            loadConsultations: LoadConsultationsUseCase(remoteAPI: remoteAPI),
+            fileTransferService: fileTransferService
         )
     }
 }

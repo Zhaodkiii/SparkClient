@@ -122,6 +122,8 @@ struct LoadHospitalAgentDirectoryUseCase: Sendable {
         if let memberID {
             let conversations = (try? await remoteAPI.listConversations(memberID: memberID, page: 1, pageSize: 100)) ?? []
             for item in conversations {
+                // 线上问诊会话不得作为医生智能体「继续咨询」的 recent。
+                if item.consultation != nil { continue }
                 if recentByAgent[item.agent.id] == nil {
                     recentByAgent[item.agent.id] = item.threadId
                 }
@@ -130,25 +132,7 @@ struct LoadHospitalAgentDirectoryUseCase: Sendable {
         // CHAT-000054：服务端已为每位医生返回唯一已发布智能体，iOS 不再重复
         // 执行“选主”逻辑（published_at 选最新），直接消费服务端顺序。
         let cards = agents.map { dto in
-            let threadID = recentByAgent[dto.id]
-            return HospitalAgentCard(
-                id: dto.id,
-                hospitalID: dto.hospitalId,
-                name: dto.name,
-                publicSummary: dto.publicSummary ?? "",
-                serviceBoundary: dto.serviceBoundary ?? "",
-                doctorID: dto.doctor.id,
-                doctorDisplayName: dto.doctor.displayName,
-                doctorTitle: dto.doctor.title ?? "",
-                doctorAvatarURL: dto.doctor.avatarUrl ?? "",
-                avatarURL: resolvedAgentAvatarURL(dto),
-                avatarVersion: dto.avatarVersion ?? "",
-                specialties: dto.doctor.specialties ?? [],
-                departmentID: dto.department?.id,
-                departmentName: dto.department?.name ?? "",
-                hasRecentConversation: threadID != nil,
-                recentThreadID: threadID
-            )
+            HospitalAgentCard(publicDTO: dto, recentThreadID: recentByAgent[dto.id])
         }
         // 已咨询优先的稳定分组：组内保持服务端返回顺序，不做额外排序。
         var consulted: [HospitalAgentCard] = []
@@ -171,4 +155,28 @@ func resolvedAgentAvatarURL(_ dto: HospitalAgentPublicDTO) -> String {
         return url
     }
     return dto.doctor.avatarUrl ?? ""
+}
+
+extension HospitalAgentCard {
+    /// 由公开目录/详情 DTO 构造卡片；问诊表单路由只带 agentID，回源后走这条映射。
+    init(publicDTO dto: HospitalAgentPublicDTO, recentThreadID: UUID? = nil) {
+        self.init(
+            id: dto.id,
+            hospitalID: dto.hospitalId,
+            name: dto.name,
+            publicSummary: dto.publicSummary ?? "",
+            serviceBoundary: dto.serviceBoundary ?? "",
+            doctorID: dto.doctor.id,
+            doctorDisplayName: dto.doctor.displayName,
+            doctorTitle: dto.doctor.title ?? "",
+            doctorAvatarURL: dto.doctor.avatarUrl ?? "",
+            avatarURL: resolvedAgentAvatarURL(dto),
+            avatarVersion: dto.avatarVersion ?? "",
+            specialties: dto.doctor.specialties ?? [],
+            departmentID: dto.department?.id,
+            departmentName: dto.department?.name ?? "",
+            hasRecentConversation: recentThreadID != nil,
+            recentThreadID: recentThreadID
+        )
+    }
 }

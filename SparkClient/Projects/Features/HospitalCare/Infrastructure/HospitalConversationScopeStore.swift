@@ -5,6 +5,10 @@ nonisolated struct HospitalConversationScope: Codable, Equatable, Sendable {
     let agentID: UUID
     let memberID: Int
     let hospitalID: UUID
+    /// 线上问诊单 ID；有值时该 Thread 按 telemedicine 分类，而不是医生智能体。
+    var consultationID: UUID? = nil
+    /// 问诊编号（如 C202609050001），供列表主标题展示。
+    var consultNo: String? = nil
 }
 
 /// 记录医院会话 `threadID -> agentID/memberID`，供跳过通用引导卡和会话内新建继承智能体。

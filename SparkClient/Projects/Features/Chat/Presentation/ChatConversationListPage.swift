@@ -8,12 +8,14 @@ enum ChatPresentationSource: String, Equatable, Sendable {
     case manualNewThread
     case manualEmptyState
     case healthResourceDetail
+    /// 线上问诊卡片/详情从医院页 Cover 打开；关闭后仍停在最近问诊。
+    case hospitalConsultation
 
     var isAutomatic: Bool {
         switch self {
         case .automaticRecentThread, .automaticLatestUnstartedThread, .automaticNewThread:
             return true
-        case .manualThreadRow, .manualNewThread, .manualEmptyState, .healthResourceDetail:
+        case .manualThreadRow, .manualNewThread, .manualEmptyState, .healthResourceDetail, .hospitalConsultation:
             return false
         }
     }
@@ -803,14 +805,13 @@ struct ChatConversationListPage: View {
                         .foregroundColor(.secondary)
                     switchToHospitalButton
                 case .telemedicine:
-                    // 线上问诊未上线：受控空态，不提供服务发起按钮（27.2/27.4）。
                     Image(systemName: "video.bubble")
                         .font(.system(size: 44))
                         .foregroundColor(.secondary)
                     Text(L10n.text("chat.unified.empty.telemedicine", fallback: "暂无线上问诊消息"))
                         .font(.headline)
                         .foregroundColor(.secondary)
-                    Text(L10n.text("chat.unified.empty.telemedicine.hint", fallback: "线上问诊服务将在接入后显示在这里"))
+                    Text(L10n.text("chat.unified.empty.telemedicine.hint", fallback: "暂无线上问诊记录"))
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                 }

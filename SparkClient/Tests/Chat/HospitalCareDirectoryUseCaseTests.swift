@@ -176,6 +176,55 @@ final class HospitalCareDirectoryUseCaseTests: XCTestCase {
         XCTAssertNotNil(cards[0].recentThreadID)
         XCTAssertFalse(cards[1].hasRecentConversation)
     }
+
+    func testDirectoryRecentIgnoresConsultationConversations() async throws {
+        let hospitalID = UUID()
+        let agentA = UUID()
+        let agentB = UUID()
+        let consultThreadID = UUID()
+        let agentThreadID = UUID()
+        let remote = StubHospitalCareRemoteAPI()
+        remote.agentsResult = .success([
+            HospitalCareTestFixtures.agentDTO(id: agentA, hospitalID: hospitalID, doctorName: "医生A"),
+            HospitalCareTestFixtures.agentDTO(id: agentB, hospitalID: hospitalID, doctorName: "医生B")
+        ])
+        remote.conversationsResult = .success([
+            HospitalCareTestFixtures.conversationDTO(
+                threadID: consultThreadID,
+                agentID: agentA,
+                memberID: 7,
+                consultation: HospitalConversationConsultationRefDTO(
+                    consultationId: UUID(),
+                    consultNo: "C202609050001"
+                )
+            ),
+            HospitalCareTestFixtures.conversationDTO(
+                threadID: agentThreadID,
+                agentID: agentB,
+                memberID: 7
+            )
+        ])
+        let useCase = LoadHospitalAgentDirectoryUseCase(
+            remoteAPI: remote,
+            catalogCache: HospitalCatalogMemoryCache()
+        )
+
+        let cards = try await useCase.loadAgents(
+            accountID: accountID,
+            hospitalID: hospitalID,
+            departmentID: nil,
+            keyword: "",
+            memberID: 7
+        )
+
+        let cardA = cards.first { $0.id == agentA }
+        let cardB = cards.first { $0.id == agentB }
+        XCTAssertEqual(cardA?.recentThreadID, nil)
+        XCTAssertFalse(cardA?.hasRecentConversation ?? true)
+        XCTAssertEqual(cardB?.recentThreadID, agentThreadID)
+        XCTAssertTrue(cardB?.hasRecentConversation ?? false)
+        XCTAssertNotEqual(cardA?.recentThreadID, consultThreadID)
+    }
     // MARK: - BACKOFFICE-HOSPITAL-AGENT-000002：智能体头像映射
 
     func testAgentAvatarPrefersServerResolvedURL() async throws {

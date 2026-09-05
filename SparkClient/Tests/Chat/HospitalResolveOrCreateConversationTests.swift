@@ -4,6 +4,7 @@ import Foundation
 import XCTest
 
 /// CHAT-000058 C-003/C-017/C-018：先取专用配置 → 再创建/复用 Thread → 校验 scope。
+@MainActor
 final class HospitalResolveOrCreateConversationTests: XCTestCase {
     private let accountID: Int64 = 42
     private let memberID = 7
@@ -23,20 +24,32 @@ final class HospitalResolveOrCreateConversationTests: XCTestCase {
         )
     }
 
+    @MainActor
     private func makeUseCase(
         remote: StubHospitalCareRemoteAPI,
         scopeStore: HospitalConversationScopeStore? = nil,
-        configStore: HospitalAgentRuntimeConfigStore? = nil
-    ) -> (ResolveOrCreateHospitalConversationUseCase, HospitalConversationScopeStore, HospitalAgentRuntimeConfigStore) {
+        configStore: HospitalAgentRuntimeConfigStore? = nil,
+        repository: RecordingChatRepository = RecordingChatRepository(),
+        stateStore: ChatStateStore? = nil
+    ) -> (
+        ResolveOrCreateHospitalConversationUseCase,
+        HospitalConversationScopeStore,
+        HospitalAgentRuntimeConfigStore,
+        RecordingChatRepository,
+        ChatStateStore
+    ) {
         let scopes = scopeStore ?? makeScopeStore()
         let configs = configStore ?? makeConfigStore()
+        let chatStateStore = stateStore ?? ChatStateStore()
         let useCase = ResolveOrCreateHospitalConversationUseCase(
             remoteAPI: remote,
             scopeStore: scopes,
             fetchRuntimeConfig: FetchHospitalAgentRuntimeConfigUseCase(remoteAPI: remote),
-            runtimeConfigStore: configs
+            runtimeConfigStore: configs,
+            chatRepository: repository,
+            chatStateStore: chatStateStore
         )
-        return (useCase, scopes, configs)
+        return (useCase, scopes, configs, repository, chatStateStore)
     }
 
     private func createdResponse(
@@ -55,7 +68,12 @@ final class HospitalResolveOrCreateConversationTests: XCTestCase {
         )
         conversation.bindingId = bindingID
         conversation.bindingVersion = bindingVersion
-        return HospitalCreateConversationResponseDTO(threadId: threadID, conversation: conversation)
+        return HospitalCreateConversationResponseDTO(
+            threadId: threadID,
+            thread: HospitalCareTestFixtures.remoteThreadDTO(threadID: threadID, memberID: memberID),
+            conversation: conversation,
+            initialMessages: [HospitalCareTestFixtures.remoteSystemMessageDTO(threadID: threadID)]
+        )
     }
 
     // MARK: - 配置失败不创建 Thread（C-003/C-017）
@@ -66,7 +84,7 @@ final class HospitalResolveOrCreateConversationTests: XCTestCase {
         remote.createConversationResult = .success(createdResponse(
             threadID: UUID(), agentID: UUID(), hospitalID: UUID(), memberID: memberID
         ))
-        let (useCase, _, _) = makeUseCase(remote: remote)
+        let (useCase, _, _, _, _) = makeUseCase(remote: remote)
 
         do {
             _ = try await useCase.execute(
@@ -93,7 +111,7 @@ final class HospitalResolveOrCreateConversationTests: XCTestCase {
         remote.createConversationResult = .success(createdResponse(
             threadID: threadID, agentID: agentID, hospitalID: hospitalID, memberID: memberID
         ))
-        let (useCase, scopeStore, configStore) = makeUseCase(remote: remote)
+        let (useCase, scopeStore, configStore, repository, stateStore) = makeUseCase(remote: remote)
 
         let created = try await useCase.execute(
             agentID: agentID, memberID: memberID, hospitalID: hospitalID,
@@ -107,6 +125,11 @@ final class HospitalResolveOrCreateConversationTests: XCTestCase {
         XCTAssertEqual(scope?.agentID, agentID)
         XCTAssertEqual(scope?.memberID, memberID)
         XCTAssertEqual(scope?.hospitalID, hospitalID)
+        let upserted = await repository.upsertedThreads
+        XCTAssertEqual(upserted.map(\.id), [threadID])
+        let consumed = stateStore.takeHospitalInitialMessages(for: threadID)
+        XCTAssertEqual(consumed?.count, 1)
+        XCTAssertNil(stateStore.takeHospitalInitialMessages(for: threadID))
         // 配置已写入 store，供会话页直接使用（内存命中）。
         XCTAssertNotNil(configStore.cachedConfig(for: HospitalAgentRuntimeConfigStore.Scope(
             accountID: accountID, hospitalID: hospitalID, memberID: memberID, agentID: agentID
@@ -130,7 +153,7 @@ final class HospitalResolveOrCreateConversationTests: XCTestCase {
         remote.createConversationResult = .success(createdResponse(
             threadID: threadID, agentID: agentID, hospitalID: hospitalID, memberID: memberID
         ))
-        let (useCase, _, _) = makeUseCase(remote: remote, configStore: configStore)
+        let (useCase, _, _, _, _) = makeUseCase(remote: remote, configStore: configStore)
 
         let created = try await useCase.execute(
             agentID: agentID, memberID: memberID, hospitalID: hospitalID,
@@ -152,7 +175,7 @@ final class HospitalResolveOrCreateConversationTests: XCTestCase {
         remote.runtimeConfigResult = .success(HospitalCareTestFixtures.runtimeConfigDTO(
             agentID: agentID, hospitalID: hospitalID, memberID: memberID
         ))
-        let (useCase, scopeStore, _) = makeUseCase(remote: remote)
+        let (useCase, scopeStore, _, repository, stateStore) = makeUseCase(remote: remote)
 
         let resolved = try await useCase.execute(
             agentID: agentID, memberID: memberID, hospitalID: hospitalID,
@@ -162,6 +185,47 @@ final class HospitalResolveOrCreateConversationTests: XCTestCase {
         XCTAssertEqual(resolved, recentThreadID)
         XCTAssertEqual(remote.createConversationCallCount, 0)
         XCTAssertEqual(scopeStore.scope(for: recentThreadID, accountID: accountID)?.agentID, agentID)
+        let upserted = await repository.upsertedThreads
+        XCTAssertTrue(upserted.isEmpty)
+        XCTAssertNil(stateStore.takeHospitalInitialMessages(for: recentThreadID))
+    }
+
+    func testRecentConsultationThreadIsNotReusedForAgentChat() async throws {
+        let agentID = UUID()
+        let hospitalID = UUID()
+        let consultThreadID = UUID()
+        let createdThreadID = UUID()
+        let consultID = UUID()
+        let remote = StubHospitalCareRemoteAPI()
+        remote.runtimeConfigResult = .success(HospitalCareTestFixtures.runtimeConfigDTO(
+            agentID: agentID, hospitalID: hospitalID, memberID: memberID
+        ))
+        remote.createConversationResult = .success(createdResponse(
+            threadID: createdThreadID, agentID: agentID, hospitalID: hospitalID, memberID: memberID
+        ))
+        let scopeStore = makeScopeStore()
+        scopeStore.remember(
+            HospitalConversationScope(
+                threadID: consultThreadID,
+                agentID: agentID,
+                memberID: memberID,
+                hospitalID: hospitalID,
+                consultationID: consultID,
+                consultNo: "C202609050001"
+            ),
+            accountID: accountID
+        )
+        let (useCase, storedScopes, _, _, _) = makeUseCase(remote: remote, scopeStore: scopeStore)
+
+        let resolved = try await useCase.execute(
+            agentID: agentID, memberID: memberID, hospitalID: hospitalID,
+            accountID: accountID, recentThreadID: consultThreadID
+        )
+
+        XCTAssertEqual(resolved, createdThreadID)
+        XCTAssertEqual(remote.createConversationCallCount, 1)
+        XCTAssertEqual(storedScopes.scope(for: consultThreadID, accountID: accountID)?.consultationID, consultID)
+        XCTAssertNil(storedScopes.scope(for: createdThreadID, accountID: accountID)?.consultationID)
     }
 
     // MARK: - scope 不一致视为失败（C-017）
@@ -176,7 +240,7 @@ final class HospitalResolveOrCreateConversationTests: XCTestCase {
         remote.createConversationResult = .success(createdResponse(
             threadID: UUID(), agentID: UUID(), hospitalID: hospitalID, memberID: memberID
         ))
-        let (useCase, scopeStore, _) = makeUseCase(remote: remote)
+        let (useCase, scopeStore, _, _, stateStore) = makeUseCase(remote: remote)
 
         do {
             _ = try await useCase.execute(
@@ -190,6 +254,7 @@ final class HospitalResolveOrCreateConversationTests: XCTestCase {
             XCTFail("非预期错误：\(error)")
         }
         XCTAssertTrue(scopeStore.scope(for: UUID(), accountID: accountID) == nil)
+        XCTAssertNil(stateStore.takeHospitalInitialMessages(for: UUID()))
     }
 
     // MARK: - 绑定不一致按配置失效处理（C-018/Q19）
@@ -208,7 +273,7 @@ final class HospitalResolveOrCreateConversationTests: XCTestCase {
             threadID: UUID(), agentID: agentID, hospitalID: hospitalID, memberID: memberID,
             bindingID: 999, bindingVersion: 1
         ))
-        let (useCase, _, _) = makeUseCase(remote: remote, configStore: configStore)
+        let (useCase, _, _, _, _) = makeUseCase(remote: remote, configStore: configStore)
 
         do {
             _ = try await useCase.execute(
@@ -236,7 +301,7 @@ final class HospitalResolveOrCreateConversationTests: XCTestCase {
         remote.runtimeConfigResult = .success(HospitalCareTestFixtures.runtimeConfigDTO(
             agentID: UUID(), hospitalID: hospitalID, memberID: memberID
         ))
-        let (useCase, _, _) = makeUseCase(remote: remote)
+        let (useCase, _, _, _, _) = makeUseCase(remote: remote)
 
         do {
             _ = try await useCase.execute(
@@ -250,6 +315,115 @@ final class HospitalResolveOrCreateConversationTests: XCTestCase {
         } catch {
             XCTFail("非预期错误：\(error)")
         }
+    }
+
+    func testInvalidRemoteThreadDoesNotReturnThreadID() async {
+        let agentID = UUID()
+        let hospitalID = UUID()
+        let threadID = UUID()
+        let remote = StubHospitalCareRemoteAPI()
+        remote.runtimeConfigResult = .success(HospitalCareTestFixtures.runtimeConfigDTO(
+            agentID: agentID, hospitalID: hospitalID, memberID: memberID
+        ))
+        var conversation = HospitalConversationDTO(
+            threadId: threadID,
+            agent: HospitalConversationAgentDTO(id: agentID, name: "智能体", publicationStatus: "published"),
+            memberId: memberID,
+            hospital: HospitalCareTestFixtures.hospitalDTO(id: hospitalID)
+        )
+        conversation.bindingId = 130
+        conversation.bindingVersion = 1788503258
+        remote.createConversationResult = .success(HospitalCreateConversationResponseDTO(
+            threadId: threadID,
+            thread: HospitalCareTestFixtures.remoteThreadDTO(
+                threadID: threadID,
+                memberID: memberID,
+                scenario: "not-a-scenario"
+            ),
+            conversation: conversation,
+            initialMessages: [HospitalCareTestFixtures.remoteSystemMessageDTO(threadID: threadID)]
+        ))
+        let (useCase, scopeStore, _, _, stateStore) = makeUseCase(remote: remote)
+
+        do {
+            _ = try await useCase.execute(
+                agentID: agentID, memberID: memberID, hospitalID: hospitalID,
+                accountID: accountID, recentThreadID: nil
+            )
+            XCTFail("Thread 映射失败必须抛错")
+        } catch let error as HospitalConversationResolveError {
+            XCTAssertEqual(error, .threadMappingFailed)
+        } catch {
+            XCTFail("非预期错误：\(error)")
+        }
+        XCTAssertNil(scopeStore.scope(for: threadID, accountID: accountID))
+        XCTAssertNil(stateStore.takeHospitalInitialMessages(for: threadID))
+    }
+
+    func testThreadUpsertFailureDoesNotReturnThreadID() async {
+        let agentID = UUID()
+        let hospitalID = UUID()
+        let threadID = UUID()
+        let remote = StubHospitalCareRemoteAPI()
+        remote.runtimeConfigResult = .success(HospitalCareTestFixtures.runtimeConfigDTO(
+            agentID: agentID, hospitalID: hospitalID, memberID: memberID
+        ))
+        remote.createConversationResult = .success(createdResponse(
+            threadID: threadID, agentID: agentID, hospitalID: hospitalID, memberID: memberID
+        ))
+        let repository = RecordingChatRepository()
+        await repository.setFailUpsertRemoteThreads(true)
+        let (useCase, scopeStore, _, _, stateStore) = makeUseCase(remote: remote, repository: repository)
+
+        do {
+            _ = try await useCase.execute(
+                agentID: agentID, memberID: memberID, hospitalID: hospitalID,
+                accountID: accountID, recentThreadID: nil
+            )
+            XCTFail("Thread upsert 失败必须抛错")
+        } catch let error as HospitalConversationResolveError {
+            XCTAssertEqual(error, .threadMappingFailed)
+        } catch {
+            XCTFail("非预期错误：\(error)")
+        }
+        XCTAssertNil(scopeStore.scope(for: threadID, accountID: accountID))
+        XCTAssertNil(stateStore.takeHospitalInitialMessages(for: threadID))
+    }
+
+    func testLegacySnapshotWithoutThreadDoesNotRegisterHospitalContext() async throws {
+        let agentID = UUID()
+        let hospitalID = UUID()
+        let threadID = UUID()
+        let remote = StubHospitalCareRemoteAPI()
+        remote.runtimeConfigResult = .success(HospitalCareTestFixtures.runtimeConfigDTO(
+            agentID: agentID, hospitalID: hospitalID, memberID: memberID
+        ))
+        var conversation = HospitalConversationDTO(
+            threadId: threadID,
+            agent: HospitalConversationAgentDTO(id: agentID, name: "智能体", publicationStatus: "published"),
+            memberId: memberID,
+            hospital: HospitalCareTestFixtures.hospitalDTO(id: hospitalID)
+        )
+        conversation.bindingId = 130
+        conversation.bindingVersion = 1788503258
+        remote.createConversationResult = .success(HospitalCreateConversationResponseDTO(
+            threadId: threadID,
+            thread: nil,
+            conversation: conversation,
+            initialMessages: []
+        ))
+        let (useCase, scopeStore, _, repository, stateStore) = makeUseCase(remote: remote)
+
+        let created = try await useCase.execute(
+            agentID: agentID, memberID: memberID, hospitalID: hospitalID,
+            accountID: accountID, recentThreadID: nil
+        )
+
+        XCTAssertEqual(created, threadID)
+        XCTAssertEqual(scopeStore.scope(for: threadID, accountID: accountID)?.agentID, agentID)
+        let upserted = await repository.upsertedThreads
+        XCTAssertTrue(upserted.isEmpty)
+        XCTAssertNil(stateStore.takeHospitalInitialMessages(for: threadID))
     }
 }
 #endif

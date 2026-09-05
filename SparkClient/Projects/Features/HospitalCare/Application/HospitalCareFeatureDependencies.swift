@@ -20,6 +20,12 @@ struct HospitalCareFeatureDependencies {
     let knowledgeSync: HospitalKnowledgeSyncCoordinator
     /// CHAT-000055：医院知识本地只读仓库。
     let knowledgeRepository: any HospitalKnowledgeRepository
+    /// 线上问诊：问诊单提交（创建关联会话）。
+    let submitConsultation: SubmitConsultationUseCase
+    /// 线上问诊：最近问诊列表加载。
+    let loadConsultations: LoadConsultationsUseCase
+    /// 问诊病历资料上传（STS 直传 + 注册 file_id）。
+    let fileTransferService: FileTransferService
 }
 
 private struct HospitalCareDependenciesKey: EnvironmentKey {

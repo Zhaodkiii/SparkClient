@@ -166,6 +166,10 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
                     if let changedThreadID = event.threadID, changedThreadID != threadID {
                         return
                     }
+                    self.logger.debug(
+                        "CHAT-000061 database_event kind=\(event.kind.rawValue) thread=\(threadID.uuidString.prefix(8)) affected=\(event.affectedClientMessageIDs.count)",
+                        module: .general
+                    )
                     switch event.kind {
                     case .messagesAppended:
                         let currentIDs = Set(self.stateStore.persistedMessages(for: threadID).map(\.clientMessageID))
@@ -887,6 +891,35 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         }
     }
 
+    /// 医院新建会话：把创建响应里的初始消息交给统一入站管线；空数组或失败时只 pull 一次。
+    func applyHospitalInitialMessages(_ messages: [ChatMessage], threadID: UUID) async {
+        if messages.isEmpty == false {
+            await chatSyncSupervisor.applyAlreadyFetchedMessages(
+                messages,
+                enqueueAttachmentDownloadJobs: false
+            )
+            // CHAT-000061：入站管线完成 Core Data upsert 后，显式重读当前 Thread。
+            // 不依赖数据库通知驱动 UI，避免新建医院会话首卡落库成功但 StateStore 仍为空。
+            await satisfyLoadRequest(
+                .openOrReloadNewest(
+                    threadID: threadID,
+                    lockBottomViewport: true
+                )
+            )
+            return
+        }
+        logger.warning("医院会话初始消息为空，回源拉取 thread=\(shortID(threadID))", module: .general)
+        do {
+            try await chatSyncSupervisor.pullThreadMessagesIncrementalOnOpen(threadID: threadID)
+        } catch {
+            if error is CancellationError { return }
+            logger.warning(
+                "医院会话初始消息兜底拉取失败，thread=\(shortID(threadID)), error=\(error.localizedDescription)",
+                module: .general
+            )
+        }
+    }
+
     func loadMoreMessages(for threadID: UUID) async {
         guard stateStore.hasMoreMessages(for: threadID) else { return }
         guard stateStore.isLoadingMoreMessages(for: threadID) == false else { return }
@@ -918,6 +951,10 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
                 messages,
                 for: threadID,
                 hasMore: hasMore
+            )
+            logger.debug(
+                "CHAT-000061 ui_messages_reloaded thread=\(threadID.uuidString.prefix(8)) count=\(messages.count) has_more=\(hasMore)",
+                module: .general
             )
             stateStore.requestScrollToBottom(for: threadID)
             if lockBottomViewport {
@@ -954,12 +991,6 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
     /// - 插入失败（或无 builder）：返回 false，调用方不得启动科普问题生成。
     @discardableResult
     func ensureFirstGuideCardInsertedForNewThreadIfNeeded(threadID: UUID) async -> Bool {
-        let existing = stateStore.persistedMessages(for: threadID)
-        if existing.contains(where: { message in
-            message.role == .system && message.blocks.contains { $0.kind == .hospitalDoctorIntroCard }
-        }) {
-            return false
-        }
         let output = await ensureGuideSystemMessageUseCase.execute(threadID: threadID)
         guard let target = output.target else {
             return false

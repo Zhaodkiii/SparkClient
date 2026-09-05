@@ -143,6 +143,8 @@ nonisolated extension ChatAttachmentType: Codable {
         switch raw {
         case "image_base64", "image_url":
             self = .image
+        case "document", "application/pdf":
+            self = .pdf
         default:
             guard let value = ChatAttachmentType(rawValue: raw) else {
                 throw DecodingError.dataCorruptedError(

@@ -78,10 +78,46 @@ final class HospitalConversationScopeResolutionTests: XCTestCase {
         XCTAssertEqual(resolved?.threadID, threadID)
         XCTAssertEqual(resolved?.agentID, context.agent.id)
         XCTAssertEqual(resolved?.memberID, 7)
+        XCTAssertNil(resolved?.consultationID)
         // 恢复后写入本地，第二次不再回源。
         let again = try await useCase.execute(threadID: threadID, accountID: accountID)
         XCTAssertEqual(again, resolved)
         XCTAssertEqual(remote.fetchContextCallCount, 1)
+    }
+
+    func testResolveRecoversConsultationRefFromServerContext() async throws {
+        let store = makeStore()
+        let threadID = UUID()
+        let consultation = HospitalConversationConsultationRefDTO(consultationId: UUID(), consultNo: "C202609050088")
+        let context = HospitalCareTestFixtures.contextDTO(threadID: threadID, memberID: 7, consultation: consultation)
+        let remote = StubHospitalCareRemoteAPI()
+        remote.contextResult = .success(context)
+        let useCase = ResolveHospitalConversationScopeUseCase(remoteAPI: remote, scopeStore: store)
+
+        let resolved = try await useCase.execute(threadID: threadID, accountID: accountID)
+
+        XCTAssertEqual(resolved?.consultationID, consultation.consultationId)
+        XCTAssertEqual(resolved?.consultNo, consultation.consultNo)
+    }
+
+    func testScopeDecodesLegacyJSONWithoutConsultationFields() throws {
+        let threadID = UUID()
+        let agentID = UUID()
+        let hospitalID = UUID()
+        let payload: [String: Any] = [
+            "threadID": threadID.uuidString,
+            "agentID": agentID.uuidString,
+            "memberID": 7,
+            "hospitalID": hospitalID.uuidString,
+        ]
+        let data = try JSONSerialization.data(withJSONObject: payload)
+        let decoded = try JSONDecoder().decode(HospitalConversationScope.self, from: data)
+        XCTAssertEqual(decoded.threadID, threadID)
+        XCTAssertEqual(decoded.agentID, agentID)
+        XCTAssertEqual(decoded.memberID, 7)
+        XCTAssertEqual(decoded.hospitalID, hospitalID)
+        XCTAssertNil(decoded.consultationID)
+        XCTAssertNil(decoded.consultNo)
     }
 
     func testResolveReturnsNilForOrdinaryConversation() async throws {
@@ -114,7 +150,8 @@ final class HospitalConversationScopeResolutionTests: XCTestCase {
     func testHydrateWritesAllHospitalScopes() async {
         let store = makeStore()
         let remote = StubHospitalCareRemoteAPI()
-        let validA = HospitalCareTestFixtures.conversationDTO(memberID: 7)
+        let consultRef = HospitalConversationConsultationRefDTO(consultationId: UUID(), consultNo: "C202609050099")
+        let validA = HospitalCareTestFixtures.conversationDTO(memberID: 7, consultation: consultRef)
         let validB = HospitalCareTestFixtures.conversationDTO(memberID: 8)
         let missingMember = HospitalCareTestFixtures.conversationDTO(memberID: nil)
         let missingHospital = HospitalCareTestFixtures.conversationDTO(memberID: 7, hospitalID: nil)
@@ -125,7 +162,10 @@ final class HospitalConversationScopeResolutionTests: XCTestCase {
 
         XCTAssertEqual(count, 2)
         XCTAssertEqual(store.scope(for: validA.threadId, accountID: accountID)?.agentID, validA.agent.id)
+        XCTAssertEqual(store.scope(for: validA.threadId, accountID: accountID)?.consultationID, consultRef.consultationId)
+        XCTAssertEqual(store.scope(for: validA.threadId, accountID: accountID)?.consultNo, consultRef.consultNo)
         XCTAssertEqual(store.scope(for: validB.threadId, accountID: accountID)?.memberID, 8)
+        XCTAssertNil(store.scope(for: validB.threadId, accountID: accountID)?.consultationID)
         XCTAssertNil(store.scope(for: missingMember.threadId, accountID: accountID))
         XCTAssertNil(store.scope(for: missingHospital.threadId, accountID: accountID))
     }

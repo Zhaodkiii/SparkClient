@@ -9,6 +9,7 @@ struct HospitalHomeView: View {
     private let onOpenReportInterpretation: () -> Void
     private let onOpenDirectory: (UUID?) -> Void
     private let onOpenThread: (UUID) -> Void
+    private let onOpenTelemedicine: () -> Void
 
     @State private var alertItem: HospitalHomeAlertItem?
 
@@ -17,7 +18,8 @@ struct HospitalHomeView: View {
         homeDependencies: HomeFeatureDependencies,
         onOpenReportInterpretation: @escaping () -> Void,
         onOpenDirectory: @escaping (UUID?) -> Void,
-        onOpenThread: @escaping (UUID) -> Void
+        onOpenThread: @escaping (UUID) -> Void,
+        onOpenTelemedicine: @escaping () -> Void
     ) {
         _viewModel = StateObject(
             wrappedValue: HospitalHomeViewModel(
@@ -31,6 +33,7 @@ struct HospitalHomeView: View {
         self.onOpenReportInterpretation = onOpenReportInterpretation
         self.onOpenDirectory = onOpenDirectory
         self.onOpenThread = onOpenThread
+        self.onOpenTelemedicine = onOpenTelemedicine
     }
 
     private var accent: Color { Color(uiColor: .systemTeal) }
@@ -372,7 +375,10 @@ struct HospitalHomeView: View {
         case .reportInterpretation:
             // Q7–Q9：复用已有"新建会话 → 自动发送报告解读小任务 → 报告上传卡片"流程。
             onOpenReportInterpretation()
-        case .registration, .aiTriage, .telemedicine:
+        case .telemedicine:
+            // 线上问诊：进入"科室选择 → 医生选择 → 问诊材料"流程（DOCTOR-WORKSPACE-000004）。
+            onOpenTelemedicine()
+        case .registration, .aiTriage:
             // Q5–Q7：未开放服务仅提示，不创建 Thread、不进入空页面。
             alertItem = HospitalHomeAlertItem(
                 title: service.title,
@@ -669,7 +675,8 @@ private enum HospitalHomeService: String, CaseIterable, Identifiable {
     var statusText: String {
         switch self {
         case .reportInterpretation: return "进入报告解读对话"
-        case .registration, .aiTriage, .telemedicine: return "功能正在实现"
+        case .telemedicine: return "选择科室与医生问诊"
+        case .registration, .aiTriage: return "功能正在实现"
         }
     }
 

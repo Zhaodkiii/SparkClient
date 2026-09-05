@@ -219,8 +219,8 @@ extension ChatMessageBlock {
                 onOpen: context.onSmallTaskCardOpen
             )
             
-            // 17. 文件附件块
-        case .fileAttachments(let attachments):
+            // 17. 文件附件块（含医院问诊 fileGallery）
+        case .fileAttachments(let attachments), .fileGallery(let attachments):
             ChatFileAttachmentBlockView(
                 attachments: attachments,
                 role: context.message.role,

@@ -1,11 +1,13 @@
 import Foundation
 
 /// CHAT-000058：医院会话创建后的 scope / 绑定校验失败。
-enum HospitalConversationResolveError: LocalizedError {
+enum HospitalConversationResolveError: LocalizedError, Equatable {
     /// 创建返回的 hospital_id / member_id / agent_id 与本地预期不一致。
     case scopeMismatch
     /// 创建返回的 binding_id / binding_version 与专用运行配置不一致（按配置失效处理）。
     case bindingMismatch
+    /// 创建响应中的规范化 Thread 无法映射为本地 ChatThread。
+    case threadMappingFailed
 
     var errorDescription: String? {
         switch self {
@@ -13,6 +15,8 @@ enum HospitalConversationResolveError: LocalizedError {
             return "院内会话信息校验失败，请返回名医列表后重试"
         case .bindingMismatch:
             return "院内会话运行配置校验失败，请返回名医列表后重试"
+        case .threadMappingFailed:
+            return "院内会话初始化失败，请返回名医列表后重试"
         }
     }
 }
@@ -24,6 +28,8 @@ nonisolated struct ResolveOrCreateHospitalConversationUseCase {
     let scopeStore: HospitalConversationScopeStore
     let fetchRuntimeConfig: FetchHospitalAgentRuntimeConfigUseCase
     let runtimeConfigStore: HospitalAgentRuntimeConfigStore
+    let chatRepository: any ChatRepository
+    let chatStateStore: ChatStateStore
 
     func execute(
         agentID: UUID,
@@ -55,20 +61,30 @@ nonisolated struct ResolveOrCreateHospitalConversationUseCase {
             config = fetched
         }
 
-        // 2. 复用最近 Thread 或创建新 Thread（客户端不提交 binding/model/endpoint 等字段）。
+        // 2. 复用最近智能体 Thread 或创建新 Thread（客户端不提交 binding/model/endpoint 等字段）。
+        // 线上问诊会话带 consultationID，不能被智能体路径复用或改写 scope。
         if let recentThreadID {
-            scopeStore.remember(
-                HospitalConversationScope(
-                    threadID: recentThreadID,
-                    agentID: agentID,
-                    memberID: memberID,
-                    hospitalID: hospitalID
-                ),
-                accountID: accountID
-            )
-            return recentThreadID
+            let existing = scopeStore.scope(for: recentThreadID, accountID: accountID)
+            if existing?.consultationID == nil {
+                scopeStore.remember(
+                    HospitalConversationScope(
+                        threadID: recentThreadID,
+                        agentID: agentID,
+                        memberID: memberID,
+                        hospitalID: hospitalID,
+                        consultationID: existing?.consultationID,
+                        consultNo: existing?.consultNo
+                    ),
+                    accountID: accountID
+                )
+                return recentThreadID
+            }
         }
         let created = try await remoteAPI.createConversation(agentID: agentID, memberID: memberID)
+        ConsoleLogger().debug(
+            "CHAT-000061 create_response thread=\(created.threadId.uuidString.prefix(8)) has_thread=\(created.thread != nil) initial_messages=\(created.initialMessages.count)",
+            module: .general
+        )
 
         // 3. 校验返回 scope 与本地预期一致（C-017：不一致视为失败，不进入可发送页面）。
         let conversation = created.conversation
@@ -89,6 +105,16 @@ nonisolated struct ResolveOrCreateHospitalConversationUseCase {
             throw HospitalConversationResolveError.bindingMismatch
         }
 
+        if let remoteThread = created.thread {
+            guard let thread = ChatSyncEngineDTOMapper.toDomainThread(remoteThread) else {
+                throw HospitalConversationResolveError.threadMappingFailed
+            }
+            await chatRepository.upsertRemoteThreads([thread])
+            guard await chatRepository.loadThread(id: thread.id) != nil else {
+                throw HospitalConversationResolveError.threadMappingFailed
+            }
+        }
+
         scopeStore.remember(
             HospitalConversationScope(
                 threadID: created.threadId,
@@ -98,6 +124,18 @@ nonisolated struct ResolveOrCreateHospitalConversationUseCase {
             ),
             accountID: accountID
         )
+        // 仅当创建响应带有规范化 Thread 时登记医院新建上下文；
+        // 旧幂等快照缺少 thread 时按历史会话进入，由常规 pull 补齐。
+        if created.thread != nil {
+            let initialMessages = created.initialMessages.compactMap(ChatSyncEngineDTOMapper.toDomain)
+            ConsoleLogger().debug(
+                "CHAT-000061 initial_messages_mapped thread=\(created.threadId.uuidString.prefix(8)) raw=\(created.initialMessages.count) mapped=\(initialMessages.count)",
+                module: .general
+            )
+            await MainActor.run {
+                chatStateStore.rememberHospitalInitialMessages(initialMessages, for: created.threadId)
+            }
+        }
         return created.threadId
     }
 }

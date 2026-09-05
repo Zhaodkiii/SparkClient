@@ -35,6 +35,8 @@ struct MainTabRouteDestinationBuilder {
     let aiSettingsViewModel: AISettingsViewModel
     /// 引导卡片滑块 → 健康首页 destination（CHAT-000025）；nil 时滑块降级为纯展示。
     var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
+    /// 医院问诊卡片/详情打开对话时使用宿主 fullScreenCover，避免跳进对话 Tab。
+    var activeHomeFullScreenCover: Binding<HomeFullScreenCover?> = .constant(nil)
 
     /// 根据指定路由构建对应的目标视图
     /// - Parameter route: 应用导航路由枚举
@@ -130,6 +132,54 @@ struct MainTabRouteDestinationBuilder {
                     initialDepartmentID: departmentID,
                     onOpenThread: { threadID in
                         routeStore.route(to: .chatThread(threadID))
+                    }
+                )
+            } else {
+                EmptyView()
+            }
+        /// 线上问诊流程（科室选择 → 医生选择 → 问诊材料）；提交后回到最近问诊。
+        case .hospitalConsultation(let focus):
+            if let hospitalCareDependencies {
+                ConsultFlowView(
+                    dependencies: hospitalCareDependencies,
+                    memberContextStore: homeDependencies.memberContextStore,
+                    sessionStore: homeDependencies.sessionStore,
+                    routeStore: routeStore,
+                    focus: focus,
+                    onOpenThread: { threadID in
+                        activeHomeFullScreenCover.wrappedValue = .chat(
+                            threadID: threadID,
+                            source: .hospitalConsultation
+                        )
+                    }
+                )
+            } else {
+                EmptyView()
+            }
+        /// 线上问诊第二步：科室选择后 push 的独立医生选择页。
+        case .hospitalDoctorSelect(let hospitalID, let departmentID):
+            if let hospitalCareDependencies {
+                ConsultDoctorSelectRouteView(
+                    dependencies: hospitalCareDependencies,
+                    hospitalID: hospitalID,
+                    departmentID: departmentID,
+                    memberContextStore: homeDependencies.memberContextStore,
+                    sessionStore: homeDependencies.sessionStore,
+                    routeStore: routeStore
+                )
+            } else {
+                EmptyView()
+            }
+        /// 线上问诊第三步：点击医生后 push 的问诊材料填写页；提交成功后回到最近问诊。
+        case .hospitalConsultForm(let agentID):
+            if let hospitalCareDependencies {
+                ConsultFormRouteView(
+                    dependencies: hospitalCareDependencies,
+                    agentID: agentID,
+                    memberContextStore: homeDependencies.memberContextStore,
+                    sessionStore: homeDependencies.sessionStore,
+                    onSubmitted: { _ in
+                        routeStore.route(to: .hospitalConsultation(.recent), replaceStack: true)
                     }
                 )
             } else {

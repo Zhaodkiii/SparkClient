@@ -56,6 +56,16 @@ actor ChatSyncSupervisor {
         try await syncEngine.pullThreadMessagesIncrementalOnOpen(threadID: threadID)
     }
 
+    func applyAlreadyFetchedMessages(
+        _ messages: [ChatMessage],
+        enqueueAttachmentDownloadJobs: Bool
+    ) async {
+        await syncEngine.applyAlreadyFetchedMessages(
+            messages,
+            enqueueAttachmentDownloadJobs: enqueueAttachmentDownloadJobs
+        )
+    }
+
     private func scheduleOutboxPush(reason: String) {
         debouncedOutboxTask?.cancel()
         debouncedOutboxTask = Task { [syncEngine, attachmentPipeline] in

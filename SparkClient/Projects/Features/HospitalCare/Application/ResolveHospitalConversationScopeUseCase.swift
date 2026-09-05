@@ -23,7 +23,9 @@ struct ResolveHospitalConversationScopeUseCase {
             threadID: context.threadId,
             agentID: context.agent.id,
             memberID: memberID,
-            hospitalID: context.hospital.id
+            hospitalID: context.hospital.id,
+            consultationID: context.consultation?.consultationId,
+            consultNo: context.consultation?.consultNo
         )
         scopeStore.remember(scope, accountID: accountID)
         return scope

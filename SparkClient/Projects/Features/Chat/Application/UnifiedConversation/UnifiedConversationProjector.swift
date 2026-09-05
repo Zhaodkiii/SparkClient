@@ -222,7 +222,7 @@ struct UnifiedConversationProjector: Sendable {
         case .hospitalAgent:
             guard let serviceStatus else { return .hospitalAgentActive }
             switch serviceStatus {
-            case .active:
+            case .active, .pendingDoctor:
                 return .hospitalAgentActive
             case .doctorTakenOver, .doctorJoined:
                 // 医生接管中：患者可发送，AI 不自动回复（38.6/L2813）。
@@ -232,19 +232,13 @@ struct UnifiedConversationProjector: Sendable {
                 return .medicalReadOnly
             }
         case .telemedicine:
-            guard let serviceStatus else { return .medicalReadOnly }
+            // Manifest 未上线时 serviceStatus 为空，按可发送的一对一问诊处理。
+            guard let serviceStatus else { return .telemedicineActive }
             switch serviceStatus {
-            case .active:
-                return ConversationCapability(
-                    canRead: true,
-                    canSend: true,
-                    canUseAI: false,
-                    canUseHospitalKnowledge: false,
-                    canUseTelemedicine: true,
-                    canMarkRead: true
-                )
-            case .doctorTakenOver, .doctorJoined, .ended, .suspended, .agentUnavailable,
-                 .hospitalUnavailable, .consultationCompleted, .unsupported:
+            case .active, .pendingDoctor, .doctorTakenOver, .doctorJoined:
+                return .telemedicineActive
+            case .ended, .suspended, .agentUnavailable, .hospitalUnavailable,
+                 .consultationCompleted, .unsupported:
                 return .medicalReadOnly
             }
         case .unknown:
@@ -314,27 +308,42 @@ struct UnifiedConversationProjector: Sendable {
         accountID: Int64
     ) -> UnifiedConversationIdentity? {
         guard kind == .hospitalAgent || kind == .telemedicine else { return base }
-        let existing = base?.doctorAvatarURLString?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard existing.isEmpty else { return base }
-        guard let resolver = hospitalAgentResolver else { return base }
         let scope = hospitalScopeStore?.scope(for: threadID, accountID: accountID)
-        guard let agentID = base?.agentID ?? scope?.agentID,
-              let hospitalID = base?.hospitalID ?? scope?.hospitalID,
-              let dto = resolver(agentID, hospitalID, accountID) else { return base }
-        let avatarURL = resolvedAgentAvatarURL(dto)
-        guard avatarURL.isEmpty == false else { return base }
-        return UnifiedConversationIdentity(
+        let consultationID = base?.consultationID ?? scope?.consultationID
+        let consultationDisplayName = base?.consultationDisplayName ?? scope?.consultNo
+        let hospitalID = base?.hospitalID ?? scope?.hospitalID
+        let agentID = base?.agentID ?? scope?.agentID
+        var doctorID = base?.doctorID
+        var doctorDisplayName = base?.doctorDisplayName
+        var agentDisplayName = base?.agentDisplayName
+        var departmentDisplayName = base?.departmentDisplayName
+        var doctorAvatarURLString = base?.doctorAvatarURLString
+        let existingAvatar = doctorAvatarURLString?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if existingAvatar.isEmpty, let resolver = hospitalAgentResolver,
+           let resolvedAgentID = agentID, let resolvedHospitalID = hospitalID,
+           let dto = resolver(resolvedAgentID, resolvedHospitalID, accountID) {
+            let avatarURL = resolvedAgentAvatarURL(dto)
+            if avatarURL.isEmpty == false {
+                doctorAvatarURLString = avatarURL
+            }
+            doctorID = doctorID ?? dto.doctor.id
+            doctorDisplayName = doctorDisplayName ?? dto.doctor.displayName
+            agentDisplayName = agentDisplayName ?? dto.name
+            departmentDisplayName = departmentDisplayName ?? dto.department?.name
+        }
+        let enriched = UnifiedConversationIdentity(
             hospitalID: hospitalID,
-            doctorID: base?.doctorID ?? dto.doctor.id,
+            doctorID: doctorID,
             agentID: agentID,
-            doctorDisplayName: base?.doctorDisplayName ?? dto.doctor.displayName,
-            agentDisplayName: base?.agentDisplayName ?? dto.name,
-            departmentDisplayName: base?.departmentDisplayName ?? dto.department?.name,
+            doctorDisplayName: doctorDisplayName,
+            agentDisplayName: agentDisplayName,
+            departmentDisplayName: departmentDisplayName,
             hospitalDisplayName: base?.hospitalDisplayName,
-            doctorAvatarURLString: avatarURL,
-            consultationID: base?.consultationID,
-            consultationDisplayName: base?.consultationDisplayName
+            doctorAvatarURLString: doctorAvatarURLString,
+            consultationID: consultationID,
+            consultationDisplayName: consultationDisplayName
         )
+        return enriched.hasDisplayableIdentity || consultationID != nil ? enriched : base
     }
 
     // MARK: - 成员显示（D-006：本人 / 成员姓名 / 加载中 / 不可用；不泄露 memberID）
@@ -444,7 +453,8 @@ struct UnifiedConversationProjector: Sendable {
                 memberID: memberID
             )
         case .telemedicine:
-            guard let consultationID = identity?.consultationID else {
+            let consultationID = identity?.consultationID ?? scope?.consultationID
+            guard let consultationID else {
                 return .confirmationRequired(threadID: threadID)
             }
             return .telemedicine(

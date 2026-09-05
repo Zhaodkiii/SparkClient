@@ -111,6 +111,7 @@ struct ChatView: View {
 
     /// CHAT-000058：医院会话后台校验失败/配置失效 → 输入区与发送整体禁用（C-013/C-014）。
     private var isHospitalRuntimeUnavailable: Bool {
+        guard isTelemedicineConversation == false else { return false }
         guard case .hospital = hospitalScopeResolution else { return false }
         return detailViewModel.hospitalRuntimeUnavailableThreadIDs.contains(currentThreadID)
     }
@@ -148,11 +149,21 @@ struct ChatView: View {
         unifiedUnknownState != nil
     }
 
+    /// 线上问诊一对一会话：统一投影 kind，或医院 scope 已带 consultationID。
+    private var isTelemedicineConversation: Bool {
+        if unifiedCurrentItem?.conversationKind == .telemedicine { return true }
+        if case .hospital(let scope) = hospitalScopeResolution, scope.consultationID != nil {
+            return true
+        }
+        return false
+    }
+
     /// CHAT-000057 38.6/L1942：医生接管中（患者可发送，AI 不自动回复）。
-    /// 双通道判定（任一成立）：统一投影 capability（Manifest 通道）；
-    /// context 回源的实时 service_status（Manifest 未启用时接管状态的唯一实时通道）。
+    /// 仅适用于医生智能体；线上问诊本身就没有 AI，不能套用「医生接管中」文案。
     private var isDoctorTakeoverActive: Bool {
-        if let capability = unifiedCurrentItem?.capability,
+        if isTelemedicineConversation { return false }
+        if unifiedCurrentItem?.conversationKind == .hospitalAgent,
+           let capability = unifiedCurrentItem?.capability,
            capability.canSend, capability.canUseAI == false {
             return true
         }
@@ -161,6 +172,21 @@ struct ChatView: View {
             return true
         }
         return false
+    }
+
+    /// 线上问诊待医生查看：pending_doctor / active / 尚未回源，且医生尚未接诊。
+    private var isTelemedicineWaitingForDoctor: Bool {
+        guard isTelemedicineConversation else { return false }
+        if let status = hospitalServiceStatus {
+            switch status {
+            case .pendingDoctor, .active:
+                return true
+            case .doctorTakenOver, .doctorJoined, .ended, .suspended, .agentUnavailable,
+                 .hospitalUnavailable, .consultationCompleted, .unsupported:
+                return false
+            }
+        }
+        return true
     }
     
     var body: some View {
@@ -444,6 +470,8 @@ struct ChatView: View {
                        capabilities.canSendMessage == false {
                         // CHAT-000055 Q27：智能体下架/会话只读时，输入区上方固定提示，发送入口同步禁用。
                         hospitalReadOnlyBanner(reason: capabilities.readOnlyReason)
+                    } else if isTelemedicineWaitingForDoctor {
+                        telemedicineWaitingBanner
                     } else if isDoctorTakeoverActive {
                         // CHAT-000057 38.6：医生接管中轻量提示（可发送，AI 不回复），与只读横幅互斥。
                         doctorTakeoverBanner
@@ -698,8 +726,14 @@ struct ChatView: View {
             .task(id: currentThreadID) {
                 // 固定本轮 ID，避免 await 期间用户再次新建导致后续步骤串到别的 thread
                 let id = currentThreadID
+                let markedBeforeTake = stateStore.isThreadMarkedAsNewlyCreated(id)
                 logger.info(
-                    "chat.detail.thread_switch.task_start thread=\(String(id.uuidString.prefix(8))) marker=\(stateStore.isThreadMarkedAsNewlyCreated(id))",
+                    "CHAT-000061 thread_task_start thread=\(String(id.uuidString.prefix(8))) marker=\(markedBeforeTake)",
+                    module: .general
+                )
+                let hospitalInitialMessages = stateStore.takeHospitalInitialMessages(for: id)
+                logger.info(
+                    "CHAT-000061 initial_messages_taken thread=\(String(id.uuidString.prefix(8))) present=\(hospitalInitialMessages != nil) count=\(hospitalInitialMessages?.count ?? 0)",
                     module: .general
                 )
                 listViewModel.selectThread(id)
@@ -719,9 +753,31 @@ struct ChatView: View {
                     }
                 }
                 await detailViewModel.refreshThreadImageDeliveryMode(for: id)
-                await detailViewModel.loadMessagesIfNeeded(for: id, lockBottomViewport: true)
+                await detailViewModel.loadMessagesIfNeeded(
+                    for: id,
+                    lockBottomViewport: true,
+                    syncRemote: hospitalInitialMessages == nil
+                )
                 logger.info(
-                    "chat.detail.thread_switch.messages_loaded thread=\(String(id.uuidString.prefix(8))) count=\(stateStore.persistedMessages(for: id).count)",
+                    "CHAT-000061 local_messages_loaded thread=\(String(id.uuidString.prefix(8))) count=\(stateStore.persistedMessages(for: id).count) sync_remote=\(hospitalInitialMessages == nil)",
+                    module: .general
+                )
+                if let hospitalInitialMessages {
+                    logger.info(
+                        "CHAT-000061 initial_messages_apply_start thread=\(String(id.uuidString.prefix(8))) count=\(hospitalInitialMessages.count)",
+                        module: .general
+                    )
+                    // CHAT-000061：纳入当前 `.task(id:)` 的结构化初始化顺序。
+                    // 初始消息入站并显式重读完成后再继续 scope/context 初始化，
+                    // 避免嵌套 Task 在页面切换或生命周期变化时停在 apply_start。
+                    await detailViewModel.applyHospitalInitialMessages(hospitalInitialMessages, threadID: id)
+                    logger.info(
+                        "CHAT-000061 initial_messages_apply_end thread=\(String(id.uuidString.prefix(8))) local_count=\(stateStore.persistedMessages(for: id).count)",
+                        module: .general
+                    )
+                }
+                logger.info(
+                    "CHAT-000061 thread_task_after_local_load thread=\(String(id.uuidString.prefix(8))) count=\(stateStore.persistedMessages(for: id).count)",
                     module: .general
                 )
                 // CHAT-000054：先完成医院会话身份判定（本地 scope → 服务端 context 回源），
@@ -1248,15 +1304,18 @@ struct ChatView: View {
                 return
             }
             // CHAT-000058 C-013/C-014：后台校验失败 → 立即停止后续发送（不中断进行中请求，不改投普通 AI）。
-            if detailViewModel.hospitalRuntimeUnavailableThreadIDs.contains(currentThreadID) {
+            // 线上问诊不依赖医生智能体运行配置，不因 AI runtime 失败禁发。
+            if isTelemedicineConversation == false,
+               detailViewModel.hospitalRuntimeUnavailableThreadIDs.contains(currentThreadID) {
                 hospitalSendBlockedMessage = L10n.text(
                     "chat.hospital.runtime_unavailable",
                     fallback: "当前服务已不可用"
                 )
                 return
             }
-            // CHAT-000058 C-003：专用配置未就绪（无缓存且查询失败/进行中）时不发送，先补装载。
-            guard detailViewModel.hospitalComposerModelRows[currentThreadID] != nil else {
+            // CHAT-000058 C-003：专用配置未就绪时不发送，先补装载。线上问诊跳过。
+            if isTelemedicineConversation == false,
+               detailViewModel.hospitalComposerModelRows[currentThreadID] == nil {
                 hospitalSendBlockedMessage = L10n.text(
                     "chat.hospital.runtime_preparing",
                     fallback: "医生智能体服务尚未就绪，请稍候重试"
@@ -1300,8 +1359,8 @@ struct ChatView: View {
                 return
             }
         }
-        // CHAT-000057 38.6/L1942：医生接管中允许发送但 AI 不回复；投影不可用时保持旧 AI 链路。
-        let suppressAIReply = isDoctorTakeoverActive
+        // 医生接管中 / 线上问诊：允许发送但 AI 不回复。
+        let suppressAIReply = isDoctorTakeoverActive || isTelemedicineConversation
         if suppressAIReply == false {
             // CHAT-000058：医院会话可用性以单项锁定目录为准（上文已校验），普通会话仍以通用目录为准。
             if case .hospital = hospitalScopeResolution {
@@ -1364,6 +1423,23 @@ struct ChatView: View {
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity)
         .background(Color.orange.opacity(0.12))
+    }
+
+    /// 线上问诊待医生查看：一对一会话，不套用「医生接管中」。
+    private var telemedicineWaitingBanner: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "stethoscope")
+                .foregroundStyle(Color.accentColor)
+            Text(L10n.text("chat.hospital.telemedicine.waiting.banner", fallback: "问诊已提交，医生将尽快查看并回复"))
+                .font(.footnote)
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.leading)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity)
+        .background(Color.accentColor.opacity(0.10))
     }
 
     /// CHAT-000057 38.6：医生接管中提示横幅（可发送，AI 不回复；与只读横幅互斥）。
@@ -1441,8 +1517,14 @@ struct ChatView: View {
             switch scopeResolution {
             case .ordinary:
                 capability = .ordinaryAI
-            case .hospital:
-                capability = (hospitalCapabilities?.canSendMessage == false) ? .medicalReadOnly : .hospitalAgentActive
+            case .hospital(let scope):
+                if hospitalCapabilities?.canSendMessage == false {
+                    capability = .medicalReadOnly
+                } else if scope.consultationID != nil {
+                    capability = .telemedicineActive
+                } else {
+                    capability = .hospitalAgentActive
+                }
             case .undetermined, .failed:
                 // 26.3：医院 scope/context 未确认完成时不得当作普通会话提前清未读。
                 return

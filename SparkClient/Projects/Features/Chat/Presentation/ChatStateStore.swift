@@ -114,6 +114,8 @@ final class ChatStateStore: ObservableObject {
     /// 用于区分新建对话首次初始化（可触发科普问题生成）与重新进入旧对话（只允许修复）。
     /// 标记仅进程内有效，App 重启后自然失效（重启进入视为重新进入）。
     private var newlyCreatedThreadMarkers: [UUID: Date] = [:]
+    /// 医院新建会话待注入的初始消息；消费一次后即释放，不持久化。
+    private var hospitalInitialMessagesByThread: [UUID: (createdAt: Date, messages: [ChatMessage])] = [:]
     /// 标记有效期：超时后进入不再视为新建链路
     private static let newlyCreatedMarkerLifetime: TimeInterval = 120
 
@@ -131,6 +133,17 @@ final class ChatStateStore: ObservableObject {
     /// 保持期间可阻止并发消息加载中的 reenter repair 误修复新插入的 generating 卡片）。
     func clearThreadWasJustCreatedMarker(_ threadID: UUID) {
         newlyCreatedThreadMarkers[threadID] = nil
+    }
+
+    func rememberHospitalInitialMessages(_ messages: [ChatMessage], for threadID: UUID) {
+        hospitalInitialMessagesByThread[threadID] = (Date(), messages)
+    }
+
+    /// 原子取出医院新建初始消息。超时或已消费返回 `nil`，按历史会话走常规 pull。
+    func takeHospitalInitialMessages(for threadID: UUID) -> [ChatMessage]? {
+        guard let entry = hospitalInitialMessagesByThread.removeValue(forKey: threadID) else { return nil }
+        guard Date().timeIntervalSince(entry.createdAt) <= Self.newlyCreatedMarkerLifetime else { return nil }
+        return entry.messages
     }
 
     private func newlyCreatedThreadCreatedAt(_ threadID: UUID) -> Date? {

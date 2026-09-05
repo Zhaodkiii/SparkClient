@@ -59,6 +59,12 @@ nonisolated struct HospitalConversationAgentDTO: Codable, Sendable {
     let publicationStatus: String?
 }
 
+/// 医院会话上的线上问诊单引用；无问诊单时为 nil（医生智能体对话）。
+nonisolated struct HospitalConversationConsultationRefDTO: Codable, Sendable {
+    let consultationId: UUID
+    let consultNo: String
+}
+
 nonisolated struct HospitalConversationDTO: Codable, Sendable {
     let threadId: UUID
     let agent: HospitalConversationAgentDTO
@@ -67,6 +73,8 @@ nonisolated struct HospitalConversationDTO: Codable, Sendable {
     /// CHAT-000058：服务端创建/查询时固定的运行绑定（旧服务端缺省为 nil，客户端不猜测）。
     var bindingId: Int? = nil
     var bindingVersion: Int? = nil
+    /// 有值表示该 Thread 是线上问诊专属会话；旧服务端缺省为 nil。
+    var consultation: HospitalConversationConsultationRefDTO? = nil
 }
 
 nonisolated struct HospitalCreateConversationRequestDTO: Encodable, Sendable {
@@ -74,9 +82,128 @@ nonisolated struct HospitalCreateConversationRequestDTO: Encodable, Sendable {
     let memberId: Int
 }
 
+// MARK: - 线上问诊单（DOCTOR-WORKSPACE-000004 页面形态修订）
+
+/// 提交线上问诊的附件引用（file_id 来自 FileTransferService 注册结果）。
+nonisolated struct HospitalConsultationAttachmentDTO: Encodable, Sendable {
+    let fileId: Int
+}
+
+/// POST /api/v1/hospital-care/consultations/ 请求体：问诊材料 + 可选附件与补充病史。
+nonisolated struct HospitalConsultationSubmitRequestDTO: Encodable, Sendable {
+    let agentId: UUID
+    let memberId: Int
+    let chiefComplaint: String
+    let attachments: [HospitalConsultationAttachmentDTO]?
+    let orderItems: [String]?
+    let pastHistory: String?
+    let familyHistory: String?
+    let allergyHistory: String?
+    /// 客户端生成的幂等键；重试提交同一问诊时复用，服务端返回原问诊单。
+    let threadId: UUID?
+}
+
+/// GET/POST /api/v1/hospital-care/consultations/ 的问诊单视图。
+nonisolated struct HospitalConsultationDTO: Codable, Sendable {
+    let consultationId: UUID
+    let consultNo: String
+    let threadId: UUID
+    let hospital: HospitalPublicDTO?
+    let department: HospitalDepartmentPublicDTO?
+    let doctor: HospitalDoctorPublicDTO?
+    let agent: HospitalConversationAgentDTO
+    let memberId: Int?
+    let chiefComplaint: String
+    let orderItems: [String]?
+    let pastHistory: String?
+    let familyHistory: String?
+    let allergyHistory: String?
+    let serviceStatus: String
+    let submittedAt: Date?
+    var attachmentCount: Int? = nil
+
+    init(
+        consultationId: UUID,
+        consultNo: String,
+        threadId: UUID,
+        hospital: HospitalPublicDTO? = nil,
+        department: HospitalDepartmentPublicDTO? = nil,
+        doctor: HospitalDoctorPublicDTO? = nil,
+        agent: HospitalConversationAgentDTO,
+        memberId: Int? = nil,
+        chiefComplaint: String = "",
+        orderItems: [String]? = nil,
+        pastHistory: String? = nil,
+        familyHistory: String? = nil,
+        allergyHistory: String? = nil,
+        serviceStatus: String,
+        submittedAt: Date? = nil,
+        attachmentCount: Int? = nil
+    ) {
+        self.consultationId = consultationId
+        self.consultNo = consultNo
+        self.threadId = threadId
+        self.hospital = hospital
+        self.department = department
+        self.doctor = doctor
+        self.agent = agent
+        self.memberId = memberId
+        self.chiefComplaint = chiefComplaint
+        self.orderItems = orderItems
+        self.pastHistory = pastHistory
+        self.familyHistory = familyHistory
+        self.allergyHistory = allergyHistory
+        self.serviceStatus = serviceStatus
+        self.submittedAt = submittedAt
+        self.attachmentCount = attachmentCount
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        consultationId = try container.decode(UUID.self, forKey: .consultationId)
+        consultNo = try container.decode(String.self, forKey: .consultNo)
+        threadId = try container.decode(UUID.self, forKey: .threadId)
+        hospital = try container.decodeIfPresent(HospitalPublicDTO.self, forKey: .hospital)
+        department = try container.decodeIfPresent(HospitalDepartmentPublicDTO.self, forKey: .department)
+        doctor = try container.decodeIfPresent(HospitalDoctorPublicDTO.self, forKey: .doctor)
+        agent = try container.decode(HospitalConversationAgentDTO.self, forKey: .agent)
+        memberId = try container.decodeIfPresent(Int.self, forKey: .memberId)
+        chiefComplaint = try container.decodeIfPresent(String.self, forKey: .chiefComplaint) ?? ""
+        orderItems = try container.decodeIfPresent([String].self, forKey: .orderItems)
+        pastHistory = try container.decodeIfPresent(String.self, forKey: .pastHistory)
+        familyHistory = try container.decodeIfPresent(String.self, forKey: .familyHistory)
+        allergyHistory = try container.decodeIfPresent(String.self, forKey: .allergyHistory)
+        serviceStatus = try container.decodeIfPresent(String.self, forKey: .serviceStatus) ?? ""
+        submittedAt = try container.decodeIfPresent(Date.self, forKey: .submittedAt)
+        attachmentCount = try container.decodeIfPresent(Int.self, forKey: .attachmentCount)
+    }
+}
+
 nonisolated struct HospitalCreateConversationResponseDTO: Codable, Sendable {
     let threadId: UUID
+    let thread: ChatRemoteThreadDTO?
     let conversation: HospitalConversationDTO
+    let initialMessages: [ChatRemoteMessageDTO]
+
+    init(
+        threadId: UUID,
+        thread: ChatRemoteThreadDTO? = nil,
+        conversation: HospitalConversationDTO,
+        initialMessages: [ChatRemoteMessageDTO] = []
+    ) {
+        self.threadId = threadId
+        self.thread = thread
+        self.conversation = conversation
+        self.initialMessages = initialMessages
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        threadId = try container.decode(UUID.self, forKey: .threadId)
+        thread = try container.decodeIfPresent(ChatRemoteThreadDTO.self, forKey: .thread)
+        conversation = try container.decode(HospitalConversationDTO.self, forKey: .conversation)
+        initialMessages = try container.decodeIfPresent([ChatRemoteMessageDTO].self, forKey: .initialMessages) ?? []
+    }
 }
 
 /// GET /api/v1/hospital-care/conversations/{thread_id}/context/ 的响应。
@@ -92,6 +219,8 @@ nonisolated struct HospitalConversationContextDTO: Codable, Sendable {
     let knowledgeManifest: HospitalKnowledgeManifestDTO?
     /// 服务端实时服务状态（如 active / doctor_joined）；旧服务端缺省为 nil，客户端不猜测。
     let serviceStatus: String?
+    /// 有值表示该 Thread 是线上问诊专属会话；旧服务端缺省为 nil。
+    var consultation: HospitalConversationConsultationRefDTO? = nil
 }
 
 nonisolated struct HospitalConversationCapabilitiesDTO: Codable, Sendable {

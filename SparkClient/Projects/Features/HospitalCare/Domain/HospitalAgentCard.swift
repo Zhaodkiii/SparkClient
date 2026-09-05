@@ -9,13 +9,13 @@ nonisolated struct HospitalSummary: Equatable, Sendable, Identifiable {
     let status: String
 }
 
-nonisolated struct HospitalDepartmentSummary: Equatable, Sendable, Identifiable {
+nonisolated struct HospitalDepartmentSummary: Equatable, Sendable, Identifiable, Hashable {
     let id: UUID
     let name: String
     let sortOrder: Int
 }
 
-nonisolated struct HospitalAgentCard: Equatable, Sendable, Identifiable {
+nonisolated struct HospitalAgentCard: Equatable, Sendable, Identifiable, Hashable {
     let id: UUID
     let hospitalID: UUID
     let name: String

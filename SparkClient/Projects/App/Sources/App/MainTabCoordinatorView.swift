@@ -58,7 +58,8 @@ struct MainTabCoordinatorView: View {
             chatAutoSmallTaskCoordinator: chatAutoSmallTaskCoordinator,
             accountManagementViewModel: accountManagementViewModel,
             aiSettingsViewModel: aiSettingsViewModel,
-            guideHomeDestinationBuilder: guideHomeDestinationBuilder
+            guideHomeDestinationBuilder: guideHomeDestinationBuilder,
+            activeHomeFullScreenCover: $activeHomeFullScreenCover
         )
     }
 
@@ -229,6 +230,9 @@ struct MainTabCoordinatorView: View {
                     },
                     onOpenThread: { threadID in
                         routeStore.route(to: .chatThread(threadID))
+                    },
+                    onOpenTelemedicine: {
+                        routeStore.route(to: .hospitalConsultation(.departments))
                     }
                 )
             } else {

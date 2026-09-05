@@ -171,6 +171,15 @@ final class HospitalHomeViewModelTests: XCTestCase {
             defaults: UserDefaults(suiteName: "HospitalHomeViewModelTests.\(UUID().uuidString)")!
         )
         let fetchRuntimeConfig = FetchHospitalAgentRuntimeConfigUseCase(remoteAPI: remote)
+        let fileTransferService = FileTransferService(
+            api: SparkFileAPI(engine: engine),
+            ossAPI: SparkOSSAPI(configuration: configuration),
+            ossClient: OSSClientWrapper(manager: OSSManager.shared),
+            ossRuntimeConfigurator: OSSManager.shared,
+            ossConfigurationStore: SparkOSSConfigurationStore(),
+            cacheManager: FileCacheManager(),
+            logger: ConsoleLogger()
+        )
         let dependencies = HospitalCareFeatureDependencies(
             remoteAPI: concreteRemote,
             catalogCache: cache,
@@ -181,7 +190,9 @@ final class HospitalHomeViewModelTests: XCTestCase {
                 remoteAPI: remote,
                 scopeStore: scopeStore,
                 fetchRuntimeConfig: fetchRuntimeConfig,
-                runtimeConfigStore: runtimeConfigStore
+                runtimeConfigStore: runtimeConfigStore,
+                chatRepository: RecordingChatRepository(),
+                chatStateStore: ChatStateStore()
             ),
             resolveScope: ResolveHospitalConversationScopeUseCase(remoteAPI: remote, scopeStore: scopeStore),
             fetchRuntimeConfig: fetchRuntimeConfig,
@@ -190,7 +201,10 @@ final class HospitalHomeViewModelTests: XCTestCase {
             loadDoctorProfile: LoadHospitalDoctorProfileUseCase(remoteAPI: remote, catalogCache: cache),
             fetchContext: FetchHospitalConversationContextUseCase(remoteAPI: remote),
             knowledgeSync: HospitalKnowledgeSyncCoordinator(remoteAPI: remote, repository: knowledgeRepository),
-            knowledgeRepository: knowledgeRepository
+            knowledgeRepository: knowledgeRepository,
+            submitConsultation: SubmitConsultationUseCase(remoteAPI: remote, scopeStore: scopeStore),
+            loadConsultations: LoadConsultationsUseCase(remoteAPI: remote),
+            fileTransferService: fileTransferService
         )
         let memberContextStore = MemberContextStore()
         let sessionStore = AppSessionStore(

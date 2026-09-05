@@ -32,11 +32,58 @@ final class AppRouteStoreHospitalTabTests: XCTestCase {
         XCTAssertEqual(AppRoute.hospitalHome.rootTab, .hospital)
         XCTAssertEqual(AppRoute.hospitalAgentDirectory(departmentID: UUID()).rootTab, .hospital)
         XCTAssertEqual(AppRoute.hospitalAgentDirectory(departmentID: nil).rootTab, .hospital)
+        XCTAssertEqual(AppRoute.hospitalConsultation(.departments).rootTab, .hospital)
+        XCTAssertEqual(AppRoute.hospitalConsultation(.recent).rootTab, .hospital)
+        XCTAssertEqual(
+            AppRoute.hospitalDoctorSelect(hospitalID: UUID(), departmentID: UUID()).rootTab,
+            .hospital
+        )
+        XCTAssertEqual(AppRoute.hospitalConsultForm(agentID: UUID()).rootTab, .hospital)
     }
 
     func testHospitalHomeIsRootDestinationAndDirectoryIsPushed() {
         XCTAssertTrue(AppRoute.hospitalHome.isRootDestination)
         XCTAssertFalse(AppRoute.hospitalAgentDirectory(departmentID: nil).isRootDestination)
+        XCTAssertFalse(AppRoute.hospitalConsultation(.departments).isRootDestination)
+        XCTAssertFalse(AppRoute.hospitalConsultation(.recent).isRootDestination)
+        XCTAssertFalse(AppRoute.hospitalDoctorSelect(hospitalID: UUID(), departmentID: UUID()).isRootDestination)
+        XCTAssertFalse(AppRoute.hospitalConsultForm(agentID: UUID()).isRootDestination)
+    }
+
+    func testConsultFlowPushesDoctorSelectThenFormOntoHospitalStack() {
+        let store = AppRouteStore(storage: makeStorage())
+        let hospitalID = UUID()
+        let departmentID = UUID()
+        let agentID = UUID()
+
+        store.route(to: .hospitalConsultation(.departments))
+        store.route(to: .hospitalDoctorSelect(hospitalID: hospitalID, departmentID: departmentID))
+        store.route(to: .hospitalConsultForm(agentID: agentID))
+
+        XCTAssertEqual(store.selectedTab, .hospital)
+        XCTAssertEqual(
+            store.routes(for: .hospital),
+            [
+                .hospitalConsultation(.departments),
+                .hospitalDoctorSelect(hospitalID: hospitalID, departmentID: departmentID),
+                .hospitalConsultForm(agentID: agentID),
+            ]
+        )
+    }
+
+    func testSubmitConsultationReplaceStackKeepsRecentFocusOnHospitalTab() {
+        let store = AppRouteStore(storage: makeStorage())
+        let hospitalID = UUID()
+        let departmentID = UUID()
+        let agentID = UUID()
+
+        store.route(to: .hospitalConsultation(.departments))
+        store.route(to: .hospitalDoctorSelect(hospitalID: hospitalID, departmentID: departmentID))
+        store.route(to: .hospitalConsultForm(agentID: agentID))
+        store.route(to: .hospitalConsultation(.recent), replaceStack: true)
+
+        XCTAssertEqual(store.selectedTab, .hospital)
+        XCTAssertEqual(store.routes(for: .hospital), [.hospitalConsultation(.recent)])
     }
 
     // MARK: - raw value 与持久化

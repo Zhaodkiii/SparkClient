@@ -2,6 +2,12 @@ import Combine
 import Foundation
 import SwiftUI
 
+/// 线上问诊入口页落点：全部科室或最近问诊。
+enum HospitalConsultationFocus: Hashable, Sendable {
+    case departments
+    case recent
+}
+
 /// App 级路由目标：通知、深链、登录态变化最终都先解析成这里的 typed route。
 enum AppRoute: Hashable, Sendable {
     case home
@@ -26,6 +32,12 @@ enum AppRoute: Hashable, Sendable {
     case hospitalHome
     /// 医院医生智能体目录；可携带初始科室筛选（来自首页固定科室点击）。
     case hospitalAgentDirectory(departmentID: UUID?)
+    /// 线上问诊流程入口（科室选择页）；focus 决定落在「全部科室」还是「最近问诊」。
+    case hospitalConsultation(HospitalConsultationFocus)
+    /// 线上问诊 - 医生选择页（指定医院 + 科室）。
+    case hospitalDoctorSelect(hospitalID: UUID, departmentID: UUID)
+    /// 线上问诊 - 问诊材料填写页（指定医生智能体）。
+    case hospitalConsultForm(agentID: UUID)
 
     var rootTab: AppRouteStore.RootTab {
         switch self {
@@ -43,7 +55,7 @@ enum AppRoute: Hashable, Sendable {
             return .popularScience
         case .settings, .aiSettings, .accountManagement:
             return .settings
-        case .hospitalHome, .hospitalAgentDirectory:
+        case .hospitalHome, .hospitalAgentDirectory, .hospitalConsultation, .hospitalDoctorSelect, .hospitalConsultForm:
             return .hospital
         }
     }
@@ -52,7 +64,7 @@ enum AppRoute: Hashable, Sendable {
         switch self {
         case .home, .knowledge, .nutrition, .fitness, .chatList, .popularScience, .settings, .hospitalHome:
             return true
-        case .chatThread, .automaticChatThread, .popularScienceArticle, .aiSettings, .accountManagement, .homeMedicalList, .homeFamilyMedicineCabinet, .taskDetail, .hospitalAgentDirectory:
+        case .chatThread, .automaticChatThread, .popularScienceArticle, .aiSettings, .accountManagement, .homeMedicalList, .homeFamilyMedicineCabinet, .taskDetail, .hospitalAgentDirectory, .hospitalConsultation, .hospitalDoctorSelect, .hospitalConsultForm:
             return false
         }
     }

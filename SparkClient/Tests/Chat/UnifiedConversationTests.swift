@@ -128,6 +128,7 @@ final class ConversationServiceStatusMappingTests: XCTestCase {
         XCTAssertEqual(ConversationServiceStatus(rawValue: "agent_offline"), .agentUnavailable)
         XCTAssertEqual(ConversationServiceStatus(rawValue: "hospital_service_unavailable"), .hospitalUnavailable)
         XCTAssertEqual(ConversationServiceStatus(rawValue: "consultation_completed"), .consultationCompleted)
+        XCTAssertEqual(ConversationServiceStatus(rawValue: "pending_doctor"), .pendingDoctor)
     }
 
     func testDoctorJoinedHasTakeoverSemantics() {
@@ -150,6 +151,7 @@ final class ConversationServiceStatusMappingTests: XCTestCase {
 
     func testAllowsSendingOnlyForActiveAndDoctorTakenOver() {
         XCTAssertTrue(ConversationServiceStatus.active.allowsSending)
+        XCTAssertTrue(ConversationServiceStatus.pendingDoctor.allowsSending)
         XCTAssertTrue(ConversationServiceStatus.doctorTakenOver.allowsSending)
         XCTAssertFalse(ConversationServiceStatus.ended.allowsSending)
         XCTAssertFalse(ConversationServiceStatus.suspended.allowsSending)
@@ -261,5 +263,163 @@ private final class StubChatMessageStoring: ChatMessageStoring, @unchecked Senda
     func markMessageBlocksSynced(ids: [UUID]) async {}
     func appendUsageEvent(_ event: ChatMessageUsageEvent) async {}
     func upsertUsageSummary(_ summary: ChatMessageUsageSummary) async {}
+}
+
+/// 线上问诊独立会话：scope 分类、能力与路由兜底。
+final class TelemedicineConversationClassificationTests: XCTestCase {
+    private let accountID: Int64 = 42
+
+    private func isolatedDefaults() -> UserDefaults {
+        UserDefaults(suiteName: "TelemedicineConversationClassificationTests.\(UUID().uuidString)")!
+    }
+
+    private func classify(scope: HospitalConversationScope?) -> UnifiedConversationClassifier.Result {
+        let defaults = isolatedDefaults()
+        let scopeStore = HospitalConversationScopeStore(defaults: defaults)
+        if let scope {
+            scopeStore.remember(scope, accountID: accountID)
+        }
+        return UnifiedConversationClassifier.classify(
+            threadID: scope?.threadID ?? UUID(),
+            accountID: accountID,
+            manifestRepository: UnifiedConversationManifestRepository(defaults: defaults),
+            provenanceStore: ThreadCreationProvenanceStore(defaults: defaults),
+            hospitalScopeStore: scopeStore,
+            featureFlags: UnifiedConversationFeatureFlags(
+                manifestEnabled: false,
+                unknownGatingEnabled: false
+            )
+        )
+    }
+
+    func testScopeWithoutConsultationClassifiesAsHospitalAgent() {
+        let threadID = UUID()
+        let result = classify(
+            scope: HospitalConversationScope(
+                threadID: threadID,
+                agentID: UUID(),
+                memberID: 7,
+                hospitalID: UUID()
+            )
+        )
+        XCTAssertEqual(result.kind, .hospitalAgent)
+        XCTAssertEqual(result.scope?.threadID, threadID)
+    }
+
+    func testScopeWithConsultationClassifiesAsTelemedicine() {
+        let threadID = UUID()
+        let consultationID = UUID()
+        let result = classify(
+            scope: HospitalConversationScope(
+                threadID: threadID,
+                agentID: UUID(),
+                memberID: 7,
+                hospitalID: UUID(),
+                consultationID: consultationID,
+                consultNo: "C202609050001"
+            )
+        )
+        XCTAssertEqual(result.kind, .telemedicine)
+        XCTAssertEqual(result.scope?.consultationID, consultationID)
+    }
+
+    func testTelemedicineCapabilityAllowsSendWithoutAI() {
+        XCTAssertEqual(
+            UnifiedConversationProjector.resolveCapability(
+                kind: .telemedicine,
+                classificationState: .resolved,
+                serviceStatus: nil
+            ),
+            .telemedicineActive
+        )
+        XCTAssertEqual(
+            UnifiedConversationProjector.resolveCapability(
+                kind: .telemedicine,
+                classificationState: .resolved,
+                serviceStatus: .pendingDoctor
+            ),
+            .telemedicineActive
+        )
+        XCTAssertEqual(
+            UnifiedConversationProjector.resolveCapability(
+                kind: .telemedicine,
+                classificationState: .resolved,
+                serviceStatus: .doctorJoined
+            ),
+            .telemedicineActive
+        )
+        XCTAssertEqual(
+            UnifiedConversationProjector.resolveCapability(
+                kind: .telemedicine,
+                classificationState: .resolved,
+                serviceStatus: .ended
+            ),
+            .medicalReadOnly
+        )
+        XCTAssertFalse(ConversationCapability.telemedicineActive.canUseAI)
+        XCTAssertTrue(ConversationCapability.telemedicineActive.canUseTelemedicine)
+        XCTAssertTrue(ConversationCapability.telemedicineActive.canSend)
+    }
+
+    func testTelemedicineRouteFallsBackToScopeConsultationID() {
+        let threadID = UUID()
+        let consultationID = UUID()
+        let scope = HospitalConversationScope(
+            threadID: threadID,
+            agentID: UUID(),
+            memberID: 7,
+            hospitalID: UUID(),
+            consultationID: consultationID,
+            consultNo: "C202609050001"
+        )
+        let route = UnifiedConversationProjector.resolveRoute(
+            kind: .telemedicine,
+            threadID: threadID,
+            memberID: 7,
+            identity: nil,
+            scope: scope
+        )
+        XCTAssertEqual(
+            route,
+            .telemedicine(threadID: threadID, consultationID: consultationID, memberID: 7)
+        )
+    }
+
+    func testTelemedicineRouteWithoutConsultationRequiresConfirmation() {
+        let threadID = UUID()
+        let route = UnifiedConversationProjector.resolveRoute(
+            kind: .telemedicine,
+            threadID: threadID,
+            memberID: 7,
+            identity: nil,
+            scope: HospitalConversationScope(
+                threadID: threadID,
+                agentID: UUID(),
+                memberID: 7,
+                hospitalID: UUID()
+            )
+        )
+        XCTAssertEqual(route, .confirmationRequired(threadID: threadID))
+    }
+
+    func testTelemedicineBadgeAndTitlesUseConsultNo() {
+        XCTAssertEqual(
+            UnifiedConversationProjector.resolveBadge(kind: .telemedicine, classificationState: .resolved),
+            .telemedicine
+        )
+        let titles = UnifiedConversationProjector.resolveTitles(
+            kind: .telemedicine,
+            classificationState: .resolved,
+            identity: UnifiedConversationIdentity(
+                doctorDisplayName: "李医生",
+                hospitalDisplayName: "示例医院",
+                consultationID: UUID(),
+                consultationDisplayName: "C202609050001"
+            ),
+            thread: ChatThread(id: UUID(), title: "会话")
+        )
+        XCTAssertEqual(titles.primary, "C202609050001")
+        XCTAssertEqual(titles.secondary, "示例医院")
+    }
 }
 #endif

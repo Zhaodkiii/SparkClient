@@ -255,6 +255,9 @@ nonisolated enum ChatMessageBlockPayload: Codable, Equatable, Sendable {
     case tool(ChatToolBlockPayload)
     case imageGallery([ChatAttachment])
     case fileAttachments([ChatAttachment])
+    /// 医院问诊 PDF 画廊：医生控制台写入 `fileGallery` / `file_gallery`。
+    /// 展示与本地 kind 一律按 ``fileAttachments`` 处理，避免整次 pull 因未知 discriminator 失败。
+    case fileGallery([ChatAttachment])
     case knowledgeCards([ChatKnowledgeCard])
     case translatedText(String)
     case mapRoute(ChatMapRouteBlockPayload)
@@ -294,7 +297,7 @@ nonisolated enum ChatMessageBlockPayload: Codable, Equatable, Sendable {
         case .deepThought: return .deepThought
         case .tool: return .tool
         case .imageGallery: return .imageGallery
-        case .fileAttachments: return .fileAttachments
+        case .fileAttachments, .fileGallery: return .fileAttachments
         case .knowledgeCards: return .knowledgeCards
         case .translatedText: return .translatedText
         case .mapRoute: return .mapRoute
@@ -398,7 +401,7 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
     /// 附件列表：图片画廊/文件附件类型有效
     nonisolated var attachments: [ChatAttachment] {
         switch payload {
-        case .imageGallery(let attachments), .fileAttachments(let attachments):
+        case .imageGallery(let attachments), .fileAttachments(let attachments), .fileGallery(let attachments):
             return attachments
         default:
             return []

@@ -10,7 +10,7 @@ enum ConversationKind: String, Codable, Sendable, CaseIterable {
     case ordinaryAI = "ordinary_ai"
     /// 院内医生智能体对话
     case hospitalAgent = "hospital_agent"
-    /// 线上问诊对话（本期仅预留，不产生真实列表项）
+    /// 线上问诊对话（一对一医生会话，不走医生智能体 AI）
     case telemedicine = "telemedicine"
     /// 暂时无法判定（Manifest 未覆盖、旧数据或协议异常）；仅客户端使用，服务端不下发该值
     case unknown = "unknown"
@@ -86,6 +86,16 @@ struct ConversationCapability: Equatable, Sendable {
         canMarkRead: true
     )
 
+    /// 线上问诊（待接诊/进行中）：可发送，仅医生一对一，不用 AI / 医院知识库
+    static let telemedicineActive = ConversationCapability(
+        canRead: true,
+        canSend: true,
+        canUseAI: false,
+        canUseHospitalKnowledge: false,
+        canUseTelemedicine: true,
+        canMarkRead: true
+    )
+
     /// 医疗服务暂停/下架/结束：历史可读，禁止发送
     static let medicalReadOnly = ConversationCapability(
         canRead: true,
@@ -121,6 +131,8 @@ struct ConversationCapability: Equatable, Sendable {
 enum ConversationServiceStatus: Equatable, Sendable, Codable {
     /// AI 服务中
     case active
+    /// 待医生接诊（服务端 binding 实际下发值 pending_doctor）
+    case pendingDoctor
     /// 医生接管中（需求矩阵值 doctor_taken_over）
     case doctorTakenOver
     /// 医生已接管（服务端 context 接口实际下发值 doctor_joined，语义同 doctorTakenOver）
@@ -141,6 +153,7 @@ enum ConversationServiceStatus: Equatable, Sendable, Codable {
     nonisolated init(rawValue: String) {
         switch rawValue {
         case "active": self = .active
+        case "pending_doctor": self = .pendingDoctor
         case "doctor_taken_over": self = .doctorTakenOver
         case "doctor_joined": self = .doctorJoined
         case "ended": self = .ended
@@ -155,6 +168,7 @@ enum ConversationServiceStatus: Equatable, Sendable, Codable {
     nonisolated var rawValue: String {
         switch self {
         case .active: return "active"
+        case .pendingDoctor: return "pending_doctor"
         case .doctorTakenOver: return "doctor_taken_over"
         case .doctorJoined: return "doctor_joined"
         case .ended: return "ended"
@@ -169,7 +183,7 @@ enum ConversationServiceStatus: Equatable, Sendable, Codable {
     /// 是否为可继续发送的服务状态（医生接管中仍可发送）。
     var allowsSending: Bool {
         switch self {
-        case .active, .doctorTakenOver, .doctorJoined:
+        case .active, .pendingDoctor, .doctorTakenOver, .doctorJoined:
             return true
         case .ended, .suspended, .agentUnavailable, .hospitalUnavailable, .consultationCompleted, .unsupported:
             return false
@@ -181,7 +195,7 @@ enum ConversationServiceStatus: Equatable, Sendable, Codable {
         switch self {
         case .doctorTakenOver, .doctorJoined:
             return true
-        case .active, .ended, .suspended, .agentUnavailable, .hospitalUnavailable,
+        case .active, .pendingDoctor, .ended, .suspended, .agentUnavailable, .hospitalUnavailable,
              .consultationCompleted, .unsupported:
             return false
         }
@@ -192,6 +206,8 @@ enum ConversationServiceStatus: Equatable, Sendable, Codable {
         switch self {
         case .active:
             return nil
+        case .pendingDoctor:
+            return L10n.text("chat.unified.status.pending_doctor", fallback: "待医生接诊")
         case .doctorTakenOver, .doctorJoined:
             return L10n.text("chat.unified.status.doctor_taken_over", fallback: "医生接管中")
         case .ended:
@@ -212,7 +228,7 @@ enum ConversationServiceStatus: Equatable, Sendable, Codable {
     /// 只读会话页禁用输入的患者可见原因。
     var localizedReadOnlyReason: String? {
         switch self {
-        case .active, .doctorTakenOver, .doctorJoined:
+        case .active, .pendingDoctor, .doctorTakenOver, .doctorJoined:
             return nil
         case .ended:
             return L10n.text("chat.unified.readonly.ended", fallback: "该医生智能体当前已结束服务，您仍可查看历史咨询记录")

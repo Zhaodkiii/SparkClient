@@ -238,6 +238,8 @@ final class AppContainer {
     let retryFailedMessageUseCase: RetryFailedMessageUseCase
     /// 删除线程及其消息（具体是否物理删由仓库实现）。
     let deleteThreadUseCase: DeleteThreadUseCase
+    /// 聊天本地仓储（Thread / 消息落库）。
+    let chatRepository: any ChatRepository
     /// 聊天同步编排（引擎 + 附件管线）。
     let chatSyncSupervisor: ChatSyncSupervisor
     /// 用户发送一条消息：落库、触发编排（流式模型 + 工具）。
@@ -587,6 +589,7 @@ final class AppContainer {
         self.createThreadUseCase = chat.createThreadUseCase
         self.retryFailedMessageUseCase = chat.retryFailedMessageUseCase
         self.deleteThreadUseCase = chat.deleteThreadUseCase
+        self.chatRepository = chat.chatRepository
         self.chatSyncSupervisor = chat.chatSyncSupervisor
         self.sendChatMessageUseCase = chat.sendChatMessageUseCase
         self.toolHub = chat.toolHub
@@ -1051,6 +1054,9 @@ final class AppContainer {
             scopeStore: hospitalConversationScopeStore,
             runtimeConfigStore: hospitalAgentRuntimeConfigStore,
             knowledgeRepository: hospitalKnowledgeRepository,
+            chatRepository: chatRepository,
+            chatStateStore: chatStateStore,
+            fileTransferService: fileTransferService,
             logger: logger
         ).makeFacade()
     }

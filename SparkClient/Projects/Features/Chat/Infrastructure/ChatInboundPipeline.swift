@@ -15,11 +15,22 @@ struct ChatInboundPipeline: Sendable {
         let grouped = Dictionary(grouping: remoteMessages, by: \.threadID)
         for (threadID, batch) in grouped {
             let localMessages = await repository.loadMessages(threadID: threadID, limit: nil, before: nil)
+            let incomingKinds = batch.flatMap { $0.blocks.map { $0.kind.rawValue } }
+            ConsoleLogger().debug(
+                "CHAT-000061 inbound_merge_start thread=\(threadID.uuidString.prefix(8)) incoming=\(batch.count) local=\(localMessages.count) kinds=\(incomingKinds.joined(separator: ","))",
+                module: .general
+            )
             let localByClient = Self.indexByClientMessageID(localMessages)
             let merged = batch.map { remote in
                 mergeEngine.resolve(local: localByClient[remote.clientMessageID], remote: remote)
             }
             await repository.upsertRemoteMessages(merged, in: threadID, enqueueAttachmentDownloadJobs: enqueueAttachmentDownloadJobs)
+            let persistedMessages = await repository.loadMessages(threadID: threadID, limit: nil, before: nil)
+            let persistedKinds = persistedMessages.flatMap { $0.blocks.map { $0.kind.rawValue } }
+            ConsoleLogger().debug(
+                "CHAT-000061 inbound_merge_end thread=\(threadID.uuidString.prefix(8)) merged=\(merged.count) persisted=\(persistedMessages.count) kinds=\(persistedKinds.joined(separator: ","))",
+                module: .general
+            )
         }
     }
 

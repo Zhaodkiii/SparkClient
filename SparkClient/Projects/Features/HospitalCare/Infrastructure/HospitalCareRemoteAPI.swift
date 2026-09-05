@@ -179,6 +179,53 @@ struct HospitalCareRemoteAPI: Sendable {
         )
     }
 
+    /// 提交线上问诊：创建独立问诊单并关联新会话（DOCTOR-WORKSPACE-000004 页面形态修订）。
+    func submitConsultation(_ payload: HospitalConsultationSubmitRequestDTO) async throws -> HospitalConsultationDTO {
+        let body = try JSONEncoder.chatRemote.encode(payload)
+        let operation = CacheableSparkNetworkOperation(
+            name: "HospitalCare.SubmitConsultation",
+            apiName: "HospitalCareRemoteAPI",
+            request: SparkNetworkRequest(
+                method: .post,
+                path: "/api/v1/hospital-care/consultations/",
+                headers: ["Idempotency-Key": (payload.threadId ?? UUID()).uuidString],
+                body: .raw(body, contentType: "application/json"),
+                strategy: NetworkStrategy(
+                    requiresAuth: true,
+                    allowETag: false,
+                    serialKey: "hospital_care.consultation.submit.\(payload.agentId.hospitalCarePathID).\(payload.memberId)",
+                    retryConfig: .default,
+                    isIdempotent: true,
+                    queuePriority: .high
+                )
+            )
+        )
+        let response = try await configuration.execute(operation)
+        return try APIResponseDecoder.decodeWrappedData(
+            HospitalConsultationDTO.self,
+            from: response,
+            decoder: JSONDecoder.chatRemote
+        )
+    }
+
+    /// 当前账号名下成员的线上问诊单列表（最近问诊卡片数据源）。
+    func listConsultations(memberID: Int?, page: Int = 1, pageSize: Int = 50) async throws -> [HospitalConsultationDTO] {
+        var queryItems = [
+            URLQueryItem(name: "page", value: String(page)),
+            URLQueryItem(name: "page_size", value: String(pageSize)),
+        ]
+        if let memberID {
+            queryItems.append(URLQueryItem(name: "member_id", value: String(memberID)))
+        }
+        let payload: HospitalCarePageDTO<HospitalConsultationDTO> = try await get(
+            name: "HospitalCare.Consultations",
+            path: "/api/v1/hospital-care/consultations/",
+            queryItems: queryItems,
+            serialKey: "hospital_care.consultations.\(memberID ?? -1)"
+        )
+        return payload.items
+    }
+
     private func get<T: Decodable>(
         name: String,
         path: String,
@@ -243,6 +290,10 @@ protocol HospitalCareRemoteServing: Sendable {
         cursor: String?,
         limit: Int
     ) async throws -> HospitalKnowledgePullPageDTO
+    /// 提交线上问诊单（创建关联会话）；threadId 为客户端幂等键。
+    func submitConsultation(_ payload: HospitalConsultationSubmitRequestDTO) async throws -> HospitalConsultationDTO
+    /// 当前账号的线上问诊单列表（可按 memberID 过滤）。
+    func listConsultations(memberID: Int?, page: Int, pageSize: Int) async throws -> [HospitalConsultationDTO]
 }
 
 extension HospitalCareRemoteAPI: HospitalCareRemoteServing {}

@@ -22,7 +22,9 @@ struct HydrateHospitalConversationScopesUseCase {
                     threadID: item.threadId,
                     agentID: item.agent.id,
                     memberID: memberID,
-                    hospitalID: hospital.id
+                    hospitalID: hospital.id,
+                    consultationID: item.consultation?.consultationId,
+                    consultNo: item.consultation?.consultNo
                 ),
                 accountID: accountID
             )

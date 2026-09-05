@@ -61,7 +61,7 @@ enum UnifiedConversationClassifier {
         // 2. 已验证医院 scope 缓存。
         if let scope = hospitalScopeStore?.scope(for: threadID, accountID: accountID) {
             return Result(
-                kind: .hospitalAgent,
+                kind: scope.consultationID == nil ? .hospitalAgent : .telemedicine,
                 binding: nil,
                 scope: scope,
                 isAccessRevoked: false,
