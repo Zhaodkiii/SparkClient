@@ -12,7 +12,7 @@ nonisolated struct HospitalCarePaginationDTO: Codable, Sendable {
     let totalPages: Int
 }
 
-nonisolated struct HospitalPublicDTO: Codable, Sendable {
+nonisolated struct HospitalPublicDTO: Codable, Equatable, Sendable {
     let id: UUID
     let code: String?
     let name: String
@@ -21,13 +21,13 @@ nonisolated struct HospitalPublicDTO: Codable, Sendable {
     let status: String
 }
 
-nonisolated struct HospitalDepartmentPublicDTO: Codable, Sendable {
+nonisolated struct HospitalDepartmentPublicDTO: Codable, Equatable, Sendable {
     let id: UUID
     let name: String
     let sortOrder: Int?
 }
 
-nonisolated struct HospitalDoctorPublicDTO: Codable, Sendable {
+nonisolated struct HospitalDoctorPublicDTO: Codable, Equatable, Sendable {
     let id: UUID
     let displayName: String
     let title: String?
@@ -53,7 +53,7 @@ nonisolated struct HospitalAgentPublicDTO: Codable, Sendable {
     let avatarVersion: String?
 }
 
-nonisolated struct HospitalConversationAgentDTO: Codable, Sendable {
+nonisolated struct HospitalConversationAgentDTO: Codable, Equatable, Sendable {
     let id: UUID
     let name: String?
     let publicationStatus: String?
@@ -104,7 +104,7 @@ nonisolated struct HospitalConsultationSubmitRequestDTO: Encodable, Sendable {
 }
 
 /// GET/POST /api/v1/hospital-care/consultations/ 的问诊单视图。
-nonisolated struct HospitalConsultationDTO: Codable, Sendable {
+nonisolated struct HospitalConsultationDTO: Codable, Equatable, Sendable {
     let consultationId: UUID
     let consultNo: String
     let threadId: UUID
@@ -121,6 +121,8 @@ nonisolated struct HospitalConsultationDTO: Codable, Sendable {
     let serviceStatus: String
     let submittedAt: Date?
     var attachmentCount: Int? = nil
+    /// 问诊消息卡片内嵌附件（与聊天 ``ChatAttachment`` 同构）；列表接口可缺省。
+    var attachments: [ChatAttachment]? = nil
 
     init(
         consultationId: UUID,
@@ -138,7 +140,8 @@ nonisolated struct HospitalConsultationDTO: Codable, Sendable {
         allergyHistory: String? = nil,
         serviceStatus: String,
         submittedAt: Date? = nil,
-        attachmentCount: Int? = nil
+        attachmentCount: Int? = nil,
+        attachments: [ChatAttachment]? = nil
     ) {
         self.consultationId = consultationId
         self.consultNo = consultNo
@@ -156,6 +159,7 @@ nonisolated struct HospitalConsultationDTO: Codable, Sendable {
         self.serviceStatus = serviceStatus
         self.submittedAt = submittedAt
         self.attachmentCount = attachmentCount
+        self.attachments = attachments
     }
 
     init(from decoder: Decoder) throws {
@@ -176,6 +180,15 @@ nonisolated struct HospitalConsultationDTO: Codable, Sendable {
         serviceStatus = try container.decodeIfPresent(String.self, forKey: .serviceStatus) ?? ""
         submittedAt = try container.decodeIfPresent(Date.self, forKey: .submittedAt)
         attachmentCount = try container.decodeIfPresent(Int.self, forKey: .attachmentCount)
+        attachments = try container.decodeIfPresent([ChatAttachment].self, forKey: .attachments)
+    }
+
+    var imageAttachments: [ChatAttachment] {
+        (attachments ?? []).filter(\.isChatImageLike)
+    }
+
+    var fileAttachments: [ChatAttachment] {
+        (attachments ?? []).filter(\.isGenericFileAttachment)
     }
 }
 

@@ -174,6 +174,8 @@ nonisolated enum ChatMessageBlockKind: String, Codable, Sendable {
     case chatGuideCard
     /// 医院医生智能体会话首条系统身份卡
     case hospitalDoctorIntroCard
+    /// 患者提交线上问诊时的问诊单消息卡片
+    case consultationCard
 }
 
 nonisolated enum ChatMessageBlockStatus: String, Codable, Sendable {
@@ -290,6 +292,7 @@ nonisolated enum ChatMessageBlockPayload: Codable, Equatable, Sendable {
     case medicalDisclaimerCard(ChatMedicalDisclaimerCardPayload)
     case chatGuideCard(ChatGuideCardPayload)
     case hospitalDoctorIntroCard(HospitalDoctorIntroCardPayload)
+    case consultationCard(ChatConsultationCardPayload)
 
     nonisolated var kind: ChatMessageBlockKind {
         switch self {
@@ -330,6 +333,7 @@ nonisolated enum ChatMessageBlockPayload: Codable, Equatable, Sendable {
         case .medicalDisclaimerCard: return .medicalDisclaimerCard
         case .chatGuideCard: return .chatGuideCard
         case .hospitalDoctorIntroCard: return .hospitalDoctorIntroCard
+        case .consultationCard: return .consultationCard
         }
     }
 }
@@ -555,6 +559,11 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         return payload
     }
 
+    nonisolated var consultationCard: ChatConsultationCardPayload? {
+        guard case .consultationCard(let payload) = payload else { return nil }
+        return payload
+    }
+
     /// 运动可视化模型
     nonisolated var workoutVisualization: ChatHealthWorkoutModel? {
         guard case .workoutVisualization(let model) = payload else { return nil }
@@ -624,6 +633,7 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         medicalDisclaimerCard: ChatMedicalDisclaimerCardPayload? = nil,
         chatGuideCard: ChatGuideCardPayload? = nil,
         hospitalDoctorIntroCard: HospitalDoctorIntroCardPayload? = nil,
+        consultationCard: ChatConsultationCardPayload? = nil,
         status: ChatMessageBlockStatus = .ready,
         revision: Int64 = 1,
         orderKey: Double? = nil,
@@ -673,7 +683,8 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
             medicalRiskNotice: medicalRiskNotice,
             medicalDisclaimerCard: medicalDisclaimerCard,
             chatGuideCard: chatGuideCard,
-            hospitalDoctorIntroCard: hospitalDoctorIntroCard
+            hospitalDoctorIntroCard: hospitalDoctorIntroCard,
+            consultationCard: consultationCard
         )
         self.status = status
         self.revision = revision
@@ -720,7 +731,8 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         medicalRiskNotice: ChatMedicalRiskNoticePayload?,
         medicalDisclaimerCard: ChatMedicalDisclaimerCardPayload?,
         chatGuideCard: ChatGuideCardPayload?,
-        hospitalDoctorIntroCard: HospitalDoctorIntroCardPayload?
+        hospitalDoctorIntroCard: HospitalDoctorIntroCardPayload?,
+        consultationCard: ChatConsultationCardPayload?
     ) -> ChatMessageBlockPayload {
         switch kind {
         case .text:
@@ -861,6 +873,11 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
                 preconditionFailure("Missing hospital doctor intro payload for hospitalDoctorIntroCard block")
             }
             return .hospitalDoctorIntroCard(hospitalDoctorIntroCard)
+        case .consultationCard:
+            guard let consultationCard else {
+                preconditionFailure("Missing consultation card payload for consultationCard block")
+            }
+            return .consultationCard(consultationCard)
         }
     }
 
@@ -869,7 +886,7 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         toolCallID: String?,
         parentToolCallID: String?
     ) -> ChatMessageBlockNodeRole {
-        if kind == .medicalDisclaimerCard || kind == .hospitalDoctorIntroCard { return .timeline }
+        if kind == .medicalDisclaimerCard || kind == .hospitalDoctorIntroCard || kind == .consultationCard { return .timeline }
         if kind == .tool { return .tool }
         if parentToolCallID?.isEmpty == false { return .toolPresentation }
         if toolCallID?.isEmpty == false, kind != .text, kind != .deepThought, kind != .error, kind != .assistantStatusCard {

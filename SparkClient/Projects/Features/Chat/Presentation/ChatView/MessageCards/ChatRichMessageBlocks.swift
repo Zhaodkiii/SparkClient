@@ -262,11 +262,8 @@ struct ChatHTMLPreviewBlockView: View {
 
 /// 从消息附件构建画廊用图片载荷（`type == .image`：`url`、本地缓存、或 `text` 中的内嵌图 / http(s) 片段）。
 enum ChatImagePayloadBuilder {
-    static func imagePayloads(from message: ChatMessage) -> [ChatImagePayload] {
+    static func imagePayloads(from attachments: [ChatAttachment]) -> [ChatImagePayload] {
         var payloads: [ChatImagePayload] = []
-        let attachments = message.blocks
-            .filter { $0.kind == .imageGallery || $0.kind == .fileAttachments }
-            .flatMap(\.attachments)
         for attachment in attachments where attachment.isChatImageLike {
             if let image = ChatAttachment.inlinePreviewUIImage(from: attachment) {
                 payloads.append(ChatImagePayload(id: attachment.id, url: nil, image: image, managedFile: nil))
@@ -296,6 +293,13 @@ enum ChatImagePayloadBuilder {
         }
 //        ChatAttachmentImageDiagnostics.debug("payloadBuilder.done count=\(payloads.count)")
         return payloads
+    }
+
+    static func imagePayloads(from message: ChatMessage) -> [ChatImagePayload] {
+        let attachments = message.blocks
+            .filter { $0.kind == .imageGallery || $0.kind == .fileAttachments }
+            .flatMap(\.attachments)
+        return imagePayloads(from: attachments)
     }
 
 }

@@ -68,6 +68,8 @@ struct ChatRenderContext {
     let onSmallTaskCardOpen: (ChatSmallTaskMessageCardPayload) -> Void
     /// 引导卡片科普问题点击（上抛给 ViewModel 走当前会话发送链路）。
     let onGuideQuestionTap: (ChatGuideQuestion) -> Void
+    /// 线上问诊消息卡片点击 → 打开问诊详情。
+    let onConsultationCardTap: (ChatConsultationCardPayload) -> Void
     /// 引导卡片滑块点击 → 健康首页 destination（CHAT-000025）。
     /// nil（宿主未注入 / 旧宿主）时滑块降级为纯展示面板，不影响问题点击。
     var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
@@ -134,6 +136,7 @@ extension ChatRenderContext {
             onCaptureCancel: onCaptureCancel,
             onSmallTaskCardOpen: onSmallTaskCardOpen,
             onGuideQuestionTap: onGuideQuestionTap,
+            onConsultationCardTap: onConsultationCardTap,
             guideHomeDestinationBuilder: guideHomeDestinationBuilder,
             guideMetricSectionsProvider: guideMetricSectionsProvider,
             onPresentToolPreview: onPresentToolPreview,

@@ -68,6 +68,7 @@ struct ChatMessageBubbleContentView: View {
     let onCaptureCancel: (ChatCaptureMessageCardPayload) -> Void
     let onSmallTaskCardOpen: (ChatSmallTaskMessageCardPayload) -> Void
     let onGuideQuestionTap: (ChatGuideQuestion) -> Void
+    let onConsultationCardTap: (ChatConsultationCardPayload) -> Void
     let onPresentToolPreview: (ToolPreviewPrompt, ChatRenderContext) -> Void
     let fileTransferService: FileTransferService
     let medicalQueryAPI: SparkMedicalQueryAPI
@@ -151,6 +152,7 @@ struct ChatMessageBubbleContentView: View {
             onCaptureCancel: onCaptureCancel,
             onSmallTaskCardOpen: onSmallTaskCardOpen,
             onGuideQuestionTap: onGuideQuestionTap,
+            onConsultationCardTap: onConsultationCardTap,
             guideHomeDestinationBuilder: guideHomeDestinationBuilder,
             guideMetricSectionsProvider: guideMetricSectionsProvider,
             onPresentToolPreview: onPresentToolPreview,
@@ -601,7 +603,7 @@ private enum ChatMessageTimelineProjector {
 
     nonisolated private static func isToolPresentationBlock(_ kind: ChatMessageBlockKind) -> Bool {
         switch kind {
-        case .tool, .text, .deepThought, .error, .assistantStatusCard, .chatGuideCard, .hospitalDoctorIntroCard:
+        case .tool, .text, .deepThought, .error, .assistantStatusCard, .chatGuideCard, .hospitalDoctorIntroCard, .consultationCard:
             return false
         case .imageGallery,
                 .fileAttachments,

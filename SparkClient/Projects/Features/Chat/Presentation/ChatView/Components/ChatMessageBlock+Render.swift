@@ -297,6 +297,14 @@ extension ChatMessageBlock {
         case .hospitalDoctorIntroCard(let payload):
             HospitalDoctorIntroCardView(payload: payload)
 
+        case .consultationCard(let payload):
+            ConsultationMessageCardView(
+                payload: payload,
+                fileTransferService: context.fileTransferService
+            ) {
+                context.onConsultationCardTap(payload)
+            }
+
         }
         }
     }
@@ -396,6 +404,8 @@ extension ChatMessageBlock {
             return "正在准备健康引导卡片..."
         case .hospitalDoctorIntroCard:
             return "正在准备医生简介..."
+        case .consultationCard:
+            return "正在准备问诊卡片..."
         default:
             return "正在整理结果..."
         }

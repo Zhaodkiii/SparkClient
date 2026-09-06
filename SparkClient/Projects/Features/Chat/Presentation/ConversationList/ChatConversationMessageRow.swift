@@ -7,6 +7,8 @@ struct ChatConversationMessageRow: View {
     @State private var bubbleMenuConfig: ChatBubbleMenuConfig?
     @State private var textSelectionPayload: ChatSelectableTextPayload?
 
+    @State private var consultationDetail: HospitalConsultationDTO?
+
     let threadID: UUID
     let message: ChatMessage
     let visibleMessages: [ChatMessage]
@@ -80,22 +82,38 @@ struct ChatConversationMessageRow: View {
         .accessibilityLabel(displayName)
     }
 
+    private var isHospitalSystemEventTip: Bool {
+        ChatHospitalSystemMessageSupport.shouldRenderCenteredTip(for: message)
+    }
+
     var body: some View {
-        HStack {
-            if message.role == .assistant || message.role == .system {
-                assistantOrSystemColumn
-                Spacer(minLength: 0)
+        Group {
+            if isHospitalSystemEventTip {
+                ChatHospitalSystemEventTipView(
+                    text: ChatHospitalSystemMessageSupport.displayText(for: message)
+                )
             } else {
-                Spacer(minLength: 40)
-                longPressableBubble
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color.accentColor)
-                    )
-                    .frame(maxWidth: bubbleMaxWidth, alignment: .trailing)
+                HStack {
+                    if message.role == .assistant || message.role == .system {
+                        assistantOrSystemColumn
+                        Spacer(minLength: 0)
+                    } else if isConsultationCardMessage {
+                        Spacer(minLength: 16)
+                        longPressableBubble
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                    } else {
+                        Spacer(minLength: 40)
+                        longPressableBubble
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.accentColor)
+                            )
+                            .frame(maxWidth: bubbleMaxWidth, alignment: .trailing)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: message.role == .user ? .trailing : .leading)
             }
         }
-        .frame(maxWidth: .infinity, alignment: message.role == .user ? .trailing : .leading)
         .padding(8)
         .background(
             GeometryReader { proxy in
@@ -116,6 +134,22 @@ struct ChatConversationMessageRow: View {
             if let config = bubbleMenuConfig {
                 ChatBubbleMenuView(config: config) {
                     bubbleMenuConfig = nil
+                }
+            }
+        }
+        .sheet(item: $consultationDetail) { consultation in
+            NavigationStack {
+                ConsultationDetailView(consultation: consultation) { _ in
+                    consultationDetail = nil
+                }
+                .navigationTitle("问诊详情")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button(L10n.text("common.done")) {
+                            consultationDetail = nil
+                        }
+                    }
                 }
             }
         }
@@ -140,9 +174,13 @@ struct ChatConversationMessageRow: View {
         }
     }
 
-    /// 医院医生简介系统卡不进入长按菜单，避免被当成 AI 消息操作。
+    private var isConsultationCardMessage: Bool {
+        message.blocks.contains { $0.kind == .consultationCard }
+    }
+
+    /// 医院医生简介 / 问诊卡片不进入长按菜单，避免被当成普通 AI 消息操作。
     private var disablesBubbleMenu: Bool {
-        message.blocks.contains { $0.kind == .hospitalDoctorIntroCard }
+        message.blocks.contains { $0.kind == .hospitalDoctorIntroCard || $0.kind == .consultationCard }
     }
 
     /// 带长按手势的气泡，替代系统 contextMenu
@@ -275,6 +313,7 @@ struct ChatConversationMessageRow: View {
             onCaptureCancel: { _ in },
             onSmallTaskCardOpen: { _ in },
             onGuideQuestionTap: { _ in },
+            onConsultationCardTap: { _ in },
             onPresentToolPreview: { _, _ in },
             fileTransferService: detailViewModel.attachmentFileTransferService,
             medicalQueryAPI: detailViewModel.sparkMedicalQueryAPI,
@@ -497,6 +536,9 @@ struct ChatConversationMessageRow: View {
             },
             onGuideQuestionTap: { question in
                 detailViewModel.sendGuideQuestion(question, in: threadID)
+            },
+            onConsultationCardTap: { payload in
+                consultationDetail = payload
             },
             onPresentToolPreview: { prompt, renderContext in
                 detailViewModel.presentToolDetailPreview(prompt: prompt, renderContext: renderContext)
