@@ -269,7 +269,8 @@ private extension SignedInMainTabHostView {
                 await mainTab.chatListViewModel.selectAndPrepare(threadID: threadID)
                 await mainTab.chatDetailViewModel.loadMessagesIfNeeded(
                     for: threadID,
-                    lockBottomViewport: true
+                    lockBottomViewport: true,
+                    scrollToBottom: true
                 )
             }
         }

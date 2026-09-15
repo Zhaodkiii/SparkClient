@@ -502,6 +502,14 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         return hospitalComposerModelRows[threadID]
     }
 
+    /// 消息气泡发送者头部：医生显示名与医院锁定模型的展示名补全。
+    func messageSenderHeaderContext(for threadID: UUID) -> ChatMessageSenderHeaderContext {
+        ChatMessageSenderHeaderContext(
+            hospitalDoctorDisplayName: hospitalConfigsByThread[threadID]?.doctorName,
+            hospitalLockedModelRow: hospitalComposerModelRows[threadID]
+        )
+    }
+
     /// 进入医院会话：装载专用运行配置（内存 → Keychain → 服务端），配置单项锁定目录。
     /// Keychain 命中时先返回可用并注册后台静默校验（C-012）；全部失败标记服务不可用（C-003/C-013）。
     /// - Returns: true 表示当前会话可发送。
@@ -865,12 +873,14 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
     func loadMessagesIfNeeded(
         for threadID: UUID,
         lockBottomViewport: Bool = false,
+        scrollToBottom: Bool = false,
         syncRemote: Bool = true
     ) async {
         await satisfyLoadRequest(
             .openOrReloadNewest(
                 threadID: threadID,
-                lockBottomViewport: lockBottomViewport
+                lockBottomViewport: lockBottomViewport,
+                scrollToBottom: scrollToBottom
             )
         )
         guard syncRemote else { return }
@@ -899,7 +909,8 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
             await satisfyLoadRequest(
                 .openOrReloadNewest(
                     threadID: threadID,
-                    lockBottomViewport: true
+                    lockBottomViewport: true,
+                    scrollToBottom: true
                 )
             )
             return
@@ -929,7 +940,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
 
     private func satisfyLoadRequest(_ request: ChatLoadRequest) async {
         switch request {
-        case .openOrReloadNewest(let threadID, let lockBottomViewport):
+        case .openOrReloadNewest(let threadID, let lockBottomViewport, let scrollToBottom):
             if lockBottomViewport {
                 stateStore.beginBottomViewportLock(for: threadID)
             }
@@ -948,7 +959,9 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
                 for: threadID,
                 hasMore: hasMore
             )
-            stateStore.requestScrollToBottom(for: threadID)
+            if scrollToBottom {
+                stateStore.requestScrollToBottom(for: threadID)
+            }
             if lockBottomViewport {
                 stateStore.endBottomViewportLock(for: threadID)
             }

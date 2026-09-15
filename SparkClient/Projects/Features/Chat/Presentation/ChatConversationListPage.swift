@@ -952,7 +952,11 @@ struct ChatConversationListPage: View {
     /// - Parameter threadID: 要导航到的会话 ID
     private func navigateToThread(_ threadID: UUID, source: ChatPresentationSource) async {
         listViewModel.selectThread(threadID)
-        await detailViewModel.loadMessagesIfNeeded(for: threadID, lockBottomViewport: true)
+        await detailViewModel.loadMessagesIfNeeded(
+            for: threadID,
+            lockBottomViewport: true,
+            scrollToBottom: true
+        )
         if source.isAutomatic {
             onPresentChat(ChatPresentationRequest(threadID: threadID, source: source))
         } else {

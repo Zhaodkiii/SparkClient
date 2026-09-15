@@ -65,6 +65,9 @@ struct ChatView: View {
     @Environment(\.hospitalCare) private var hospitalCare
     
     @State private var hasLoaded = false
+    /// 当前 ChatView 生命周期内最近一次真正进入的会话。
+    /// 子页面 pop 返回会重启 `.task(id:)`，但不应再次把同一会话当作首次进入并触发滚底。
+    @State private var initiallyOpenedThreadID: UUID?
     @StateObject private var uiStateStore = ChatMessageUIStateStore()
     @StateObject private var messageNavigationCoordinator = ChatMessageNavigationCoordinator()
     private let actionStateHandle = ChatMessageActionStateHandle(ChatMessageActionState())
@@ -472,9 +475,9 @@ struct ChatView: View {
                         hospitalReadOnlyBanner(reason: capabilities.readOnlyReason)
                     } else if isTelemedicineWaitingForDoctor {
                         telemedicineWaitingBanner
-                    } else if isDoctorTakeoverActive {
-                        // CHAT-000057 38.6：医生接管中轻量提示（可发送，AI 不回复），与只读横幅互斥。
-                        doctorTakeoverBanner
+//                    } else if isDoctorTakeoverActive {
+//                        // CHAT-000057 38.6：医生接管中轻量提示（可发送，AI 不回复），与只读横幅互斥。
+//                        doctorTakeoverBanner
                     }
                     composerChrome
                         // CHAT-000057 34.4：unknown 确认期间输入区/附件/快捷问题整体禁用。
@@ -726,6 +729,11 @@ struct ChatView: View {
             .task(id: currentThreadID) {
                 // 固定本轮 ID，避免 await 期间用户再次新建导致后续步骤串到别的 thread
                 let id = currentThreadID
+                let isInitialConversationOpen = initiallyOpenedThreadID != id
+                if isInitialConversationOpen {
+                    // 必须在第一个 await 前记录；即使随后 push 导致 task 取消，返回也属于导航返回。
+                    initiallyOpenedThreadID = id
+                }
                 let hospitalInitialMessages = stateStore.takeHospitalInitialMessages(for: id)
                 listViewModel.selectThread(id)
                 // CHAT-000058：本地 scope 命中的医院线程使用单项锁定目录；
@@ -746,7 +754,8 @@ struct ChatView: View {
                 await detailViewModel.refreshThreadImageDeliveryMode(for: id)
                 await detailViewModel.loadMessagesIfNeeded(
                     for: id,
-                    lockBottomViewport: true,
+                    lockBottomViewport: isInitialConversationOpen,
+                    scrollToBottom: isInitialConversationOpen,
                     syncRemote: hospitalInitialMessages == nil
                 )
                 if let hospitalInitialMessages {

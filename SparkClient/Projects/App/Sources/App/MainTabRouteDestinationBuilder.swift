@@ -61,7 +61,11 @@ struct MainTabRouteDestinationBuilder {
             )
             .task(id: threadID) {
                 await chatListViewModel.selectAndPrepare(threadID: threadID)
-                await chatDetailViewModel.loadMessagesIfNeeded(for: threadID, lockBottomViewport: true)
+                await chatDetailViewModel.loadMessagesIfNeeded(
+                    for: threadID,
+                    lockBottomViewport: true,
+                    scrollToBottom: true
+                )
             }
         case .automaticChatThread(let threadID):
             ChatView(
@@ -83,7 +87,11 @@ struct MainTabRouteDestinationBuilder {
             )
             .task(id: threadID) {
                 await chatListViewModel.selectAndPrepare(threadID: threadID)
-                await chatDetailViewModel.loadMessagesIfNeeded(for: threadID, lockBottomViewport: true)
+                await chatDetailViewModel.loadMessagesIfNeeded(
+                    for: threadID,
+                    lockBottomViewport: true,
+                    scrollToBottom: true
+                )
             }
         /// AI 设置页面
         case .aiSettings:

@@ -609,7 +609,9 @@ struct ChatConversationMessageRow: View {
     private var senderKind: ChatMessageSenderKind? {
         ChatMessageSenderHeaderResolver.senderKind(
             for: message,
-            scenarioModels: detailViewModel.chatScenarioModels
+            scenarioModels: detailViewModel.chatScenarioModels,
+            visibleMessages: visibleMessages,
+            context: detailViewModel.messageSenderHeaderContext(for: threadID)
         )
     }
 

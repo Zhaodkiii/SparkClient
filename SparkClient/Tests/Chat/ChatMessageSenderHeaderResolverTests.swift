@@ -59,7 +59,36 @@ final class ChatMessageSenderHeaderResolverTests: XCTestCase {
             ),
             scenarioModels: [makeModelRow(name: "qwen-plus", displayName: "Qwen-Plus", company: "QWEN")]
         )
-        XCTAssertEqual(kind, .aiAgent(displayName: "开开医生智能体", avatarURL: "https://cdn.example.test/agent.webp?v=1"))
+        XCTAssertEqual(kind, .aiAgent(displayName: "开开医生", avatarURL: "https://cdn.example.test/agent.webp?v=1"))
+    }
+
+    func testSenderKindUsesHospitalDoctorDisplayNameForAIAgentHeader() {
+        let kind = ChatMessageSenderHeaderResolver.senderKind(
+            for: makeAssistantMessage(
+                modelName: "qwen-plus",
+                sender: makeAIAgentSenderWithAvatar("https://cdn.example.test/agent.webp?v=1")
+            ),
+            scenarioModels: [],
+            context: ChatMessageSenderHeaderContext(hospitalDoctorDisplayName: "开开")
+        )
+        XCTAssertEqual(kind, .aiAgent(displayName: "开开", avatarURL: "https://cdn.example.test/agent.webp?v=1"))
+    }
+
+    func testSenderKindUsesHospitalLockedModelDisplayTitleWhenNotInScenarioList() {
+        let locked = makeModelRow(name: "hospital-binding-model", displayName: "周医生专用模型", company: "QWEN")
+        let kind = ChatMessageSenderHeaderResolver.senderKind(
+            for: makeAssistantMessage(modelName: "hospital-binding-model", sender: nil),
+            scenarioModels: [],
+            context: ChatMessageSenderHeaderContext(hospitalLockedModelRow: locked)
+        )
+        XCTAssertEqual(kind, .aiModel(displayName: "周医生专用模型", icon: .companyLogo(companyIconName(for: "QWEN"))))
+    }
+
+    func testPreferDoctorDisplayNameOverAgentNameStripsSuffix() {
+        XCTAssertEqual(
+            ChatMessageSenderHeaderResolver.preferDoctorDisplayNameOverAgentName("李医生智能体"),
+            "李医生"
+        )
     }
 
     func testSenderKindFallsBackToModelForAIAgentWithoutAvatar() {
