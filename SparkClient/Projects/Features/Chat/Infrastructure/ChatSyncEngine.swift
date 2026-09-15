@@ -98,10 +98,6 @@ actor ChatSyncEngine {
         _ messages: [ChatMessage],
         enqueueAttachmentDownloadJobs: Bool
     ) async {
-        logger.debug(
-            "CHAT-000061 apply_fetched_messages count=\(messages.count) threads=\(Set(messages.map(\.threadID)).count)",
-            module: .general
-        )
         guard messages.isEmpty == false else { return }
         await inboundPipeline.applyRemoteMessages(
             messages,
@@ -377,9 +373,6 @@ actor ChatSyncEngine {
     }
 
     private func pullAndMerge(cursor: String?, threadID: UUID?) async throws {
-        let scope = threadID.map { "thread=\(shortID($0))" } ?? "global"
-        logger.debug("CHAT-000061 pull_start cursor=\(cursor == nil ? "nil" : "set") scope=\(scope)", module: .general)
-
         var nextCursor = cursor
         var page = 0
         var totalMessages = 0
@@ -389,10 +382,6 @@ actor ChatSyncEngine {
             page += 1
             let result = try await remoteAPI.pull(cursor: nextCursor, threadID: threadID, limit: SyncPaging.messagePageLimit)
             let domainMessages = result.messages.compactMap(ChatSyncEngineDTOMapper.toDomain)
-            logger.debug(
-                "CHAT-000061 pull_page page=\(page) raw=\(result.messages.count) mapped=\(domainMessages.count) has_more=\(result.hasMore) scope=\(scope)",
-                module: .general
-            )
             await inboundPipeline.applyRemoteMessages(domainMessages, enqueueAttachmentDownloadJobs: false)
             for tid in Set(domainMessages.map(\.threadID)) {
                 touchedThreads.insert(tid)

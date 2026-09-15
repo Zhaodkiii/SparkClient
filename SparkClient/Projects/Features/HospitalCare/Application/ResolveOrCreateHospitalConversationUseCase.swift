@@ -81,10 +81,6 @@ nonisolated struct ResolveOrCreateHospitalConversationUseCase {
             }
         }
         let created = try await remoteAPI.createConversation(agentID: agentID, memberID: memberID)
-        ConsoleLogger().debug(
-            "CHAT-000061 create_response thread=\(created.threadId.uuidString.prefix(8)) has_thread=\(created.thread != nil) initial_messages=\(created.initialMessages.count)",
-            module: .general
-        )
 
         // 3. 校验返回 scope 与本地预期一致（C-017：不一致视为失败，不进入可发送页面）。
         let conversation = created.conversation
@@ -128,10 +124,6 @@ nonisolated struct ResolveOrCreateHospitalConversationUseCase {
         // 旧幂等快照缺少 thread 时按历史会话进入，由常规 pull 补齐。
         if created.thread != nil {
             let initialMessages = created.initialMessages.compactMap(ChatSyncEngineDTOMapper.toDomain)
-            ConsoleLogger().debug(
-                "CHAT-000061 initial_messages_mapped thread=\(created.threadId.uuidString.prefix(8)) raw=\(created.initialMessages.count) mapped=\(initialMessages.count)",
-                module: .general
-            )
             await MainActor.run {
                 chatStateStore.rememberHospitalInitialMessages(initialMessages, for: created.threadId)
             }

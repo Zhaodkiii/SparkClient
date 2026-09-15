@@ -166,10 +166,6 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
                     if let changedThreadID = event.threadID, changedThreadID != threadID {
                         return
                     }
-                    self.logger.debug(
-                        "CHAT-000061 database_event kind=\(event.kind.rawValue) thread=\(threadID.uuidString.prefix(8)) affected=\(event.affectedClientMessageIDs.count)",
-                        module: .general
-                    )
                     switch event.kind {
                     case .messagesAppended:
                         let currentIDs = Set(self.stateStore.persistedMessages(for: threadID).map(\.clientMessageID))
@@ -898,7 +894,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
                 messages,
                 enqueueAttachmentDownloadJobs: false
             )
-            // CHAT-000061：入站管线完成 Core Data upsert 后，显式重读当前 Thread。
+            // 入站管线完成 Core Data upsert 后，显式重读当前 Thread。
             // 不依赖数据库通知驱动 UI，避免新建医院会话首卡落库成功但 StateStore 仍为空。
             await satisfyLoadRequest(
                 .openOrReloadNewest(
@@ -951,10 +947,6 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
                 messages,
                 for: threadID,
                 hasMore: hasMore
-            )
-            logger.debug(
-                "CHAT-000061 ui_messages_reloaded thread=\(threadID.uuidString.prefix(8)) count=\(messages.count) has_more=\(hasMore)",
-                module: .general
             )
             stateStore.requestScrollToBottom(for: threadID)
             if lockBottomViewport {

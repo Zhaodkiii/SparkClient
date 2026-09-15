@@ -726,16 +726,7 @@ struct ChatView: View {
             .task(id: currentThreadID) {
                 // 固定本轮 ID，避免 await 期间用户再次新建导致后续步骤串到别的 thread
                 let id = currentThreadID
-                let markedBeforeTake = stateStore.isThreadMarkedAsNewlyCreated(id)
-                logger.info(
-                    "CHAT-000061 thread_task_start thread=\(String(id.uuidString.prefix(8))) marker=\(markedBeforeTake)",
-                    module: .general
-                )
                 let hospitalInitialMessages = stateStore.takeHospitalInitialMessages(for: id)
-                logger.info(
-                    "CHAT-000061 initial_messages_taken thread=\(String(id.uuidString.prefix(8))) present=\(hospitalInitialMessages != nil) count=\(hospitalInitialMessages?.count ?? 0)",
-                    module: .general
-                )
                 listViewModel.selectThread(id)
                 // CHAT-000058：本地 scope 命中的医院线程使用单项锁定目录；
                 // 普通目录刷新不得修正其草稿选中态与线程模型（目录完全隔离，C-019）。
@@ -758,28 +749,12 @@ struct ChatView: View {
                     lockBottomViewport: true,
                     syncRemote: hospitalInitialMessages == nil
                 )
-                logger.info(
-                    "CHAT-000061 local_messages_loaded thread=\(String(id.uuidString.prefix(8))) count=\(stateStore.persistedMessages(for: id).count) sync_remote=\(hospitalInitialMessages == nil)",
-                    module: .general
-                )
                 if let hospitalInitialMessages {
-                    logger.info(
-                        "CHAT-000061 initial_messages_apply_start thread=\(String(id.uuidString.prefix(8))) count=\(hospitalInitialMessages.count)",
-                        module: .general
-                    )
-                    // CHAT-000061：纳入当前 `.task(id:)` 的结构化初始化顺序。
+                    // 纳入当前 `.task(id:)` 的结构化初始化顺序。
                     // 初始消息入站并显式重读完成后再继续 scope/context 初始化，
                     // 避免嵌套 Task 在页面切换或生命周期变化时停在 apply_start。
                     await detailViewModel.applyHospitalInitialMessages(hospitalInitialMessages, threadID: id)
-                    logger.info(
-                        "CHAT-000061 initial_messages_apply_end thread=\(String(id.uuidString.prefix(8))) local_count=\(stateStore.persistedMessages(for: id).count)",
-                        module: .general
-                    )
                 }
-                logger.info(
-                    "CHAT-000061 thread_task_after_local_load thread=\(String(id.uuidString.prefix(8))) count=\(stateStore.persistedMessages(for: id).count)",
-                    module: .general
-                )
                 // CHAT-000054：先完成医院会话身份判定（本地 scope → 服务端 context 回源），
                 // 再决定引导卡/修复/新建继承副作用，避免重装后医院会话被降级为普通会话。
                 let scopeResolution = await resolveHospitalScope(for: id)
