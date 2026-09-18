@@ -46,6 +46,7 @@ struct ChatSwiftUIConversationView: View {
     let scrollToBottomRequestGeneration: UInt64
     /// 引导卡片滑块 → 健康首页 destination（CHAT-000025）；nil 时滑块降级为纯展示。
     var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
+    var doctorProfileNavigation: ChatDoctorProfileNavigationContext? = nil
 
     @StateObject private var refreshCoordinator: ConversationMessageListRefreshCoordinator
     @StateObject private var streamBuffer = ChatSwiftUIStreamEventBuffer()
@@ -81,7 +82,8 @@ struct ChatSwiftUIConversationView: View {
         isLoadingMoreMessages: Bool,
         lockBottomViewport: Bool,
         scrollToBottomRequestGeneration: UInt64,
-        guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
+        guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil,
+        doctorProfileNavigation: ChatDoctorProfileNavigationContext? = nil
     ) {
         self.threadID = threadID
         self.stateStore = stateStore
@@ -104,6 +106,7 @@ struct ChatSwiftUIConversationView: View {
         self.lockBottomViewport = lockBottomViewport
         self.scrollToBottomRequestGeneration = scrollToBottomRequestGeneration
         self.guideHomeDestinationBuilder = guideHomeDestinationBuilder
+        self.doctorProfileNavigation = doctorProfileNavigation
         _refreshCoordinator = StateObject(
             wrappedValue: ConversationMessageListRefreshCoordinator(
                 threadID: threadID,
@@ -154,6 +157,7 @@ struct ChatSwiftUIConversationView: View {
                             taskManager: taskManager,
                             logger: logger,
                             guideHomeDestinationBuilder: guideHomeDestinationBuilder,
+                            doctorProfileNavigation: doctorProfileNavigation,
                             onHeightChangingUpdate: { update in
                                 update()
                             }
@@ -430,6 +434,7 @@ private struct ChatSwiftUIConversationMessageRow: View {
     let taskManager: TaskManager
     let logger: Logger
     var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
+    var doctorProfileNavigation: ChatDoctorProfileNavigationContext? = nil
     let onHeightChangingUpdate: (@escaping () -> Void) -> Void
 
     var body: some View {
@@ -451,6 +456,7 @@ private struct ChatSwiftUIConversationMessageRow: View {
             taskManager: taskManager,
             logger: logger,
             guideHomeDestinationBuilder: guideHomeDestinationBuilder,
+            doctorProfileNavigation: doctorProfileNavigation,
             onHeightChangingUpdate: onHeightChangingUpdate
         )
         .transaction { transaction in

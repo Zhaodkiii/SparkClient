@@ -27,6 +27,8 @@ struct ChatConversationMessageRow: View {
     let logger: Logger
     /// 引导卡片滑块 → 健康首页 destination（CHAT-000025）；nil 时滑块降级为纯展示。
     var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
+    /// 医院会话：真人医生头像点击进入医生简介详情。
+    var doctorProfileNavigation: ChatDoctorProfileNavigationContext? = nil
     let onHeightChangingUpdate: (@escaping () -> Void) -> Void
 
     private var messageActionUseCase: any ChatMessageActionUseCase {
@@ -63,7 +65,12 @@ struct ChatConversationMessageRow: View {
 
     private func doctorMessageColumn(displayName: String, avatarURL: String?) -> some View {
         HStack(alignment: .top, spacing: 8) {
-            ChatDoctorAvatarView(displayName: displayName, avatarURL: avatarURL, size: 40)
+            ChatDoctorAvatarView(
+                displayName: displayName,
+                avatarURL: avatarURL,
+                size: 40,
+                profileNavigation: isDoctorMessage ? doctorProfileNavigation : nil
+            )
             VStack(alignment: .leading, spacing: 4) {
                 Text(displayName)
                     .font(.caption)

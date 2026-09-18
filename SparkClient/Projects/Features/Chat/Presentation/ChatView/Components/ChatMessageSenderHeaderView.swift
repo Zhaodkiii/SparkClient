@@ -75,13 +75,41 @@ struct ChatMessageSenderHeaderView: View {
     }
 }
 
+/// 医院会话内点击真人医生头像进入简介详情（与简介卡 `NavigationLink` 目标一致）。
+struct ChatDoctorProfileNavigationContext: Equatable, Sendable {
+    let agentID: UUID
+    let hospitalName: String
+    var accountID: Int64? = nil
+}
+
 /// 真人医生头像：圆角方图；无 URL 时用姓氏字。加载复用通用文件缓存并按比例保留上半部分。
 struct ChatDoctorAvatarView: View {
     let displayName: String
     let avatarURL: String?
     var size: CGFloat = 40
+    var profileNavigation: ChatDoctorProfileNavigationContext? = nil
 
     var body: some View {
+        if let profileNavigation {
+            NavigationLink {
+                DoctorLightProfileView(
+                    agentID: profileNavigation.agentID,
+                    hospitalName: profileNavigation.hospitalName,
+                    consultActionTitle: "咨询医生智能体",
+                    onConsult: {},
+                    accountID: profileNavigation.accountID
+                )
+            } label: {
+                avatarImage
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("查看\(displayName)医生简介")
+        } else {
+            avatarImage
+        }
+    }
+
+    private var avatarImage: some View {
         HospitalAvatarImageView(
             urlString: avatarURL ?? "",
             size: size,

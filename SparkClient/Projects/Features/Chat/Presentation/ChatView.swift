@@ -993,6 +993,29 @@ struct ChatView: View {
         )
     }
     
+    /// 医院 / 线上问诊会话：真人医生头像跳转简介详情（agent 来自 scope，医院名优先简介卡快照）。
+    private var doctorProfileNavigation: ChatDoctorProfileNavigationContext? {
+        guard case .hospital(let scope) = hospitalScopeResolution else { return nil }
+        return ChatDoctorProfileNavigationContext(
+            agentID: scope.agentID,
+            hospitalName: hospitalNameFromIntroCard(in: visibleMessages) ?? "",
+            accountID: listViewModel.signedInAccountID
+        )
+    }
+
+    private func hospitalNameFromIntroCard(in messages: [ChatMessage]) -> String? {
+        for message in messages {
+            for block in message.blocks {
+                guard case .hospitalDoctorIntroCard(let payload) = block.payload else { continue }
+                let name = payload.doctor.hospitalName.trimmingCharacters(in: .whitespacesAndNewlines)
+                if name.isEmpty == false {
+                    return name
+                }
+            }
+        }
+        return nil
+    }
+
     @ViewBuilder
     private var messageList: some View {
         switch aiSettingsViewModel.snapshot.chatConversationUIPreferences.architecture {
@@ -1017,7 +1040,8 @@ struct ChatView: View {
                 isLoadingMoreMessages: isLoadingMoreMessages,
                 lockBottomViewport: stateStore.isBottomViewportLocked(for: currentThreadID),
                 scrollToBottomRequestGeneration: stateStore.scrollToBottomRequestGeneration(for: currentThreadID),
-                guideHomeDestinationBuilder: guideHomeDestinationBuilder
+                guideHomeDestinationBuilder: guideHomeDestinationBuilder,
+                doctorProfileNavigation: doctorProfileNavigation
             )
         case .swiftUI:
             ChatSwiftUIConversationView(
@@ -1041,7 +1065,8 @@ struct ChatView: View {
                 isLoadingMoreMessages: isLoadingMoreMessages,
                 lockBottomViewport: stateStore.isBottomViewportLocked(for: currentThreadID),
                 scrollToBottomRequestGeneration: stateStore.scrollToBottomRequestGeneration(for: currentThreadID),
-                guideHomeDestinationBuilder: guideHomeDestinationBuilder
+                guideHomeDestinationBuilder: guideHomeDestinationBuilder,
+                doctorProfileNavigation: doctorProfileNavigation
             )
         }
     }
@@ -1932,6 +1957,7 @@ private struct ChatConversationMessageListContainer: View {
     let lockBottomViewport: Bool
     let scrollToBottomRequestGeneration: UInt64
     var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
+    var doctorProfileNavigation: ChatDoctorProfileNavigationContext? = nil
     
     @StateObject private var refreshCoordinator: ConversationMessageListRefreshCoordinator
     
@@ -1955,7 +1981,8 @@ private struct ChatConversationMessageListContainer: View {
         isLoadingMoreMessages: Bool,
         lockBottomViewport: Bool,
         scrollToBottomRequestGeneration: UInt64,
-        guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
+        guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil,
+        doctorProfileNavigation: ChatDoctorProfileNavigationContext? = nil
     ) {
         self.threadID = threadID
         self.stateStore = stateStore
@@ -1977,6 +2004,7 @@ private struct ChatConversationMessageListContainer: View {
         self.lockBottomViewport = lockBottomViewport
         self.scrollToBottomRequestGeneration = scrollToBottomRequestGeneration
         self.guideHomeDestinationBuilder = guideHomeDestinationBuilder
+        self.doctorProfileNavigation = doctorProfileNavigation
         _refreshCoordinator = StateObject(
             wrappedValue: ConversationMessageListRefreshCoordinator(
                 threadID: threadID,
@@ -2007,6 +2035,7 @@ private struct ChatConversationMessageListContainer: View {
             lockBottomViewport: lockBottomViewport,
             scrollToBottomRequestGeneration: scrollToBottomRequestGeneration,
             guideHomeDestinationBuilder: guideHomeDestinationBuilder,
+            doctorProfileNavigation: doctorProfileNavigation,
             onCommand: { command in
                 switch command {
                 case .loadMore:
