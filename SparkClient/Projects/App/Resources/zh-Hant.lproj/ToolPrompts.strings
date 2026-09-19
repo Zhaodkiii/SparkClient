@@ -184,3 +184,12 @@
 "tool.param.ask_user_option_item" = "選項文案。";
 "tool.param.ask_user_selection_mode" = "single 或 multiple。";
 "tool.param.ask_user_allows_other" = "是否允許使用者錄入其他答案。";
+"tool.summary.collect_symptoms" = "預設不要呼叫。只有使用者在目前最新訊息中主動、明確陳述本人或其正在諮詢成員正在發生的具體身體不適，而且繼續追問症狀細節確有必要時，才可開始症狀採集。例如『我頭暈兩天了』、『孩子今天發燒』可以呼叫。『你好』、『你能做什麼』、『頭暈是什麼原因』、『怎麼預防感冒』等問候、閒聊、能力詢問、知識諮詢或疾病科普必須正常文字回覆，不得呼叫。表達含糊時先用普通文字回應，不要用本工具試探。不得根據歷史訊息、成員資料或模型推測自行編造主訴。工具只負責採集、補全並讓使用者確認一個主訴及伴隨症狀，不做診斷、分流或治療建議。action 使用 start、ask、review；欄位、問題與選項由模型動態宣告。每次呼叫必須只生成一個問題，使用者提交後再呼叫本工具生成下一個問題。不得讀取或寫入長期健康檔案。";
+"tool.param.collect_symptoms_action" = "症狀採集動作：start、ask 或 review。";
+"tool.param.collect_symptoms_primary_complaint" = "本次採集唯一主訴。";
+"tool.param.collect_symptoms_collection_id" = "同一次採集的穩定 ID。";
+"tool.param.collect_symptoms_snapshot_json" = "目前採集快照 JSON。";
+"tool.param.collect_symptoms_required_fields" = "模型宣告的必填欄位陣列。";
+"tool.param.collect_symptoms_field_item" = "症狀欄位名稱。";
+"tool.param.collect_symptoms_questions" = "本輪必須且只能生成 1 個問題，包含 2 至 8 個選項；使用者提交後下一輪再生成下一個問題。";
+"tool.param.collect_symptoms_question_item" = "包含 id、question、field_key、options、selection_mode、allows_other 的問題物件。";

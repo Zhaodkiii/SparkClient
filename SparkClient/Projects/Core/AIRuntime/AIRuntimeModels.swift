@@ -124,6 +124,8 @@ final class AIRuntimeToolProperty: Codable, @unchecked Sendable {
     let objectProperties: [String: AIRuntimeToolProperty]?  // 对象嵌套属性
     let objectRequired: [String]?              // 对象必填字段
     let arrayItems: AIRuntimeToolProperty?     // 数组元素类型
+    let minItems: Int?                         // 数组最少元素数
+    let maxItems: Int?                         // 数组最多元素数
 
     /// 构造方法
     init(
@@ -133,7 +135,9 @@ final class AIRuntimeToolProperty: Codable, @unchecked Sendable {
         format: String? = nil,
         objectProperties: [String: AIRuntimeToolProperty]? = nil,
         objectRequired: [String]? = nil,
-        arrayItems: AIRuntimeToolProperty? = nil
+        arrayItems: AIRuntimeToolProperty? = nil,
+        minItems: Int? = nil,
+        maxItems: Int? = nil
     ) {
         self.type = type
         self.description = description
@@ -142,6 +146,8 @@ final class AIRuntimeToolProperty: Codable, @unchecked Sendable {
         self.objectProperties = objectProperties
         self.objectRequired = objectRequired
         self.arrayItems = arrayItems
+        self.minItems = minItems
+        self.maxItems = maxItems
     }
 
     /// JSON 编码键（映射后端字段名）
@@ -156,6 +162,8 @@ final class AIRuntimeToolProperty: Codable, @unchecked Sendable {
         objectProperties = try c.decodeIfPresent([String: AIRuntimeToolProperty].self, forKey: .key("properties"))
         objectRequired = try c.decodeIfPresent([String].self, forKey: .key("required"))
         arrayItems = try c.decodeIfPresent(AIRuntimeToolProperty.self, forKey: .key("items"))
+        minItems = try c.decodeIfPresent(Int.self, forKey: .key("minItems"))
+        maxItems = try c.decodeIfPresent(Int.self, forKey: .key("maxItems"))
     }
 
     /// 自定义编码
@@ -168,6 +176,8 @@ final class AIRuntimeToolProperty: Codable, @unchecked Sendable {
         try c.encodeIfPresent(objectProperties, forKey: .key("properties"))
         try c.encodeIfPresent(objectRequired, forKey: .key("required"))
         try c.encodeIfPresent(arrayItems, forKey: .key("items"))
+        try c.encodeIfPresent(minItems, forKey: .key("minItems"))
+        try c.encodeIfPresent(maxItems, forKey: .key("maxItems"))
     }
 }
 
@@ -181,6 +191,8 @@ extension AIRuntimeToolProperty: Equatable {
             && lhs.objectProperties == rhs.objectProperties
             && lhs.objectRequired == rhs.objectRequired
             && lhs.arrayItems == rhs.arrayItems
+            && lhs.minItems == rhs.minItems
+            && lhs.maxItems == rhs.maxItems
     }
 }
 
@@ -197,6 +209,7 @@ nonisolated struct AIRuntimeToolDefinition: Codable, Equatable, Sendable {
 /// 工具调用选择策略
 nonisolated enum AIRuntimeToolChoice: String, Codable, Sendable {
     case auto      // 自动判断是否调用
+    case required  // 本轮必须调用已提供工具中的一个
     case none      // 不使用任何工具
 }
 

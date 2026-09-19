@@ -75,6 +75,54 @@ enum SparkLogger {
         sparkLogHandlerStorage.value(level, module, message)
     }
 
+    /// Unified Logging / Xcode 控制台会把超长单条日志截成 `<…>`（约 32KB）。
+    /// 调试完整转储时按 UTF-8 分片走 `print`，避免 JSON 中途被截断。
+    nonisolated static func debugUntruncated(_ message: String, module: LogModule) {
+        guard isEnabled(.debug) else { return }
+        let chunks = utf8Chunks(message, maxBytes: untruncatedChunkUTF8Bytes)
+        sparkLogHandlerStorage.value(
+            .debug,
+            module,
+            "完整调试输出 chars=\(message.count) parts=\(chunks.count)"
+        )
+        if chunks.count <= 1 {
+            print(message)
+            return
+        }
+        let total = chunks.count
+        for (index, chunk) in chunks.enumerated() {
+            print("[\(index + 1)/\(total)]\n\(chunk)")
+        }
+    }
+
+    /// 单片低于 os.Logger 动态字符串约 1024 字符的截断阈值，并给日志前缀留余量。
+    nonisolated fileprivate static let untruncatedChunkUTF8Bytes = 900
+
+    nonisolated private static func utf8Chunks(_ text: String, maxBytes: Int) -> [String] {
+        precondition(maxBytes > 0)
+        let bytes = Array(text.utf8)
+        guard bytes.count > maxBytes else { return [text] }
+        var chunks: [String] = []
+        var offset = 0
+        while offset < bytes.count {
+            var end = min(offset + maxBytes, bytes.count)
+            if end < bytes.count {
+                while end > offset, bytes[end] & 0b1100_0000 == 0b1000_0000 {
+                    end -= 1
+                }
+            }
+            if end == offset {
+                end = min(offset + 4, bytes.count)
+                while end < bytes.count, bytes[end] & 0b1100_0000 == 0b1000_0000 {
+                    end += 1
+                }
+            }
+            chunks.append(String(decoding: bytes[offset..<end], as: UTF8.self))
+            offset = end
+        }
+        return chunks
+    }
+
     nonisolated fileprivate static func defaultHandler(
         level: LogLevel,
         module: LogModule,
@@ -122,6 +170,11 @@ nonisolated extension Logger {
 
     func debug(_ message: String) {
         debug(message, module: .general)
+    }
+
+    /// 完整输出超长调试文本；普通 `debug` 经 os.Logger 时会被截成 `<…>`。
+    func debugUntruncated(_ message: String, module: LogModule) {
+        SparkLogger.debugUntruncated(message, module: module)
     }
 
     func info(_ message: String) {

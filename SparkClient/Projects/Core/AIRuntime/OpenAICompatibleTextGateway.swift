@@ -445,7 +445,10 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
                     accumulated.id = id
                 }
                 if let name = item.function?.name, name.isEmpty == false {
-                    accumulated.name = name
+                    accumulated.name = Self.mergeToolNameFragment(
+                        current: accumulated.name,
+                        fragment: name
+                    )
                 }
                 if let arguments = item.function?.arguments, arguments.isEmpty == false {
                     accumulated.arguments.append(arguments)
@@ -468,6 +471,15 @@ final class OpenAICompatibleTextGateway: AIRuntimeGateway, @unchecked Sendable {
         if let reason = choice.finishReason, reason.isEmpty == false {
             finishReason = reason
         }
+    }
+
+    /// OpenAI 兼容供应商可能一次返回完整名称、返回累计名称，或把名称拆成多个增量片段。
+    private static func mergeToolNameFragment(current: String, fragment: String) -> String {
+        guard fragment.isEmpty == false else { return current }
+        guard current.isEmpty == false else { return fragment }
+        if fragment == current || current.hasSuffix(fragment) { return current }
+        if fragment.hasPrefix(current) { return fragment }
+        return current + fragment
     }
 
     /// 解析成功的响应数据（兼容包装格式和原生格式）

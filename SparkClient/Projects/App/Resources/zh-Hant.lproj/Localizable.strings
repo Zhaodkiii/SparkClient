@@ -278,3 +278,6 @@
 "api_error.reason.account_banned" = "您的帳號因違規行為已觸犯用戶協議，已被系統永久禁止登入。如有疑問請聯繫客服處理。";
 "api_error.code.40371" = "您的帳號因違規行為已觸犯用戶協議，已被系統永久禁止登入。如有疑問請聯繫客服處理。";
 "api_error.msg.user_inactive" = "當前帳號已停用，請聯繫管理員。";
+"ai_settings.tool_groups.medical" = "醫療輔助類";
+"ai_settings.tool_groups.medical.description" = "負責在目前對話中採集、補全與確認症狀資訊";
+"ai_settings.tools.collect_symptoms" = "症狀採集";

@@ -34,6 +34,8 @@ enum AppRoute: Hashable, Sendable {
     case hospitalAgentDirectory(departmentID: UUID?)
     /// 线上问诊流程入口（科室选择页）；focus 决定落在「全部科室」还是「最近问诊」。
     case hospitalConsultation(HospitalConsultationFocus)
+    /// 演示挂号预约：仅查询医院目录和医生，不向服务端创建预约单。
+    case hospitalRegistration
     /// 线上问诊 - 医生选择页（指定医院 + 科室）。
     case hospitalDoctorSelect(hospitalID: UUID, departmentID: UUID)
     /// 线上问诊 - 问诊材料填写页（指定医生智能体）。
@@ -55,7 +57,7 @@ enum AppRoute: Hashable, Sendable {
             return .popularScience
         case .settings, .aiSettings, .accountManagement:
             return .settings
-        case .hospitalHome, .hospitalAgentDirectory, .hospitalConsultation, .hospitalDoctorSelect, .hospitalConsultForm:
+        case .hospitalHome, .hospitalAgentDirectory, .hospitalConsultation, .hospitalRegistration, .hospitalDoctorSelect, .hospitalConsultForm:
             return .hospital
         }
     }
@@ -64,7 +66,7 @@ enum AppRoute: Hashable, Sendable {
         switch self {
         case .home, .knowledge, .nutrition, .fitness, .chatList, .popularScience, .settings, .hospitalHome:
             return true
-        case .chatThread, .automaticChatThread, .popularScienceArticle, .aiSettings, .accountManagement, .homeMedicalList, .homeFamilyMedicineCabinet, .taskDetail, .hospitalAgentDirectory, .hospitalConsultation, .hospitalDoctorSelect, .hospitalConsultForm:
+        case .chatThread, .automaticChatThread, .popularScienceArticle, .aiSettings, .accountManagement, .homeMedicalList, .homeFamilyMedicineCabinet, .taskDetail, .hospitalAgentDirectory, .hospitalConsultation, .hospitalRegistration, .hospitalDoctorSelect, .hospitalConsultForm:
             return false
         }
     }

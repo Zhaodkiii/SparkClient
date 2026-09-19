@@ -215,6 +215,7 @@ struct ChatOrchestrator: Sendable {
         let maxToolRounds = 30 // 最大工具调用轮次
         var round = 0
         var executedTools: [ToolExecutionResult] = []
+        var symptomContinuationNoProgressRounds = 0
 
         // MARK: - AI + 工具 多轮循环（最多30轮）
         while round < maxToolRounds {
@@ -230,8 +231,56 @@ struct ChatOrchestrator: Sendable {
                 )
             }
             let promptMessageTokenEstimate = Self.estimateTokens(for: loopMessages)
+            let mustContinueSymptomCollection = symptomCollectionRequiresContinuation(executedTools)
+            if mustContinueSymptomCollection {
+                // 只有模型已经实际进入症状采集且工具返回需要继续时，才强制续采集。
+                // 普通医生对话始终保留完整工具集，由模型自主决定是否进入症状采集。
+                activeToolDefinitions = baseToolDefinitions.filter {
+                    $0.name == SparkToolName.collectSymptoms.rawValue
+                }
+                activeToolChoice = activeToolDefinitions.isEmpty ? .none : .required
+            } else {
+                activeToolDefinitions = baseToolDefinitions
+                activeToolChoice = inference.useTools && baseToolDefinitions.isEmpty == false ? .auto : .none
+            }
             let promptToolTokenEstimate = Self.estimateTokens(for: activeToolDefinitions)
             let promptTokenEstimate = promptMessageTokenEstimate + promptToolTokenEstimate
+            let effectivePartialHandler: (@Sendable (ChatAssistantPartialDelta) async -> Void)?
+            if let onPartial {
+                let operationalText = localizedToolOperationText(
+                    toolName: SparkToolName.collectSymptoms.rawValue,
+                    detail: nil
+                )
+                let operationalToolCallID = "symptom-collection-processing"
+                let operationalDelta = ChatAssistantPartialDelta(
+                    answer: "",
+                    reasoning: nil,
+                    kind: .tool,
+                    toolName: SparkToolName.collectSymptoms.rawValue,
+                    toolContent: operationalText,
+                    toolArguments: nil,
+                    toolInvocationArguments: nil,
+                    toolCallID: operationalToolCallID
+                )
+
+                if mustContinueSymptomCollection {
+                    // 已进入采集续接阶段时，先插入稳定运行态，避免模型响应较慢时界面空白。
+                    await onPartial(operationalDelta)
+                }
+                effectivePartialHandler = { delta in
+                    let isCollectSymptomsTool = delta.kind == .tool
+                        && Self.normalizeToolName(delta.toolName ?? "")
+                            == Self.normalizeToolName(SparkToolName.collectSymptoms.rawValue)
+                    if isCollectSymptomsTool || mustContinueSymptomCollection {
+                        // 症状采集只展示运行态，不向消息暴露模型正文、思考链、工具参数或结果 JSON。
+                        await onPartial(operationalDelta)
+                    } else {
+                        await onPartial(delta)
+                    }
+                }
+            } else {
+                effectivePartialHandler = onPartial
+            }
             do {
                 // MARK: 核心：调用AI模型流式生成
                 collected = try await collectRuntimeResponse(
@@ -252,7 +301,7 @@ struct ChatOrchestrator: Sendable {
                         )
                     ),
                     cancellationToken: cancellationToken,
-                    onPartial: onPartial
+                    onPartial: effectivePartialHandler
                 )
             } catch {
                 logger.error("AI 推理路径失败：\(error.localizedDescription)", module: .aiConfig)
@@ -278,6 +327,19 @@ struct ChatOrchestrator: Sendable {
 
             // MARK: - AI 不调用工具 → 直接返回文本结果
             if response.hasToolCalls == false {
+                if mustContinueSymptomCollection {
+                    symptomContinuationNoProgressRounds += 1
+                    if symptomContinuationNoProgressRounds >= 2 {
+                        return symptomCollectionStalledOutput()
+                    }
+                    loopMessages.append(
+                        AIRuntimeMessage(
+                            role: .system,
+                            content: "症状采集仍有未完成字段。不得在普通文本中提问；现在必须调用 collect_symptoms，并按上一条工具结果的 next_action 继续。"
+                        )
+                    )
+                    continue
+                }
                 let text = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 if text.isEmpty {
                     logger.warning("AI 返回空文本，转为可见错误气泡", module: .aiConfig)
@@ -376,15 +438,20 @@ struct ChatOrchestrator: Sendable {
                 )
             )
             try cancellationToken?.checkCancellation()
+            let executedToolCountAtRoundStart = executedTools.count
 
             for call in toolCallsToExecute {
                 try cancellationToken?.checkCancellation()
 
+                let canonicalCallName = activeToolDefinitions.first(where: {
+                    Self.normalizeToolName($0.name) == Self.normalizeToolName(call.name)
+                })?.name ?? call.name
+
                 if let allowed = inference.allowedToolNames {
                     let normalizedAllowed = Set(allowed.map(Self.normalizeToolName))
-                    if normalizedAllowed.contains(Self.normalizeToolName(call.name)) == false {
+                    if normalizedAllowed.contains(Self.normalizeToolName(canonicalCallName)) == false {
                         logger.warning(
-                            "tool_call.denied_by_policy tool=\(call.name), round=\(round), callID=\(call.id)",
+                            "tool_call.denied_by_policy tool=\(call.name), canonical=\(canonicalCallName), round=\(round), callID=\(call.id)",
                             module: .aiConfig
                         )
                         loopMessages.append(
@@ -392,7 +459,7 @@ struct ChatOrchestrator: Sendable {
                                 role: .tool,
                                 content: "Tool '\(call.name)' is not available in this turn.",
                                 toolCallID: call.id,
-                                name: call.name
+                                name: canonicalCallName
                             )
                         )
                         continue
@@ -406,23 +473,25 @@ struct ChatOrchestrator: Sendable {
                         assistantClientMessageID: assistantID,
                         callIndex: round,
                         toolCallID: call.id,
-                        toolName: call.name
+                        toolName: canonicalCallName
                     )
                 }
-                await emitToolPartial(
-                    answer: roundAnswer,
-                    reasoning: roundReasoning,
-                    toolName: call.name,
-                    toolCallID: call.id,
-                    toolArguments: trimmedToolCallArguments(call.arguments),
-                    toolInvocationArguments: parsedCallArguments.isEmpty ? nil : parsedCallArguments,
-                    detail: trimmedToolCallArguments(call.arguments),
-                    onPartial: onPartial
-                )
+                if Self.normalizeToolName(canonicalCallName) != Self.normalizeToolName(SparkToolName.collectSymptoms.rawValue) {
+                    await emitToolPartial(
+                        answer: roundAnswer,
+                        reasoning: roundReasoning,
+                        toolName: canonicalCallName,
+                        toolCallID: call.id,
+                        toolArguments: trimmedToolCallArguments(call.arguments),
+                        toolInvocationArguments: parsedCallArguments.isEmpty ? nil : parsedCallArguments,
+                        detail: trimmedToolCallArguments(call.arguments),
+                        onPartial: onPartial
+                    )
+                }
 
                 // MARK: 执行工具
                 let toolResult = await toolHub.executeToolCall(
-                    name: call.name,
+                    name: canonicalCallName,
                     arguments: call.arguments,
                     memberID: loopMemberID,
                     threadID: threadID,
@@ -439,25 +508,27 @@ struct ChatOrchestrator: Sendable {
                         assistantClientMessageID: assistantID,
                         callIndex: round,
                         toolCallID: call.id,
-                        toolName: call.name,
+                        toolName: canonicalCallName,
                         resultText: toolResult.outputText
                     )
                 }
 
                 // 工具执行完成 → 前端显示「参数 + 输出」，供气泡与工具详情 Sheet 共用
-                await emitToolPartial(
-                    answer: roundAnswer,
-                    reasoning: roundReasoning,
-                    toolName: call.name,
-                    toolCallID: call.id,
-                    toolArguments: trimmedToolCallArguments(call.arguments),
-                    toolInvocationArguments: resolvedToolInvocationArguments(
-                        toolResult: toolResult,
-                        callArguments: call.arguments
-                    ),
-                    detail: toolCallDetail(arguments: call.arguments, output: toolResult.outputText),
-                    onPartial: onPartial
-                )
+                if Self.normalizeToolName(canonicalCallName) != Self.normalizeToolName(SparkToolName.collectSymptoms.rawValue) {
+                    await emitToolPartial(
+                        answer: roundAnswer,
+                        reasoning: roundReasoning,
+                        toolName: canonicalCallName,
+                        toolCallID: call.id,
+                        toolArguments: trimmedToolCallArguments(call.arguments),
+                        toolInvocationArguments: resolvedToolInvocationArguments(
+                            toolResult: toolResult,
+                            callArguments: call.arguments
+                        ),
+                        detail: toolCallDetail(arguments: call.arguments, output: toolResult.outputText),
+                        onPartial: onPartial
+                    )
+                }
 
                 if let messageRunActor, let assistantID = assistantMessageClientID {
                     let anchor = toolResult.anchorToolCallID ?? call.id
@@ -486,18 +557,23 @@ struct ChatOrchestrator: Sendable {
                         role: .tool,
                         content: toolResult.outputText,
                         toolCallID: call.id,
-                        name: call.name
+                        name: canonicalCallName
                     )
                 )
 
                 // 如果工具需要用户输入 → 暂停本轮生成，等待 UI 卡片提交
                 if toolResult.isAwaitingUserInput {
-                    let text = roundAnswer.isEmpty
-                        ? response.text.trimmingCharacters(in: .whitespacesAndNewlines)
-                        : roundAnswer
-                    let reasoning = roundReasoning ?? response.reasoningText?
-                        .trimmingCharacters(in: .whitespacesAndNewlines)
-                        .nilIfEmpty
+                    let isSymptomCollection = toolResult.toolName == SparkToolName.collectSymptoms.rawValue
+                    let text = isSymptomCollection
+                        ? ""
+                        : (roundAnswer.isEmpty
+                            ? response.text.trimmingCharacters(in: .whitespacesAndNewlines)
+                            : roundAnswer)
+                    let reasoning = isSymptomCollection
+                        ? nil
+                        : (roundReasoning ?? response.reasoningText?
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                            .nilIfEmpty)
                     return ChatOrchestratorOutput(
                         text: text,
                         reasoningText: reasoning,
@@ -514,6 +590,31 @@ struct ChatOrchestrator: Sendable {
                             executedTools: executedTools
                         )
                     )
+                }
+            }
+
+            if symptomCollectionWasConfirmed(executedTools) {
+                return ChatOrchestratorOutput(
+                    text: "",
+                    reasoningText: nil,
+                    reasoningDurationMs: collected.reasoningDurationMs,
+                    finishReason: "symptom_collection_completed",
+                    kind: .text,
+                    toolName: nil,
+                    toolContent: nil,
+                    blocks: []
+                )
+            }
+
+            if mustContinueSymptomCollection {
+                // 当前轮工具集已经被限制为 collect_symptoms；这里仍保留防御，
+                // 防止不兼容提供方无视 tool_choice 后无限消耗额度。
+                let didAdvance = executedTools.dropFirst(executedToolCountAtRoundStart).contains {
+                    Self.normalizeToolName($0.toolName) == Self.normalizeToolName(SparkToolName.collectSymptoms.rawValue)
+                }
+                symptomContinuationNoProgressRounds = didAdvance ? 0 : symptomContinuationNoProgressRounds + 1
+                if symptomContinuationNoProgressRounds >= 2 {
+                    return symptomCollectionStalledOutput()
                 }
             }
 
@@ -992,10 +1093,19 @@ struct ChatOrchestrator: Sendable {
         return definitions
     }
 
-    private static func normalizeToolName(_ value: String) -> String {
+    private nonisolated static func normalizeToolName(_ value: String) -> String {
         value
             .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\\_", with: "_")
             .lowercased()
+    }
+
+    private static func mergeToolNameFragment(current: String, fragment: String) -> String {
+        guard fragment.isEmpty == false else { return current }
+        guard current.isEmpty == false else { return fragment }
+        if fragment == current || current.hasSuffix(fragment) { return current }
+        if fragment.hasPrefix(current) { return fragment }
+        return current + fragment
     }
 
     private static func estimateTokens(for messages: [AIRuntimeMessage]) -> Int {
@@ -1124,7 +1234,11 @@ struct ChatOrchestrator: Sendable {
                     call = AIRuntimeToolCall(id: id, name: call.name, arguments: call.arguments)
                 }
                 if let name = delta.name, name.isEmpty == false {
-                    call = AIRuntimeToolCall(id: call.id, name: name, arguments: call.arguments)
+                    call = AIRuntimeToolCall(
+                        id: call.id,
+                        name: Self.mergeToolNameFragment(current: call.name, fragment: name),
+                        arguments: call.arguments
+                    )
                 }
                 if let argumentsDelta = delta.argumentsDelta, argumentsDelta.isEmpty == false {
                     call = AIRuntimeToolCall(id: call.id, name: call.name, arguments: call.arguments + argumentsDelta)
@@ -1190,12 +1304,14 @@ struct ChatOrchestrator: Sendable {
     }
 
     private func makeToolTrace(from results: [ToolExecutionResult]) -> (name: String, content: String)? {
-        guard results.isEmpty == false else { return nil }
-        let names = Array(Set(results.map(\.toolName)))
+        // 症状采集的 JSON 只服务于下一轮模型调用，不能作为普通工具结果显示给用户。
+        let visibleResults = results.filter { $0.toolName != SparkToolName.collectSymptoms.rawValue }
+        guard visibleResults.isEmpty == false else { return nil }
+        let names = Array(Set(visibleResults.map(\.toolName)))
             .map(localizedToolDisplayName(for:))
             .sorted()
             .joined(separator: ", ")
-        let content = results.enumerated().map { index, item in
+        let content = visibleResults.enumerated().map { index, item in
             """
             [\(index + 1)] \(localizedToolDisplayName(for: item.toolName))
             \(item.outputText)
@@ -1205,6 +1321,40 @@ struct ChatOrchestrator: Sendable {
         .trimmingCharacters(in: .whitespacesAndNewlines)
         guard content.isEmpty == false else { return nil }
         return (names, content)
+    }
+
+    private func symptomCollectionRequiresContinuation(_ results: [ToolExecutionResult]) -> Bool {
+        guard let result = results.last(where: { $0.toolName == SparkToolName.collectSymptoms.rawValue }),
+              let data = result.outputText.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return false
+        }
+        if let value = object["requiresContinuation"] as? Bool { return value }
+        if let value = object["requires_continuation"] as? Bool { return value }
+        return false
+    }
+
+    private func symptomCollectionWasConfirmed(_ results: [ToolExecutionResult]) -> Bool {
+        guard let result = results.last(where: { $0.toolName == SparkToolName.collectSymptoms.rawValue }),
+              let data = result.outputText.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return false
+        }
+        return object["confirmed"] as? Bool == true
+    }
+
+    private func symptomCollectionStalledOutput() -> ChatOrchestratorOutput {
+        logger.error("症状采集连续两轮未取得工具调用进展，已停止重试。", module: .aiConfig)
+        return ChatOrchestratorOutput(
+            text: "",
+            reasoningText: nil,
+            reasoningDurationMs: nil,
+            finishReason: "symptom_collection_stalled",
+            kind: .text,
+            toolName: nil,
+            toolContent: nil,
+            blocks: []
+        )
     }
 
     private func emitToolPartial(
@@ -1253,6 +1403,10 @@ struct ChatOrchestrator: Sendable {
         var blocks: [ChatMessageBlock] = []
 
         for result in executedTools {
+            if result.toolName == SparkToolName.collectSymptoms.rawValue {
+                // 症状采集由消息内主卡片和问题卡片承载，不能再次降级成普通工具文本。
+                continue
+            }
             let output = result.outputText.trimmingCharacters(in: .whitespacesAndNewlines)
             guard output.isEmpty == false else { continue }
             blocks.append(

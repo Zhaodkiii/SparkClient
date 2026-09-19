@@ -240,7 +240,9 @@ final class ToolInteractionCoordinator: ObservableObject {
         prompt: ToolQuestionPrompt,
         toolCallID: String? = nil
     ) async -> InteractionResult<ToolQuestionAnswer> {
-        if interactionPreferences.questionPresentationMode == .inlineCard,
+        // 症状采集的核心体验是消息内主卡片与逐轮问题卡片，不能因通用设置切到浮层后退化成普通文本。
+        let requiresInlineSymptomCard = prompt.toolName == SparkToolName.collectSymptoms.rawValue
+        if (interactionPreferences.questionPresentationMode == .inlineCard || requiresInlineSymptomCard),
            let inlineCardSink {
             return await requestInlineQuestionAnswer(
                 threadID: threadID,

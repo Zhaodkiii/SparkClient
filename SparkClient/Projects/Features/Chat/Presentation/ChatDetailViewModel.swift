@@ -51,6 +51,9 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
     private var currentGenerationCancellationToken: AIRuntimeCancellationToken?
     private var currentGenerationAssistantClientMessageID: UUID?
     private var finalizedInterruptedAssistantMessageIDs: Set<UUID> = []
+    /// 旧版本把症状汇总/问答卡当作仅本地数据。每个会话在本进程首次打开时补入一次
+    /// block_updates 队列，使既有卡片也能回填服务端；新产生的卡片在写入时直接同步。
+    private var symptomCardSyncBackfilledThreadIDs: Set<UUID> = []
     private var titleGenerationTasks: [UUID: Task<Void, Never>] = [:]
     private var titleGenerationGenerationByThreadID: [UUID: UInt64] = [:]
     private var cancellables = Set<AnyCancellable>()
@@ -220,12 +223,8 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
     }
 
     /// CHAT-000056 Q7：目标 thread 是否仍属于当前选中成员。
-    /// 医院会话按 memberID 归属隔离；普通会话（无 memberID）不受成员切换影响。
     private func isThreadVisibleUnderCurrentMember(_ threadID: UUID) -> Bool {
-        guard let memberID = stateStore.threadItems.first(where: { $0.id == threadID })?.thread.memberID else {
-            return true
-        }
-        return memberID == memberContextStore.context.selectedMemberID
+        stateStore.isThreadVisible(threadID, selectedMemberID: memberContextStore.context.selectedMemberID)
     }
 
     /// 打开工具输出详情全局 Sheet（与 consent/question 共用同一呈现队列）。
@@ -678,20 +677,6 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         }
     }
 
-    func setThreadImageDeliveryMode(_ mode: ChatThreadImageDeliveryMode, for threadID: UUID) async {
-        await chatRepository.updateThreadImageDeliveryMode(threadID: threadID, imageDeliveryModeRaw: mode.rawValue)
-        if let item = await loadChatThreadsUseCase.execute(threadID: threadID) {
-            await MainActor.run {
-                stateStore.upsertThreadListItem(item)
-                threadImageDeliveryMode = mode
-            }
-        } else {
-            await MainActor.run {
-                threadImageDeliveryMode = mode
-            }
-        }
-    }
-
     /// 用户显式切换当前对话绑定成员（CHAT-000029：默认绑定已前置到 thread 创建阶段，
     /// 此入口仅剩用户切换场景，允许触发科普问题重新生成）。
     func updateThreadMemberBinding(_ memberID: Int?, for threadID: UUID) async {
@@ -803,14 +788,6 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         )
     }
 
-    func notifyAskReportDuplicateInPreview() {
-        notificationClient.info(
-            L10n.text("chat.ask_report.toast.duplicate_in_preview"),
-            title: nil,
-            source: "chat.ask_report.duplicate_in_preview"
-        )
-    }
-
     func updateThreadGenerationSettings(_ settings: ChatThreadGenerationSettings, for threadID: UUID) async {
         guard let existing = await chatRepository.loadThread(id: threadID) else { return }
         let next = ChatThreadGenerationSettings(
@@ -883,6 +860,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
                 scrollToBottom: scrollToBottom
             )
         )
+        await enqueueLegacySymptomCardsForServerSyncIfNeeded(threadID: threadID)
         guard syncRemote else { return }
         Task { [weak self] in
             guard let self else { return }
@@ -897,34 +875,45 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         }
     }
 
-    /// 医院新建会话：把创建响应里的初始消息交给统一入站管线；空数组或失败时只 pull 一次。
+    private func enqueueLegacySymptomCardsForServerSyncIfNeeded(threadID: UUID) async {
+        guard symptomCardSyncBackfilledThreadIDs.insert(threadID).inserted else { return }
+        let candidates = stateStore.persistedMessages(for: threadID).flatMap { message in
+            message.blocks
+                .filter(\.isSymptomCollectionInteractionBlock)
+                .map { (message.clientMessageID, $0) }
+        }
+        guard candidates.isEmpty == false else { return }
+
+        var enqueued = 0
+        for (clientMessageID, block) in candidates {
+            if await chatRepository.upsertMessageBlock(
+                clientMessageID: clientMessageID,
+                block: block,
+                markPendingForSync: true
+            ) {
+                enqueued += 1
+            }
+        }
+        logger.info(
+            "旧版症状采集卡片已补入服务端同步队列，thread=\(shortID(threadID)), blocks=\(enqueued)",
+            module: .general
+        )
+    }
+
+    /// 医院新建会话：把创建响应里的初始消息交给统一入站管线后显式重读。
     func applyHospitalInitialMessages(_ messages: [ChatMessage], threadID: UUID) async {
-        if messages.isEmpty == false {
-            await chatSyncSupervisor.applyAlreadyFetchedMessages(
-                messages,
-                enqueueAttachmentDownloadJobs: false
+        guard messages.isEmpty == false else { return }
+        await chatSyncSupervisor.applyAlreadyFetchedMessages(
+            messages,
+            enqueueAttachmentDownloadJobs: false
+        )
+        await satisfyLoadRequest(
+            .openOrReloadNewest(
+                threadID: threadID,
+                lockBottomViewport: true,
+                scrollToBottom: true
             )
-            // 入站管线完成 Core Data upsert 后，显式重读当前 Thread。
-            // 不依赖数据库通知驱动 UI，避免新建医院会话首卡落库成功但 StateStore 仍为空。
-            await satisfyLoadRequest(
-                .openOrReloadNewest(
-                    threadID: threadID,
-                    lockBottomViewport: true,
-                    scrollToBottom: true
-                )
-            )
-            return
-        }
-        logger.warning("医院会话初始消息为空，回源拉取 thread=\(shortID(threadID))", module: .general)
-        do {
-            try await chatSyncSupervisor.pullThreadMessagesIncrementalOnOpen(threadID: threadID)
-        } catch {
-            if error is CancellationError { return }
-            logger.warning(
-                "医院会话初始消息兜底拉取失败，thread=\(shortID(threadID)), error=\(error.localizedDescription)",
-                module: .general
-            )
-        }
+        )
     }
 
     func loadMoreMessages(for threadID: UUID) async {
@@ -1211,7 +1200,8 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
             useKnowledgeBag: flags.useKnowledgeBag,
             useWebSearch: flags.useWebSearch,
             reasoningEnabled: flags.reasoningEnabled,
-            reasoningEffortTier: flags.reasoningEffortTier
+            reasoningEffortTier: flags.reasoningEffortTier,
+            allowedToolNames: nil
         )
 
         // 日志：开始发送对话
@@ -1938,6 +1928,50 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
             return false
         }
         let associationID = inlineToolAssociationID(toolCallID: toolCallID, completionID: completionID)
+        let questionOrderKey = nextInlineToolCardOrderKey(for: target)
+        var symptomBlockForTarget: ChatMessageBlock?
+        var didPersistSymptomCard = true
+        if prompt.toolName == SparkToolName.collectSymptoms.rawValue,
+           let snapshot = prompt.symptomSnapshot {
+            let symptomAssociationID = "symptom-\(snapshot.collectionID.uuidString)"
+            if let existing = await symptomCollectionCardLocation(
+                threadID: target.threadID,
+                collectionID: snapshot.collectionID
+            ) {
+                let updatedBlock = updatedSymptomCollectionBlock(existing.block, snapshot: snapshot)
+                if existing.message.clientMessageID == target.clientMessageID {
+                    symptomBlockForTarget = updatedBlock
+                } else {
+                    // 始终回写首次插入的汇总卡片，后续轮次不再复制新卡片。
+                    didPersistSymptomCard = await persistInlineToolInteractionBlock(
+                        threadID: target.threadID,
+                        message: existing.message,
+                        block: updatedBlock
+                    )
+                }
+            } else {
+                // 首轮先插入汇总卡片，再展示本轮问题卡片。
+                symptomBlockForTarget = ChatMessageBlock(
+                    id: ChatStableBlockID.rich(
+                        messageID: target.clientMessageID,
+                        toolCallID: symptomAssociationID,
+                        kind: .symptomCollectionCard
+                    ),
+                    anchor: .toolCall(symptomAssociationID),
+                    kind: .symptomCollectionCard,
+                    toolCallID: symptomAssociationID,
+                    parentToolCallID: associationID,
+                    nodeRole: .toolPresentation,
+                    symptomCollectionCard: ChatSymptomCollectionCard(
+                        snapshot: snapshot,
+                        status: symptomCardStatus(for: snapshot.status)
+                    ),
+                    orderKey: questionOrderKey - 50,
+                    createdAt: Date(),
+                    updatedAt: Date()
+                )
+            }
+        }
         let card = ChatToolQuestionCard(
             completionID: completionID,
             prompt: prompt
@@ -1954,12 +1988,21 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
             parentToolCallID: associationID,
             nodeRole: .toolPresentation,
             toolQuestionCards: [card],
-            orderKey: nextInlineToolCardOrderKey(for: target),
+            orderKey: questionOrderKey,
             createdAt: Date(),
             updatedAt: Date()
         )
-        await persistInlineToolInteractionBlock(threadID: target.threadID, message: target, block: block)
-        return true
+        var blocksForTarget: [ChatMessageBlock] = []
+        if let symptomBlockForTarget {
+            blocksForTarget.append(symptomBlockForTarget)
+        }
+        blocksForTarget.append(block)
+        let didPersistTarget = await persistInlineToolInteractionBlocks(
+            threadID: target.threadID,
+            message: target,
+            blocks: blocksForTarget
+        )
+        return didPersistSymptomCard && didPersistTarget
     }
 
     func presentInlineMemberSelectionCard(
@@ -2139,11 +2182,29 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         responses: [ToolQuestionResponse]
     ) async {
         guard card.status == .pending else { return }
+        if card.prompt.toolName == SparkToolName.collectSymptoms.rawValue,
+           card.prompt.symptomSnapshot == nil,
+           card.prompt.questions.count == 1,
+           card.prompt.questions.first?.fieldKey == "primary_complaint",
+           toolInteractionCoordinator.hasPendingInlineInteraction(completionID: card.completionID) == false {
+            await submitDoctorSymptomStarterCard(threadID: threadID, message: message, card: card, responses: responses)
+            return
+        }
         guard toolInteractionCoordinator.hasPendingInlineInteraction(completionID: card.completionID) else { return }
         let resultText = inlineToolQuestionResultText(
             questions: card.prompt.questions,
             responses: responses
         )
+        var mergedSymptomSnapshot: SymptomCollectionSnapshot?
+        if card.prompt.toolName == SparkToolName.collectSymptoms.rawValue,
+           let snapshot = card.prompt.symptomSnapshot {
+            mergedSymptomSnapshot = mergeSymptomSnapshot(
+                snapshot,
+                questions: card.prompt.questions,
+                responses: responses,
+                isReview: card.prompt.isSymptomReview
+            )
+        }
         guard let updatedBlocks = replacingInlineToolQuestionCard(
             in: message.blocks,
             cardID: card.id,
@@ -2154,15 +2215,184 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
                 $0.updatedAt = Date()
             }
         ) else { return }
-        guard let updatedBlock = updatedBlocks.first(where: {
+        guard let updatedQuestionBlock = updatedBlocks.first(where: {
             $0.toolQuestionCards.contains(where: { $0.id == card.id })
         }) else { return }
-        await persistInlineToolInteractionBlock(threadID: threadID, message: message, block: updatedBlock)
-        stateStore.updateMessages([message.replacingBlocks(updatedBlocks)], for: threadID)
+        var changedBlocks = [updatedQuestionBlock]
+        var externalSymptomUpdate: (message: ChatMessage, block: ChatMessageBlock)?
+        if let mergedSymptomSnapshot {
+            if let localBlock = message.blocks.first(where: {
+                $0.symptomCollectionCard?.snapshot.collectionID == mergedSymptomSnapshot.collectionID
+            }) {
+                changedBlocks.append(updatedSymptomCollectionBlock(localBlock, snapshot: mergedSymptomSnapshot))
+            } else if let existing = await symptomCollectionCardLocation(
+                threadID: threadID,
+                collectionID: mergedSymptomSnapshot.collectionID
+            ) {
+                externalSymptomUpdate = (
+                    existing.message,
+                    updatedSymptomCollectionBlock(existing.block, snapshot: mergedSymptomSnapshot)
+                )
+            }
+        }
+        let didPersist = await persistInlineToolInteractionBlocks(
+            threadID: threadID,
+            message: message,
+            blocks: changedBlocks
+        )
+        guard didPersist else { return }
+        if let externalSymptomUpdate {
+            guard await persistInlineToolInteractionBlock(
+                threadID: threadID,
+                message: externalSymptomUpdate.message,
+                block: externalSymptomUpdate.block
+            ) else { return }
+        }
         toolInteractionCoordinator.completeInlineQuestion(
             id: card.completionID,
             answer: ToolQuestionAnswer(responses: responses)
         )
+    }
+
+    private func submitDoctorSymptomStarterCard(
+        threadID: UUID,
+        message: ChatMessage,
+        card: ChatToolQuestionCard,
+        responses: [ToolQuestionResponse]
+    ) async {
+        guard let response = responses.first else { return }
+        let selectedText = card.prompt.questions[0].options
+            .filter { response.selectedOptionIDs.contains($0.id) }
+            .map(\.text)
+        let complaint = ([response.otherText].compactMap { $0 } + selectedText)
+            .joined(separator: "、")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard complaint.isEmpty == false else { return }
+        guard let updatedBlocks = replacingInlineToolQuestionCard(
+            in: message.blocks,
+            cardID: card.id,
+            mutate: {
+                $0.answers = responses
+                $0.status = .submitted
+                $0.resultText = "已提交症状，AI 将继续补充采集。"
+                $0.updatedAt = Date()
+            }
+        ), let updatedBlock = updatedBlocks.first(where: { block in
+            block.toolQuestionCards.contains(where: { $0.id == card.id })
+        }) else { return }
+        guard await persistInlineToolInteractionBlock(threadID: threadID, message: message, block: updatedBlock) else { return }
+        await sendCurrentDraft(
+            programmaticInput: complaint
+        )
+    }
+
+    private func mergeSymptomSnapshot(
+        _ snapshot: SymptomCollectionSnapshot,
+        questions: [ToolQuestionItem],
+        responses: [ToolQuestionResponse],
+        isReview: Bool
+    ) -> SymptomCollectionSnapshot {
+        var next = snapshot
+        var requestedEdit = false
+        for response in responses {
+            guard let question = questions.first(where: { $0.id == response.questionID }) else { continue }
+            if isReview || isSymptomReviewArtifact(question: question) {
+                let selectedTexts = question.options
+                    .filter { response.selectedOptionIDs.contains($0.id) }
+                    .map(\.text)
+                if response.selectedOptionIDs.contains("confirm") || selectedTexts.contains(where: { $0.contains("确认") || $0.contains("完成") }) {
+                    next.status = .completed
+                } else if response.selectedOptionIDs.contains("edit") || selectedTexts.contains(where: { $0.contains("修改") || $0.contains("返回") }) {
+                    next.status = .collecting
+                    requestedEdit = true
+                }
+                continue
+            }
+            let selected = question.options
+                .filter { response.selectedOptionIDs.contains($0.id) }
+                .map(\.text)
+            let other = response.otherText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let parts = selected + (other.isEmpty ? [] : [String(other.prefix(200))])
+            guard parts.isEmpty == false else { continue }
+            let value = parts.joined(separator: "、")
+            let key = question.fieldKey ?? question.id
+            next.values[key] = value
+            if key.localizedCaseInsensitiveContains("accompan") || key.localizedCaseInsensitiveContains("symptom") {
+                next.associatedSymptoms = parts
+            }
+        }
+        next.revision += 1
+        if next.status != .completed, requestedEdit == false {
+            next.status = next.isComplete ? .reviewing : .collecting
+        }
+        return next
+    }
+
+    private func isSymptomReviewArtifact(question: ToolQuestionItem) -> Bool {
+        let key = (question.fieldKey ?? question.id).lowercased().replacingOccurrences(of: "_", with: "")
+        if key.contains("confirm") || key.contains("review") || question.question.contains("确认") {
+            return true
+        }
+        return false
+    }
+
+    private func updatedSymptomCollectionBlock(
+        _ block: ChatMessageBlock,
+        snapshot: SymptomCollectionSnapshot
+    ) -> ChatMessageBlock {
+        block.replacingPayload(
+            .symptomCollectionCard(ChatSymptomCollectionCard(
+                id: block.symptomCollectionCard?.id ?? UUID(),
+                snapshot: snapshot,
+                status: symptomCardStatus(for: snapshot.status),
+                createdAt: block.symptomCollectionCard?.createdAt ?? block.createdAt,
+                updatedAt: Date()
+            )),
+            status: .ready,
+            revision: block.revision + 1,
+            updatedAt: Date()
+        )
+    }
+
+    /// 按采集 ID 定位首次插入的汇总卡片。当前列表未命中时再查完整会话，
+    /// 保证跨多轮 assistant 消息仍然只维护同一张卡片。
+    private func symptomCollectionCardLocation(
+        threadID: UUID,
+        collectionID: UUID
+    ) async -> (message: ChatMessage, block: ChatMessageBlock)? {
+        func locate(in messages: [ChatMessage]) -> (message: ChatMessage, block: ChatMessageBlock)? {
+            for message in messages {
+                if let block = message.blocks.first(where: {
+                    $0.symptomCollectionCard?.snapshot.collectionID == collectionID
+                }) {
+                    return (message, block)
+                }
+            }
+            return nil
+        }
+
+        if let local = locate(in: stateStore.persistedMessages(for: threadID)) {
+            return local
+        }
+        let persisted = await loadChatMessagesUseCase.execute(
+            threadID: threadID,
+            limit: nil,
+            before: nil
+        )
+        return locate(in: persisted)
+    }
+
+    private func symptomCardStatus(for status: SymptomCollectionSnapshot.Status) -> ChatInlineToolCardStatus {
+        switch status {
+        case .completed:
+            return .submitted
+        case .cancelled:
+            return .cancelled
+        case .expired:
+            return .expired
+        case .collecting, .reviewing:
+            return .pending
+        }
     }
 
     func submitInlineToolMemberSelectionCard(
@@ -2619,7 +2849,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
     private func inlineToolInteractionTargetMessage(threadID requestedThreadID: UUID?) async -> ChatMessage? {
         let threadID = requestedThreadID ?? stateStore.selectedThreadID
         guard let threadID else { return nil }
-        let messages = stateStore.conversationListItems(for: threadID)
+        let messages = stateStore.persistedMessages(for: threadID)
         if let currentGenerationAssistantClientMessageID,
            let message = messages.first(where: { $0.clientMessageID == currentGenerationAssistantClientMessageID }) {
             return message
@@ -2688,24 +2918,70 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         message: ChatMessage,
         block: ChatMessageBlock
     ) async -> Bool {
-        let updatedMessage = messageByAppendingOrReplacingBlock(block, to: message)
+        await persistInlineToolInteractionBlocks(threadID: threadID, message: message, blocks: [block])
+    }
+
+    @discardableResult
+    private func persistInlineToolInteractionBlocks(
+        threadID: UUID,
+        message: ChatMessage,
+        blocks: [ChatMessageBlock]
+    ) async -> Bool {
+        guard blocks.isEmpty == false else { return false }
+        let updatedMessage = blocks.reduce(message) { partial, block in
+            messageByAppendingOrReplacingBlock(block, to: partial)
+        }
         guard await ensureInlineToolInteractionMessageExists(updatedMessage) else { return false }
-        let didApply = await chatRepository.upsertMessageBlock(
-            clientMessageID: message.clientMessageID,
-            block: block,
-            markPendingForSync: true
-        )
-        if didApply {
-            if message.deliveryState != .sending {
+        var didApplyAny = false
+        for block in blocks {
+            let didApply = await chatRepository.upsertMessageBlock(
+                clientMessageID: message.clientMessageID,
+                block: block,
+                // 所有内联卡片都进入 block_updates。当前设备保留交互 continuation，
+                // 服务端和其他设备只恢复卡片快照，不恢复交互 continuation。
+                markPendingForSync: true
+            )
+            didApplyAny = didApplyAny || didApply
+        }
+        if didApplyAny {
+            // 父消息尚未拿到服务端 ID 时，整包入队；已有父消息时仅发送 block_updates，
+            // 避免每次选择答案都重传整条消息。
+            if message.serverMessageID == nil, message.deliveryState != .sending {
                 await chatRepository.updateMessageDeliveryState(
                     clientMessageID: message.clientMessageID,
                     state: .pending
                 )
             }
-            stateStore.updateMessages([updatedMessage], for: threadID)
+
+            // 落库后立即回读，避免 UI 只展示内存快照、实际数据库没有可供冷启动恢复的数据。
+            let persisted = await loadChatMessagesUseCase.execute(
+                clientMessageIDs: [message.clientMessageID]
+            )
+            guard let persistedMessage = persisted.first else {
+                logger.error(
+                    "内联工具交互卡片写入后回读失败，clientMessageID=\(message.clientMessageID.uuidString)",
+                    module: .aiConfig
+                )
+                return false
+            }
+            let persistedBlocksByID = Dictionary(
+                uniqueKeysWithValues: persistedMessage.blocks.map { ($0.id, $0) }
+            )
+            let missingBlocks = blocks.filter { block in
+                guard let persistedBlock = persistedBlocksByID[block.id] else { return true }
+                return persistedBlock.revision < block.revision
+            }
+            guard missingBlocks.isEmpty else {
+                logger.error(
+                    "内联工具交互卡片未完整落库，clientMessageID=\(message.clientMessageID.uuidString), missing=\(missingBlocks.map { $0.kind.rawValue }.joined(separator: ","))",
+                    module: .aiConfig
+                )
+                return false
+            }
+            stateStore.updateMessages([persistedMessage], for: threadID)
             stateStore.requestScrollToBottom(for: threadID)
         }
-        return didApply
+        return didApplyAny
     }
 
     private func replacingInlineToolQuestionCard(
@@ -2850,7 +3126,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
     }
 
     private func currentMessage(threadID: UUID, clientMessageID: UUID) async -> ChatMessage? {
-        if let local = stateStore.conversationListItems(for: threadID).first(where: { $0.clientMessageID == clientMessageID }) {
+        if let local = stateStore.persistedMessages(for: threadID).first(where: { $0.clientMessageID == clientMessageID }) {
             return local
         }
         return await loadChatMessagesUseCase.execute(clientMessageIDs: [clientMessageID]).first

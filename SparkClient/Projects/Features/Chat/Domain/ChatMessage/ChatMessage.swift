@@ -124,6 +124,8 @@ nonisolated enum ChatMessageBlockKind: String, Codable, Sendable {
     case pendingMemberToolCards
     /// 工具用户问答消息内卡片块
     case toolQuestionCards
+    /// 症状采集主卡（同一采集过程原位更新）
+    case symptomCollectionCard
     /// 工具成员选择消息内卡片块
     case toolMemberSelectionCards
     /// 健康资料候选选择消息内卡片块
@@ -267,6 +269,7 @@ nonisolated enum ChatMessageBlockPayload: Codable, Equatable, Sendable {
     case healthCards([ChatHealthCardPayload])
     case pendingMemberToolCards([PendingMemberToolCard])
     case toolQuestionCards([ChatToolQuestionCard])
+    case symptomCollectionCard(ChatSymptomCollectionCard)
     case toolMemberSelectionCards([ChatToolMemberSelectionCard])
     case healthResourceCandidateCards([ChatHealthResourceCandidateSelectionCard])
     case toolConsentCards([ChatToolConsentCard])
@@ -308,6 +311,7 @@ nonisolated enum ChatMessageBlockPayload: Codable, Equatable, Sendable {
         case .healthCards: return .healthCards
         case .pendingMemberToolCards: return .pendingMemberToolCards
         case .toolQuestionCards: return .toolQuestionCards
+        case .symptomCollectionCard: return .symptomCollectionCard
         case .toolMemberSelectionCards: return .toolMemberSelectionCards
         case .healthResourceCandidateCards: return .healthResourceCandidateCards
         case .toolConsentCards: return .toolConsentCards
@@ -434,6 +438,11 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
     nonisolated var toolQuestionCards: [ChatToolQuestionCard] {
         guard case .toolQuestionCards(let cards) = payload else { return [] }
         return cards
+    }
+
+    nonisolated var symptomCollectionCard: ChatSymptomCollectionCard? {
+        guard case .symptomCollectionCard(let card) = payload else { return nil }
+        return card
     }
 
     /// 工具成员选择消息内卡片列表
@@ -606,6 +615,7 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         taskCards: [TaskCard] = [],
         pendingMemberToolCards: [PendingMemberToolCard] = [],
         toolQuestionCards: [ChatToolQuestionCard] = [],
+        symptomCollectionCard: ChatSymptomCollectionCard? = nil,
         toolMemberSelectionCards: [ChatToolMemberSelectionCard] = [],
         healthResourceCandidateCards: [ChatHealthResourceCandidateSelectionCard] = [],
         toolConsentCards: [ChatToolConsentCard] = [],
@@ -657,6 +667,7 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
             taskCards: taskCards,
             pendingMemberToolCards: pendingMemberToolCards,
             toolQuestionCards: toolQuestionCards,
+            symptomCollectionCard: symptomCollectionCard,
             toolMemberSelectionCards: toolMemberSelectionCards,
             healthResourceCandidateCards: healthResourceCandidateCards,
             toolConsentCards: toolConsentCards,
@@ -705,6 +716,7 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         taskCards: [TaskCard],
         pendingMemberToolCards: [PendingMemberToolCard],
         toolQuestionCards: [ChatToolQuestionCard],
+        symptomCollectionCard: ChatSymptomCollectionCard?,
         toolMemberSelectionCards: [ChatToolMemberSelectionCard],
         healthResourceCandidateCards: [ChatHealthResourceCandidateSelectionCard],
         toolConsentCards: [ChatToolConsentCard],
@@ -771,6 +783,9 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
             return .pendingMemberToolCards(pendingMemberToolCards)
         case .toolQuestionCards:
             return .toolQuestionCards(toolQuestionCards)
+        case .symptomCollectionCard:
+            guard let symptomCollectionCard else { preconditionFailure("Missing symptom collection payload") }
+            return .symptomCollectionCard(symptomCollectionCard)
         case .toolMemberSelectionCards:
             return .toolMemberSelectionCards(toolMemberSelectionCards)
         case .healthResourceCandidateCards:
@@ -1161,16 +1176,16 @@ extension ChatMessage {
         )
     }
 
-    /// 入站合并时保留本地已落库的 `healthResourceReference`（远端 push/拉取可能尚未支持该 block）。
+    /// 入站合并时保留本地已落库的客户端展示块（远端 push/拉取可能尚未支持这些 block）。
     nonisolated func mergingRemotePreservingLocalHealthResourceBlocks(_ remote: ChatMessage) -> ChatMessage {
         guard clientMessageID == remote.clientMessageID else { return remote }
-        let remoteHealthIDs = Set(
+        let remotePreservedIDs = Set(
             remote.blocks
-                .filter { $0.kind == .healthResourceReference }
+                .filter { $0.isLocallyPreservedPresentationBlock }
                 .map(\.id)
         )
         let preservedLocal = blocks.filter { block in
-            block.kind == .healthResourceReference && remoteHealthIDs.contains(block.id) == false
+            block.isLocallyPreservedPresentationBlock && remotePreservedIDs.contains(block.id) == false
         }
         guard preservedLocal.isEmpty == false else { return remote }
         var mergedBlocks = remote.blocks + preservedLocal
@@ -1268,9 +1283,28 @@ extension ChatMessage {
 }
 
 extension ChatMessageBlock {
+    /// 症状采集流程中需要跨设备持久化的交互块。
+    ///
+    /// 当前设备持有可操作的 continuation；服务端保存完整快照，其他设备或 App 重启后
+    /// 以只读历史卡片展示。交互能力与同步能力必须分开判断，不能因卡片当前不可操作而漏同步。
+    nonisolated var isSymptomCollectionInteractionBlock: Bool {
+        guard nodeRole == .toolPresentation else { return false }
+        return kind == .toolQuestionCards || kind == .symptomCollectionCard
+    }
+
+    nonisolated var isLocallyPreservedPresentationBlock: Bool {
+        kind == .healthResourceReference
+            || kind == .medicalDisclaimerCard
+            || kind == .chatGuideCard
+            || kind == .hospitalDoctorIntroCard
+            || kind == .consultationCard
+            || isInlineToolInteractionPresentationBlock
+    }
+
     nonisolated var isInlineToolInteractionPresentationBlock: Bool {
         guard nodeRole == .toolPresentation else { return false }
         return kind == .toolQuestionCards
+            || kind == .symptomCollectionCard
             || kind == .toolMemberSelectionCards
             || kind == .healthResourceCandidateCards
             || kind == .toolConsentCards

@@ -75,13 +75,6 @@ actor ChatSyncEngine {
         }
     }
 
-    /// 手动刷新同步：上送 + 拉取未同步的线程与消息。
-    func syncNowWithPull() async throws {
-        try await runSingleFlight(scope: .global) { engine in
-            try await engine.performManualRefreshSync()
-        }
-    }
-
     /// 对话列表下拉刷新：只拉取远端线程元数据增量（标题、更新时间等）。
     /// 不拉取各会话消息正文，也不触发附件后台下载；消息与图片在进入会话后按需同步/懒加载。
     /// 不主动上送本地 outbox，避免用户只是刷新列表时产生写请求。
@@ -218,7 +211,11 @@ actor ChatSyncEngine {
         try await task.value
         // Q8：定向拉取成功后通知表现层；当前打开的医院会话据此刷新 context/capabilities，
         // 若智能体下架或会话终结则立即切换只读（历史与医生最后消息保持可读）。
-        NotificationCenter.default.post(name: .chatRealtimeThreadPullDidComplete, object: threadID)
+        // SwiftUI 的两个 onReceive 会直接更新页面状态；通知必须从主线程发布，
+        // 否则 Combine 会报告 “Publishing changes from background threads”。
+        await MainActor.run {
+            NotificationCenter.default.post(name: .chatRealtimeThreadPullDidComplete, object: threadID)
+        }
     }
 
     /// Q3：账号级全局补偿单轮执行。
@@ -298,10 +295,6 @@ actor ChatSyncEngine {
 
     private func pushOutbox() async throws {
         try await outboxPipeline.pushOutbox()
-    }
-
-    private func pushThreads() async throws {
-        try await outboxPipeline.pushThreads()
     }
 
     /// 拉线程增量（会话列表），并落本地。

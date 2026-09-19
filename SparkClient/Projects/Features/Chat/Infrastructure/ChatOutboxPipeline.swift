@@ -102,6 +102,8 @@ struct ChatOutboxPipeline: Sendable {
                     return ChatRemoteMessageDTO(
                         threadId: message.threadID,
                         role: message.role.rawValue,
+                        // 整包重推必须包含症状汇总与问答卡。当前设备负责交互，服务端负责
+                        // 持久化完整快照，其他设备与冷启动场景按只读卡片恢复。
                         blocks: message.blocks,
                         clientMessageId: message.clientMessageID,
                         serverMessageId: message.serverMessageID,

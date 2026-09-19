@@ -305,10 +305,10 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
 
     /// Q7：医院会话按 memberID 归属隔离；普通会话（无 memberID）不受成员切换影响。
     private func isThreadVisibleUnderCurrentMember(_ threadID: UUID) -> Bool {
-        guard let memberID = stateStore?.threadItems.first(where: { $0.id == threadID })?.thread.memberID else {
-            return true
-        }
-        return memberID == memberContextStore?.context.selectedMemberID
+        stateStore?.isThreadVisible(
+            threadID,
+            selectedMemberID: memberContextStore?.context.selectedMemberID
+        ) ?? true
     }
 
     /// 按 store 中的计数同步「有新消息」按钮（成员切换清空等场景由下一帧 apply 收敛）
@@ -670,7 +670,7 @@ final class ConversationMessageListViewController: UIViewController, UICollectio
                let logger = logger
             {
                 let threadID = msg.threadID
-                let allVisibleMessages = stateStore.conversationListItems(for: threadID)
+                let allVisibleMessages = stateStore.persistedMessages(for: threadID)
                     .filter { uiStateStore.isDeleted($0.id) == false }
                 
                 // 消息行 SwiftUI 组件

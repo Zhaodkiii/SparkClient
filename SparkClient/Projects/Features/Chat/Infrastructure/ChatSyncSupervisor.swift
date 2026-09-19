@@ -38,16 +38,6 @@ actor ChatSyncSupervisor {
         }
     }
 
-    func syncNow() async throws {
-        try await syncEngine.syncNow()
-        await attachmentPipeline.processPendingJobs(limit: 8)
-    }
-
-    func syncNowWithPull() async throws {
-        try await syncEngine.syncNowWithPull()
-        await attachmentPipeline.processPendingJobs(limit: 24)
-    }
-
     func refreshThreadListIncremental() async throws {
         try await syncEngine.refreshThreadListIncremental()
     }

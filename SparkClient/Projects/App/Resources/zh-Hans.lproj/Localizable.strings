@@ -1999,6 +1999,8 @@
 "ai_settings.providers.editor.alert.backend_network_error" = "服务端连通性测试网络不可达，已自动改用本地直连测试。若仍失败，请检查网络、请求地址和模型名。";
 "ai_settings.tool_groups.health" = "健康数据类";
 "ai_settings.tool_groups.health.description" = "负责获取身体、运动、睡眠、营养、能量等健康相关数据";
+"ai_settings.tool_groups.medical" = "医疗辅助类";
+"ai_settings.tool_groups.medical.description" = "负责采集、补全和确认当前会话中的症状信息";
 "ai_settings.tool_groups.member" = "成员管理类";
 "ai_settings.tool_groups.member.description" = "负责家庭成员切换、查询、信息获取";
 "ai_settings.tool_groups.location" = "位置与天气类";
@@ -2014,6 +2016,7 @@
 "ai_settings.tools.fetch_nutrition_details" = "营养详情";
 "ai_settings.tools.make_nutrition_data" = "生成营养数据";
 "ai_settings.tools.show_medical_risk_notice" = "医疗风险提示";
+"ai_settings.tools.collect_symptoms" = "症状采集";
 "ai_settings.tools.fetch_sleep_details" = "睡眠详情";
 "ai_settings.tools.fetch_workout_details" = "运动详情";
 "ai_settings.tools.search_knowledge_bag" = "搜索知识库";
@@ -3308,6 +3311,8 @@
 "ai_settings.ai_tools.category.cards" = "卡片";
 "ai_settings.ai_tools.chat_group.health_data" = "健康数据类";
 "ai_settings.ai_tools.chat_group.health_data.subtitle" = "负责获取身体、运动、睡眠、营养、能量等健康相关数据。";
+"ai_settings.ai_tools.chat_group.medical" = "医疗辅助类";
+"ai_settings.ai_tools.chat_group.medical.subtitle" = "负责在当前对话中采集、补全和确认症状。";
 "ai_settings.ai_tools.chat_group.member_management" = "成员管理类";
 "ai_settings.ai_tools.chat_group.member_management.subtitle" = "负责家庭成员切换、查询、信息获取。";
 "ai_settings.ai_tools.chat_group.location_weather" = "位置与天气类";

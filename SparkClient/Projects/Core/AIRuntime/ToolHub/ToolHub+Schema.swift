@@ -233,6 +233,44 @@ extension ToolHub {
                 "recommended_action": AIRuntimeToolProperty(type: "string", description: td("tool.param.medical_risk_recommended_action")),
                 "related_reason": AIRuntimeToolProperty(type: "string", description: td("tool.param.medical_risk_related_reason"))
             ]
+        case .collectSymptoms:
+            let optionProperty = AIRuntimeToolProperty(
+                type: "object",
+                description: "一个可选择的中文症状选项。",
+                objectProperties: [
+                    "id": AIRuntimeToolProperty(type: "string", description: "本题内稳定且唯一的选项 ID，例如 today。"),
+                    "text": AIRuntimeToolProperty(type: "string", description: "直接展示给用户的中文选项文本。")
+                ],
+                objectRequired: ["id", "text"]
+            )
+            let questionProperty = AIRuntimeToolProperty(
+                type: "object",
+                description: td("tool.param.collect_symptoms_question_item"),
+                objectProperties: [
+                    "id": AIRuntimeToolProperty(type: "string", description: "本轮内稳定且唯一的问题 ID。"),
+                    "question": AIRuntimeToolProperty(type: "string", description: "直接展示给用户的中文问题。"),
+                    "field_key": AIRuntimeToolProperty(type: "string", description: "该问题补全的 required_fields 字段名，必须完全一致。"),
+                    "options": AIRuntimeToolProperty(type: "array", description: "2 至 8 个选项对象；禁止使用纯字符串、键值映射或嵌套数组。", arrayItems: optionProperty),
+                    "selection_mode": AIRuntimeToolProperty(type: "string", description: "单选或多选。", enumValues: ["single", "multiple"]),
+                    "allows_other": AIRuntimeToolProperty(type: "boolean", description: "是否允许用户输入最多 200 字的其他内容。")
+                ],
+                objectRequired: ["id", "question", "field_key", "options", "selection_mode", "allows_other"]
+            )
+            return [
+                "action": AIRuntimeToolProperty(type: "string", description: td("tool.param.collect_symptoms_action"), enumValues: ["start", "ask", "review"]),
+                "primary_complaint": AIRuntimeToolProperty(type: "string", description: td("tool.param.collect_symptoms_primary_complaint")),
+                "collection_id": AIRuntimeToolProperty(type: "string", description: td("tool.param.collect_symptoms_collection_id")),
+                "snapshot_json": AIRuntimeToolProperty(type: "string", description: td("tool.param.collect_symptoms_snapshot_json")),
+                "analysis_summary": AIRuntimeToolProperty(type: "string", description: "当前症状采集阶段的简短摘要，只描述已采集事实，不输出诊断结论。"),
+                "required_fields": AIRuntimeToolProperty(type: "array", description: td("tool.param.collect_symptoms_required_fields"), arrayItems: AIRuntimeToolProperty(type: "string", description: td("tool.param.collect_symptoms_field_item"))),
+                "questions": AIRuntimeToolProperty(
+                    type: "array",
+                    description: td("tool.param.collect_symptoms_questions"),
+                    arrayItems: questionProperty,
+                    minItems: 1,
+                    maxItems: 1
+                )
+            ]
         case .findMember:
             return [
                 "name": AIRuntimeToolProperty(type: "string", description: td("tool.param.member_name_optional")),
@@ -347,6 +385,8 @@ extension ToolHub {
             return ["card_type"]
         case .showMedicalRiskNotice:
             return ["risk_level", "message"]
+        case .collectSymptoms:
+            return ["action"]
         case .askUserQuestion:
             return []
         case .queryMemberProfile:

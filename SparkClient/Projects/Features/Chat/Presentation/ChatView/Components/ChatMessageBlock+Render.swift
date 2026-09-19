@@ -104,6 +104,9 @@ extension ChatMessageBlock {
                 )
             }
 
+        case .symptomCollectionCard(let card):
+            ChatSymptomCollectionCardView(card: card)
+
         case .toolMemberSelectionCards(let cards):
             ForEach(cards) { card in
                 ChatToolMemberSelectionMessageCardView(
@@ -333,6 +336,15 @@ extension ChatMessageBlock {
 
     /// 在 `deliveryState == .sending` 时，若本工具行后已出现其它块，或 `toolContent` 中已带可展示结果，则视为该次工具调用已结束，应显示结果区。
     private func shouldShowToolResultContent(context: ChatRenderContext, tool: ChatToolBlockPayload) -> Bool {
+        let normalizedToolName = (tool.name ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\\_", with: "_")
+            .lowercased()
+        if normalizedToolName == SparkToolName.collectSymptoms.rawValue {
+            // 症状采集的结果由专用卡片承载；流式期间始终保持运行态，
+            // 避免问答卡先到达时把工具块切换成 JSON 结果视图。
+            return false
+        }
         if context.message.deliveryState != .sending { return true }
         if let index = context.message.blocks.firstIndex(where: { $0.id == id }),
            index + 1 < context.message.blocks.count {
@@ -388,6 +400,8 @@ extension ChatMessageBlock {
             return "正在准备采集卡片..."
         case .toolQuestionCards:
             return "等待用户回答..."
+        case .symptomCollectionCard:
+            return "正在准备症状采集..."
         case .toolMemberSelectionCards:
             return "等待选择成员..."
         case .healthResourceCandidateCards:

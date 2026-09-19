@@ -8,6 +8,7 @@
 "tool.summary.fetch_nutrition_details" = "用途：以 3 小时粒度统计蛋白质、碳水、脂肪、能量摄入 (g/kcal)。触发场景：用户审视饮食结构或准备饮食计划。输入日期规则同上。可与 make_nutrition_data 联用，用于生成健康卡片。";
 "tool.summary.make_nutrition_data" = "用途：根据用户提供或模型解析的饮食信息生成营养卡片；字段值需为非负 (g/kcal)。触发场景：记录或分析一次具体饮食或用户提到营养卡片。可与 fetch_nutrition_details 联用，校正和补全数据。";
 "tool.summary.show_medical_risk_notice" = "用途：在涉及医疗/健康风险时插入结构化风险提示卡片。触发场景：解读检查/用药/症状、给出治疗或用药建议、涉及慢病/孕期/儿童/老人等敏感健康建议、或出现急症相关描述。参数 risk_level 必填；message 建议填写具体提醒。";
+"tool.summary.collect_symptoms" = "默认不要调用。只有用户在当前最新消息中主动、明确陈述本人或其正在咨询成员正在发生的具体身体不适，且继续追问症状细节确有必要时，才可开始症状采集。例如‘我头晕两天了’、‘孩子今天发烧’可以调用。‘你好’、‘你能做什么’、‘头晕是什么原因’、‘怎么预防感冒’等问候、闲聊、能力询问、知识咨询或疾病科普必须正常文字回复，不得调用。表达含糊时先用普通文字回应，不要用本工具试探。不得根据历史消息、成员资料或模型推测自行编造主诉。工具只负责采集、补全并让用户确认一个主诉及伴随症状，不做诊断、分诊或治疗建议。action 使用 start、ask、review；字段、问题和选项由模型动态声明。每次调用必须只生成一个问题，用户提交后再调用本工具生成下一个问题。不得读取或写入长期健康档案。";
 "tool.summary.fetch_sleep_details" = "用途：按会话和日汇总检索睡眠数据（核心/深度/REM/未指定睡眠阶段）。触发场景：用户回顾睡眠质量、分析睡眠模式、制定睡眠计划。输入要求：start_date、end_date ≤ 今天，格式 yyyy‑MM‑dd。可与 fetch_step_details、fetch_energy_details 联用。";
 "tool.summary.fetch_workout_details" = "用途：检索运动记录（跑步、步行、骑行等）。输入：start_date、end_date；可选 types 筛选活动类型；max_items 限制返回条数。可与 fetch_step_details、fetch_energy_details 联用。";
 "tool.summary.generate_structured_health_card" = "用途：生成可保存的结构化健康卡片（后台 AI 抽取）。调用时 report_type 指定卡片类型，raw_text 必须是你提炼后的关键摘录（勿传完整 OCR）。可选 oss_file_id（整数）。";
@@ -190,3 +191,11 @@
 "tool.param.ask_user_option_item" = "选项文案。";
 "tool.param.ask_user_selection_mode" = "single 或 multiple。";
 "tool.param.ask_user_allows_other" = "是否允许用户录入其他答案。";
+"tool.param.collect_symptoms_action" = "症状采集动作：start、ask 或 review。";
+"tool.param.collect_symptoms_primary_complaint" = "本次采集唯一主诉。";
+"tool.param.collect_symptoms_collection_id" = "同一次采集的稳定 ID。";
+"tool.param.collect_symptoms_snapshot_json" = "当前采集快照 JSON。";
+"tool.param.collect_symptoms_required_fields" = "模型声明的必填字段数组。";
+"tool.param.collect_symptoms_field_item" = "症状字段名。";
+"tool.param.collect_symptoms_questions" = "本轮必须且只能生成 1 个问题，包含 2 至 8 个选项；用户提交后下一轮再生成下一个问题。";
+"tool.param.collect_symptoms_question_item" = "包含 id、question、field_key、options、selection_mode、allows_other 的问题对象。";

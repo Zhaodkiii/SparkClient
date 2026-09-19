@@ -9,7 +9,7 @@ struct ToolPreviewSheet: View {
     let onClearRenderContext: () -> Void
 
     private var resolvedMessage: ChatMessage? {
-        stateStore.conversationListItems(for: prompt.threadID)
+        stateStore.persistedMessages(for: prompt.threadID)
             .first { $0.clientMessageID == prompt.sourceClientMessageID }
     }
 

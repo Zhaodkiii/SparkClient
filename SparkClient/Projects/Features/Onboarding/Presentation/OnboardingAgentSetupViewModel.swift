@@ -186,6 +186,11 @@ private extension OnboardingAgentTemplate {
         SparkToolName.queryMemberProfile.rawValue
     ]
 
+    static let medicalTools = [
+        SparkToolName.collectSymptoms.rawValue,
+        SparkToolName.showMedicalRiskNotice.rawValue
+    ]
+
     static let knowledgeTools = [
         SparkToolName.searchKnowledgeBag.rawValue,
         SparkToolName.createKnowledgeDocument.rawValue
@@ -211,7 +216,7 @@ private extension OnboardingAgentTemplate {
         icon: "stethoscope",
         tint: AgentTemplateTint(primary: "#2563EB", secondary: "#6366F1"),
         systemPrompt: "你是一位专业、严谨的私人医生助理。你擅长结合用户的体征、用药、检验、诊断和病历信息，给出清晰、准确、可执行的解读与建议。你必须避免夸大结论，不替代医生诊断；遇到急症、严重异常或不确定情况时，应建议用户及时就医。回答要结构清楚，必要时说明依据和下一步行动。",
-        tools: healthTools + knowledgeTools + memoryTools + webTools,
+        tools: healthTools + medicalTools + knowledgeTools + memoryTools + webTools,
         scenarios: [AIScenario.chat.rawValue, AIScenario.reportInterpretation.rawValue],
         relatedTaskCodes: ["today_activity_summary", "today_sleep_summary", "memory_search", "knowledge_search"]
     )
@@ -225,6 +230,8 @@ private extension OnboardingAgentTemplate {
         tint: AgentTemplateTint(primary: "#059669", secondary: "#0EA5E9"),
         systemPrompt: "你是一位贴心的健康管家，专注饮食、睡眠、活动和日常起居。你会根据用户的营养、睡眠、步数、能量和成员资料，给出温和、可执行的生活方式建议。回答应鼓励用户形成稳定习惯，避免制造焦虑；涉及医疗诊断时应保持谨慎并建议咨询专业医生。",
         tools: [
+            SparkToolName.collectSymptoms.rawValue,
+            SparkToolName.showMedicalRiskNotice.rawValue,
             SparkToolName.fetchNutritionDetails.rawValue,
             SparkToolName.makeNutritionData.rawValue,
             SparkToolName.fetchSleepDetails.rawValue,
@@ -245,6 +252,8 @@ private extension OnboardingAgentTemplate {
         tint: AgentTemplateTint(primary: "#EA580C", secondary: "#F97316"),
         systemPrompt: "你是一位专业的运动教练助手。你会结合用户的步数、运动、能量消耗、睡眠与营养数据，给出训练安排、恢复提醒和饮食配合建议。回答应具体、量力而行，并提示用户在疼痛、胸闷、头晕或疾病风险下先咨询专业人士。",
         tools: [
+            SparkToolName.collectSymptoms.rawValue,
+            SparkToolName.showMedicalRiskNotice.rawValue,
             SparkToolName.fetchStepDetails.rawValue,
             SparkToolName.fetchEnergyDetails.rawValue,
             SparkToolName.fetchWorkoutDetails.rawValue,

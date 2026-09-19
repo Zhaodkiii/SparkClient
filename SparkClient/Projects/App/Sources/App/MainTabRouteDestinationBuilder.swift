@@ -59,14 +59,6 @@ struct MainTabRouteDestinationBuilder {
                 autoSmallTaskCoordinator: chatAutoSmallTaskCoordinator,
                 guideHomeDestinationBuilder: guideHomeDestinationBuilder
             )
-            .task(id: threadID) {
-                await chatListViewModel.selectAndPrepare(threadID: threadID)
-                await chatDetailViewModel.loadMessagesIfNeeded(
-                    for: threadID,
-                    lockBottomViewport: true,
-                    scrollToBottom: true
-                )
-            }
         case .automaticChatThread(let threadID):
             ChatView(
                 threadID: threadID,
@@ -85,14 +77,6 @@ struct MainTabRouteDestinationBuilder {
                     routeStore.route(to: .home, replaceStack: true)
                 }
             )
-            .task(id: threadID) {
-                await chatListViewModel.selectAndPrepare(threadID: threadID)
-                await chatDetailViewModel.loadMessagesIfNeeded(
-                    for: threadID,
-                    lockBottomViewport: true,
-                    scrollToBottom: true
-                )
-            }
         /// AI 设置页面
         case .aiSettings:
             AISettingsView(viewModel: aiSettingsViewModel)
@@ -159,6 +143,19 @@ struct MainTabRouteDestinationBuilder {
                             threadID: threadID,
                             source: .hospitalConsultation
                         )
+                    }
+                )
+            } else {
+                EmptyView()
+            }
+        case .hospitalRegistration:
+            if let hospitalCareDependencies {
+                HospitalRegistrationDemoView(
+                    dependencies: hospitalCareDependencies,
+                    memberContextStore: homeDependencies.memberContextStore,
+                    sessionStore: homeDependencies.sessionStore,
+                    onFinish: {
+                        routeStore.route(to: .hospitalHome, replaceStack: true)
                     }
                 )
             } else {

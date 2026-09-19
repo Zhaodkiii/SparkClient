@@ -1,8 +1,129 @@
 import SwiftUI
 
+struct ChatSymptomCollectionCardView: View {
+    let card: ChatSymptomCollectionCard
+    @State private var isExpanded: Bool
+
+    init(card: ChatSymptomCollectionCard) {
+        self.card = card
+        // 采集中直接展示实时汇总；完成后收成摘要入口，点击查看全部信息。
+        _isExpanded = State(initialValue: card.snapshot.status != .completed)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() }
+            } label: {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: card.snapshot.status == .completed ? "checkmark.circle.fill" : "cross.case.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(accentColor)
+                        .frame(width: 34, height: 34)
+                        .background(accentColor.opacity(0.12), in: Circle())
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(statusTitle)
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundStyle(.primary)
+                        Text(headerSubtitle)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                    Spacer()
+                    HStack(spacing: 4) {
+                        Text(isExpanded ? "收起" : "查看详情")
+                        Image(systemName: "chevron.down")
+                            .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                    }
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color(red: 0.31, green: 0.36, blue: 1.0))
+                }
+            }
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .accessibilityLabel("\(statusTitle)，\(isExpanded ? "收起" : "查看完整症状信息")")
+
+            if isExpanded {
+                Divider()
+                if let summary = card.snapshot.analysisSummary, summary.isEmpty == false {
+                    Text(summary)
+                        .font(.system(size: 16, weight: .medium))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let complaint = card.snapshot.primaryComplaint, !complaint.isEmpty {
+                    Text("主诉：\(complaint)")
+                        .font(.system(size: 16, weight: .semibold))
+                }
+                if card.snapshot.values.isEmpty && card.snapshot.associatedSymptoms.isEmpty {
+                    Text("已收集的信息会持续更新在这里。")
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(card.snapshot.summaryLines.dropFirst(card.snapshot.primaryComplaint == nil ? 0 : 1), id: \.self) { line in
+                        Text(line)
+                            .font(.system(size: 15))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Text("AI 内容仅供参考，持续不适请及时就医")
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(red: 0.985, green: 0.985, blue: 1.0), in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color(red: 0.31, green: 0.36, blue: 1.0).opacity(0.12), lineWidth: 1)
+        }
+        .shadow(color: Color.indigo.opacity(0.08), radius: 16, y: 8)
+        .onChange(of: card.snapshot.status) { status in
+            if status == .completed {
+                withAnimation(.easeInOut(duration: 0.2)) { isExpanded = false }
+            } else if status == .collecting || status == .reviewing {
+                isExpanded = true
+            }
+        }
+    }
+
+    private var accentColor: Color {
+        card.snapshot.status == .completed
+            ? Color(red: 0.16, green: 0.68, blue: 0.47)
+            : Color(red: 0.31, green: 0.36, blue: 1.0)
+    }
+
+    private var headerSubtitle: String {
+        if card.snapshot.status == .completed {
+            if let complaint = card.snapshot.primaryComplaint?.trimmingCharacters(in: .whitespacesAndNewlines),
+               complaint.isEmpty == false {
+                return "主诉：\(complaint) · 点击查看完整信息"
+            }
+            return "采集完成 · 点击查看完整信息"
+        }
+        return "症状采集 · \(card.snapshot.completionPercent)%"
+    }
+
+    private var statusTitle: String {
+        switch card.snapshot.status {
+        case .collecting:
+            return "正在采集症状"
+        case .reviewing:
+            return "请确认症状信息"
+        case .completed:
+            return "症状信息已确认"
+        case .cancelled:
+            return "症状采集已取消"
+        case .expired:
+            return "症状采集已失效"
+        }
+    }
+}
+
 private enum ChatToolInteractionCardStyle {
     static let cardCornerRadius: CGFloat = 18
-    static let optionCornerRadius: CGFloat = 12
+    static let optionCornerRadius: CGFloat = 22
     static let badgeSize: CGFloat = 24
     static let cardPadding: CGFloat = 16
     static let headerFontSize: CGFloat = 13
@@ -12,9 +133,10 @@ private enum ChatToolInteractionCardStyle {
     static let optionDescriptionFontSize: CGFloat = 11.5
     static let footerFontSize: CGFloat = 11.5
 
-    static var cardBackground: Color { Color(.secondarySystemBackground) }
-    static var borderColor: Color { Color.primary.opacity(0.08) }
-    static var mutedText: Color { Color.secondary }
+    static var cardBackground: Color { Color(red: 0.985, green: 0.985, blue: 1.0) }
+    static var borderColor: Color { Color(red: 0.31, green: 0.36, blue: 1.0).opacity(0.16) }
+    static var mutedText: Color { Color(red: 0.54, green: 0.57, blue: 0.70) }
+    static var primaryPurple: Color { Color(red: 0.31, green: 0.36, blue: 1.0) }
 }
 
 struct ChatToolQuestionMessageCardView: View {
@@ -23,6 +145,7 @@ struct ChatToolQuestionMessageCardView: View {
 
     @State private var selectedOptionIDs: [String: Set<String>] = [:]
     @State private var otherTextByQuestion: [String: String] = [:]
+    @FocusState private var focusedOtherQuestionID: String?
 
     private var isResolved: Bool {
         card.status != .pending
@@ -48,6 +171,14 @@ struct ChatToolQuestionMessageCardView: View {
                 hydrateFromAnswers()
             }
         }
+        .onChange(of: focusedOtherQuestionID) { _, questionID in
+            ChatInlineInputFocus.setInlineInputFocused(questionID != nil)
+        }
+        .onDisappear {
+            if focusedOtherQuestionID != nil {
+                ChatInlineInputFocus.setInlineInputFocused(false)
+            }
+        }
     }
 
     private var interactiveContent: some View {
@@ -64,11 +195,11 @@ struct ChatToolQuestionMessageCardView: View {
 
     private var cardHeader: some View {
         HStack(alignment: .top, spacing: 12) {
-            Text("?")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Color.primary.opacity(0.72))
-                .frame(width: ChatToolInteractionCardStyle.badgeSize, height: ChatToolInteractionCardStyle.badgeSize)
-                .background(Color.primary.opacity(0.08), in: Circle())
+            Image(systemName: "sparkles")
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(ChatToolInteractionCardStyle.primaryPurple)
+                .frame(width: 32, height: 32)
+                .background(ChatToolInteractionCardStyle.primaryPurple.opacity(0.12), in: Circle())
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(L10n.text("chat.tool_interaction.question.title", fallback: "请作答以继续"))
@@ -90,25 +221,31 @@ struct ChatToolQuestionMessageCardView: View {
                 .padding(.top, 12)
 
             VStack(spacing: 6) {
-                ForEach(Array(question.options.enumerated()), id: \.element.id) { index, option in
+                ForEach(question.options) { option in
                     optionRow(
                         question: question,
                         option: option,
-                        letter: letter(for: index),
                         isSelected: selectedOptionIDs[question.id, default: []].contains(option.id)
                     )
                 }
 
                 if question.allowsOther {
                     TextField(
-                        L10n.text("chat.tool_interaction.question.other_placeholder", fallback: "输入自定义回复"),
+                        question.fieldKey == "primary_complaint"
+                            ? "请直接输入您的不适症状"
+                            : L10n.text("chat.tool_interaction.question.other_placeholder", fallback: "输入自定义回复"),
                         text: Binding(
                             get: { otherTextByQuestion[question.id, default: ""] },
-                            set: { otherTextByQuestion[question.id] = $0 }
+                            set: { otherTextByQuestion[question.id] = String($0.prefix(200)) }
                         )
                     )
-                    .textFieldStyle(.roundedBorder)
+                    .focused($focusedOtherQuestionID, equals: question.id)
+                    .textFieldStyle(.plain)
                     .font(.system(size: ChatToolInteractionCardStyle.optionTitleFontSize))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 11)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                    .overlay { RoundedRectangle(cornerRadius: 18).stroke(ChatToolInteractionCardStyle.borderColor, lineWidth: 1) }
                     .padding(.top, 4)
                 }
             }
@@ -119,27 +256,25 @@ struct ChatToolQuestionMessageCardView: View {
     private func optionRow(
         question: ToolQuestionItem,
         option: ChatQuestionOption,
-        letter: String,
         isSelected: Bool
     ) -> some View {
         Button {
             toggle(option.id, for: question)
         } label: {
-            HStack(alignment: .top, spacing: 12) {
-                letterBadge(letter, isSelected: isSelected)
+            HStack(alignment: .top, spacing: 8) {
                 Text(option.text)
-                    .font(.system(size: ChatToolInteractionCardStyle.optionTitleFontSize))
-                    .foregroundStyle(.primary)
+                    .font(.system(size: 15, weight: isSelected ? .semibold : .regular))
+                    .foregroundStyle(isSelected ? ChatToolInteractionCardStyle.primaryPurple : .primary)
                     .multilineTextAlignment(.leading)
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(ChatToolInteractionCardStyle.cardBackground, in: optionShape)
+            .background(isSelected ? ChatToolInteractionCardStyle.primaryPurple.opacity(0.08) : Color.white, in: optionShape)
             .overlay {
                 optionShape.strokeBorder(
-                    isSelected ? Color.accentColor.opacity(0.5) : ChatToolInteractionCardStyle.borderColor,
-                    lineWidth: 1
+                    isSelected ? ChatToolInteractionCardStyle.primaryPurple : ChatToolInteractionCardStyle.borderColor,
+                    lineWidth: isSelected ? 1.5 : 1
                 )
             }
         }
@@ -154,14 +289,16 @@ struct ChatToolQuestionMessageCardView: View {
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            Button(L10n.text("chat.tool_interaction.common.submit", fallback: "提交")) {
+            Button(L10n.text("chat.tool_interaction.common.submit", fallback: "确认并发送")) {
                 onSubmit(card, responses())
             }
-            .font(.system(size: 12, weight: .medium))
+            .disabled(canSubmit == false)
+            .opacity(canSubmit ? 1 : 0.45)
+            .font(.system(size: 15, weight: .semibold))
             .foregroundStyle(Color.white)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 13)
+            .background(ChatToolInteractionCardStyle.primaryPurple, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
             .buttonStyle(.plain)
         }
         .padding(.top, 12)
@@ -173,11 +310,32 @@ struct ChatToolQuestionMessageCardView: View {
         .padding(.top, 12)
     }
 
+    private var canSubmit: Bool {
+        card.prompt.questions.allSatisfy { question in
+            let selected = selectedOptionIDs[question.id]?.isEmpty == false
+            let other = nonEmpty(otherTextByQuestion[question.id]) != nil
+            return selected || other
+        }
+    }
+
     private var resolvedSummary: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label(resolvedTitle, systemImage: resolvedIcon)
-                .font(.system(size: ChatToolInteractionCardStyle.headerFontSize, weight: .semibold))
-                .foregroundStyle(resolvedColor)
+            HStack(spacing: 8) {
+                Image(systemName: resolvedIcon)
+                    .foregroundStyle(resolvedColor)
+                Text(resolvedTitle)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(resolvedColor)
+            }
+            if card.prompt.toolName == SparkToolName.collectSymptoms.rawValue {
+                Text(resolvedAnswerBubble)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(ChatToolInteractionCardStyle.primaryPurple, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            }
             ForEach(resolvedAnswerTexts, id: \.self) { text in
                 Text(text)
                     .font(.system(size: ChatToolInteractionCardStyle.bodyFontSize))
@@ -215,6 +373,16 @@ struct ChatToolQuestionMessageCardView: View {
         return [card.resultText ?? L10n.text("chat.tool_interaction.question.finished_fallback", fallback: "工具等待已经结束。")]
     }
 
+    private var resolvedAnswerBubble: String {
+        let values = card.answers.compactMap { answer -> String? in
+            guard let question = card.prompt.questions.first(where: { $0.id == answer.questionID }) else { return answer.otherText }
+            let labels = question.options.filter { answer.selectedOptionIDs.contains($0.id) }.map(\.text)
+            let other = answer.otherText?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return (labels + (other.isEmpty ? [] : [other])).joined(separator: "、")
+        }.filter { !$0.isEmpty }
+        return values.joined(separator: "；")
+    }
+
     private func hydrateFromAnswers() {
         for answer in card.answers {
             selectedOptionIDs[answer.questionID] = Set(answer.selectedOptionIDs)
@@ -230,13 +398,27 @@ struct ChatToolQuestionMessageCardView: View {
         case .single:
             ids = [id]
         case .multiple:
+            let selectedText = question.options.first(where: { $0.id == id })?.text ?? ""
+            let isNoneOption = Self.isNoneOption(selectedText)
             if ids.contains(id) {
                 ids.remove(id)
+            } else if isNoneOption {
+                // “没有/以上都没有”与其他伴随症状互斥，避免形成矛盾答案。
+                ids = [id]
             } else {
+                ids = Set(ids.filter { optionID in
+                    guard let text = question.options.first(where: { $0.id == optionID })?.text else { return true }
+                    return !Self.isNoneOption(text)
+                })
                 ids.insert(id)
             }
         }
         selectedOptionIDs[question.id] = ids
+    }
+
+    private static func isNoneOption(_ text: String) -> Bool {
+        let normalized = text.replacingOccurrences(of: " ", with: "")
+        return normalized.contains("没有") || normalized.contains("以上都没有") || normalized == "无" || normalized == "无明显不适"
     }
 
     private func responses() -> [ToolQuestionResponse] {
@@ -274,28 +456,69 @@ struct ChatToolQuestionMessageCardView: View {
         return trimmed.isEmpty ? nil : trimmed
     }
 
-    private func letter(for index: Int) -> String {
-        guard index >= 0, index < 26 else { return "?" }
-        return String(UnicodeScalar(65 + index)!)
-    }
-
-    private func letterBadge(_ letter: String, isSelected: Bool) -> some View {
-        Text(letter)
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
-            .frame(width: ChatToolInteractionCardStyle.badgeSize, height: ChatToolInteractionCardStyle.badgeSize)
-            .background(
-                isSelected ? Color.accentColor.opacity(0.15) : Color(.tertiarySystemFill).opacity(0.7),
-                in: RoundedRectangle(cornerRadius: 6, style: .continuous)
-            )
-    }
-
     private var cardShape: RoundedRectangle {
         RoundedRectangle(cornerRadius: ChatToolInteractionCardStyle.cardCornerRadius, style: .continuous)
     }
 
     private var optionShape: RoundedRectangle {
         RoundedRectangle(cornerRadius: ChatToolInteractionCardStyle.optionCornerRadius, style: .continuous)
+    }
+}
+
+/// 同一症状采集过程中的已提交问答合并展示。
+/// pending 卡不进入这里，仍由 ChatToolQuestionMessageCardView 独立负责交互。
+struct ChatAnsweredSymptomQuestionGroupView: View {
+    let cards: [ChatToolQuestionCard]
+    @State private var isExpanded = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { isExpanded.toggle() }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.green)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("已完成的症状问答")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(.primary)
+                        Text("已合并 (cards.count) 轮回答")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Text(isExpanded ? "收起" : "展开")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(ChatToolInteractionCardStyle.primaryPurple)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(ChatToolInteractionCardStyle.primaryPurple)
+                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("已完成的症状问答，\(isExpanded ? "收起" : "展开")")
+
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(cards) { card in
+                        ChatToolQuestionMessageCardView(card: card, onSubmit: { _, _ in })
+                    }
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(ChatToolInteractionCardStyle.cardBackground, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .strokeBorder(ChatToolInteractionCardStyle.borderColor, lineWidth: 1)
+        }
+        .shadow(color: Color.black.opacity(0.035), radius: 10, y: 5)
+        .padding(.top, 8)
     }
 }
 

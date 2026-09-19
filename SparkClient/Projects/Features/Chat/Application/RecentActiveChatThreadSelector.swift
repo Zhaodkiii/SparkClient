@@ -86,19 +86,4 @@ struct RecentActiveChatThreadSelector {
 
         return .noReusableThread
     }
-
-    /// 兼容旧接口：仅返回 30 分钟内最近活跃 Thread ID（不含空白会话复用）。
-    static func mostRecentActiveThreadID(
-        in items: [ChatThreadListItem],
-        within interval: TimeInterval = defaultActiveInterval,
-        memberID: Int? = nil,
-        now: Date = Date()
-    ) -> UUID? {
-        guard interval >= 0 else { return nil }
-        let cutoff = now.addingTimeInterval(-interval)
-        return mostRecent(
-            in: candidateThreads(in: items, memberID: memberID),
-            activeSince: cutoff
-        )?.id
-    }
 }

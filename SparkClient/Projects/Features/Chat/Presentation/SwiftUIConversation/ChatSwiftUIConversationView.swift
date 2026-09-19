@@ -299,10 +299,7 @@ struct ChatSwiftUIConversationView: View {
 
     /// Q7：医院会话按 memberID 归属隔离；普通会话（无 memberID）不受成员切换影响。
     private func isThreadVisibleUnderCurrentMember(_ threadID: UUID) -> Bool {
-        guard let memberID = stateStore.threadItems.first(where: { $0.id == threadID })?.thread.memberID else {
-            return true
-        }
-        return memberID == memberContextStore.context.selectedMemberID
+        stateStore.isThreadVisible(threadID, selectedMemberID: memberContextStore.context.selectedMemberID)
     }
 
     private var rowSpacing: CGFloat {

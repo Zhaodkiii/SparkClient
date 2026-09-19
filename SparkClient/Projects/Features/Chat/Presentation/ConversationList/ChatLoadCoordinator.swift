@@ -24,10 +24,4 @@ final class ChatLoadCoordinator {
             await operation?()
         }
     }
-
-    func cancel() {
-        pending?.cancel()
-        pending = nil
-        latestOperation = nil
-    }
 }

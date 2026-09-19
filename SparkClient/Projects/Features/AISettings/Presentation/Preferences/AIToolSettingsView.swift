@@ -898,6 +898,12 @@ enum AIToolCatalog {
                 ])
             ),
             AIToolSettingsGroup(
+                id: "medical",
+                title: chatGroupTitle("medical", fallback: "Medical Assistance"),
+                subtitle: chatGroupSubtitle("medical", fallback: "Collect and confirm symptoms in the current conversation."),
+                tools: matching([.collectSymptoms, .showMedicalRiskNotice])
+            ),
+            AIToolSettingsGroup(
                 id: "system_tasks",
                 title: chatGroupTitle("system_tasks", fallback: "System & Tasks"),
                 subtitle: chatGroupSubtitle("system_tasks", fallback: "Handles system events, calendar reminders, canvas, tasks, and UI display."),
@@ -909,8 +915,7 @@ enum AIToolCatalog {
                     .queryTasksByMember,
                     .generateTask,
                     .showCustomMessageCard,
-                    .askUserQuestion,
-                    .showMedicalRiskNotice
+                    .askUserQuestion
                 ])
             )
         ].filter { $0.tools.isEmpty == false }
@@ -953,6 +958,8 @@ enum AIToolCatalog {
              .fetchSleepDetails, .fetchWorkoutDetails, .generateStructuredHealthCard,
              .listMemberHealthSources, .getHealthResourceReference, .getHealthResourceContext:
             return chatGroupTitle("health_data", fallback: "Health Data")
+        case .collectSymptoms, .showMedicalRiskNotice:
+            return chatGroupTitle("medical", fallback: "Medical Assistance")
         case .getCurrentMember, .requestMemberSelection, .switchMember, .findMember, .queryMemberProfile:
             return chatGroupTitle("member_management", fallback: "Member Management")
         case .queryLocation, .getCurrentLocation, .searchNearbyLocations, .getRoute, .queryWeather:
@@ -964,7 +971,7 @@ enum AIToolCatalog {
             return chatGroupTitle("knowledge_network", fallback: "Knowledge & Network")
         case .searchCalendarAndReminders, .writeSystemEvent,
              .createCanvas, .editCanvas, .queryTasksByMember, .generateTask,
-             .showCustomMessageCard, .askUserQuestion, .showMedicalRiskNotice:
+             .showCustomMessageCard, .askUserQuestion:
             return chatGroupTitle("system_tasks", fallback: "System & Tasks")
         }
     }
@@ -1016,7 +1023,9 @@ private enum ChatToolSchemaCatalog {
         format: String? = nil,
         objectProperties: [String: AIRuntimeToolProperty]? = nil,
         objectRequired: [String]? = nil,
-        items: AIRuntimeToolProperty? = nil
+        items: AIRuntimeToolProperty? = nil,
+        minItems: Int? = nil,
+        maxItems: Int? = nil
     ) -> AIRuntimeToolProperty {
         AIRuntimeToolProperty(
             type: type,
@@ -1025,7 +1034,9 @@ private enum ChatToolSchemaCatalog {
             format: format,
             objectProperties: objectProperties,
             objectRequired: objectRequired,
-            arrayItems: items
+            arrayItems: items,
+            minItems: minItems,
+            maxItems: maxItems
         )
     }
 
@@ -1035,7 +1046,9 @@ private enum ChatToolSchemaCatalog {
         enumValues: [String]? = nil,
         objectProperties: [String: AIRuntimeToolProperty]? = nil,
         objectRequired: [String]? = nil,
-        items: AIRuntimeToolProperty? = nil
+        items: AIRuntimeToolProperty? = nil,
+        minItems: Int? = nil,
+        maxItems: Int? = nil
     ) -> AIRuntimeToolProperty {
         AIRuntimeToolProperty(
             type: type,
@@ -1043,7 +1056,9 @@ private enum ChatToolSchemaCatalog {
             enumValues: enumValues,
             objectProperties: objectProperties,
             objectRequired: objectRequired,
-            arrayItems: items
+            arrayItems: items,
+            minItems: minItems,
+            maxItems: maxItems
         )
     }
 
@@ -1100,6 +1115,44 @@ private enum ChatToolSchemaCatalog {
                 "message": prop("string", "tool.param.medical_risk_message"),
                 "recommended_action": prop("string", "tool.param.medical_risk_recommended_action"),
                 "related_reason": prop("string", "tool.param.medical_risk_related_reason")
+            ]
+        case .collectSymptoms:
+            let optionProperty = literalProp(
+                "object",
+                "一个可选择的中文症状选项。",
+                objectProperties: [
+                    "id": literalProp("string", "本题内稳定且唯一的选项 ID。"),
+                    "text": literalProp("string", "直接展示给用户的中文选项文本。")
+                ],
+                objectRequired: ["id", "text"]
+            )
+            let questionProperty = literalProp(
+                "object",
+                td("tool.param.collect_symptoms_question_item"),
+                objectProperties: [
+                    "id": literalProp("string", "本轮内稳定且唯一的问题 ID。"),
+                    "question": literalProp("string", "直接展示给用户的中文问题。"),
+                    "field_key": literalProp("string", "该问题补全的 required_fields 字段名。"),
+                    "options": literalProp("array", "2 至 8 个选项对象。", items: optionProperty),
+                    "selection_mode": literalProp("string", "单选或多选。", enumValues: ["single", "multiple"]),
+                    "allows_other": literalProp("boolean", "是否允许输入其他内容。")
+                ],
+                objectRequired: ["id", "question", "field_key", "options", "selection_mode", "allows_other"]
+            )
+            return [
+                "action": prop("string", "tool.param.collect_symptoms_action", enumValues: ["start", "ask", "review"]),
+                "primary_complaint": prop("string", "tool.param.collect_symptoms_primary_complaint"),
+                "collection_id": prop("string", "tool.param.collect_symptoms_collection_id"),
+                "snapshot_json": prop("string", "tool.param.collect_symptoms_snapshot_json"),
+                "required_fields": prop("array", "tool.param.collect_symptoms_required_fields", items: prop("string", "tool.param.collect_symptoms_field_item")),
+                "analysis_summary": literalProp("string", "当前阶段的事实摘要，不输出诊断结论。"),
+                "questions": prop(
+                    "array",
+                    "tool.param.collect_symptoms_questions",
+                    items: questionProperty,
+                    minItems: 1,
+                    maxItems: 1
+                )
             ]
         case .fetchWorkoutDetails:
             var props = dateRangeProperties
@@ -1299,6 +1352,8 @@ private enum ChatToolSchemaCatalog {
             return ["card_type"]
         case .showMedicalRiskNotice:
             return ["risk_level", "message"]
+        case .collectSymptoms:
+            return ["action"]
         case .queryMemberProfile:
             return ["query_type"]
         case .searchOnline, .searchArxivPapers:

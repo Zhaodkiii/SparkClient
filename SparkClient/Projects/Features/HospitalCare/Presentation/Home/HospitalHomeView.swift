@@ -10,6 +10,7 @@ struct HospitalHomeView: View {
     private let onOpenDirectory: (UUID?) -> Void
     private let onOpenThread: (UUID) -> Void
     private let onOpenTelemedicine: () -> Void
+    private let onOpenRegistration: () -> Void
 
     @State private var alertItem: HospitalHomeAlertItem?
 
@@ -19,7 +20,8 @@ struct HospitalHomeView: View {
         onOpenReportInterpretation: @escaping () -> Void,
         onOpenDirectory: @escaping (UUID?) -> Void,
         onOpenThread: @escaping (UUID) -> Void,
-        onOpenTelemedicine: @escaping () -> Void
+        onOpenTelemedicine: @escaping () -> Void,
+        onOpenRegistration: @escaping () -> Void
     ) {
         _viewModel = StateObject(
             wrappedValue: HospitalHomeViewModel(
@@ -34,6 +36,7 @@ struct HospitalHomeView: View {
         self.onOpenDirectory = onOpenDirectory
         self.onOpenThread = onOpenThread
         self.onOpenTelemedicine = onOpenTelemedicine
+        self.onOpenRegistration = onOpenRegistration
     }
 
     private var accent: Color { Color(uiColor: .systemTeal) }
@@ -378,7 +381,9 @@ struct HospitalHomeView: View {
         case .telemedicine:
             // 线上问诊：进入"科室选择 → 医生选择 → 问诊材料"流程（DOCTOR-WORKSPACE-000004）。
             onOpenTelemedicine()
-        case .registration, .aiTriage:
+        case .registration:
+            onOpenRegistration()
+        case .aiTriage:
             // Q5–Q7：未开放服务仅提示，不创建 Thread、不进入空页面。
             alertItem = HospitalHomeAlertItem(
                 title: service.title,
@@ -676,7 +681,8 @@ private enum HospitalHomeService: String, CaseIterable, Identifiable {
         switch self {
         case .reportInterpretation: return "进入报告解读对话"
         case .telemedicine: return "选择科室与医生问诊"
-        case .registration, .aiTriage: return "功能正在实现"
+        case .registration: return "选择科室后预约挂号"
+        case .aiTriage: return "功能正在实现"
         }
     }
 

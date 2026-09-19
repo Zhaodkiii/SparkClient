@@ -451,6 +451,7 @@ private struct ChatComposerTextView: UIViewRepresentable {
         textView.textContainerInset = .zero
         textView.textContainer.lineFragmentPadding = 0
         textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        textView.accessibilityIdentifier = ChatComposerAccessibilityIdentifier.mainComposerTextView
         return textView
     }
 
@@ -493,6 +494,10 @@ private struct ChatComposerTextView: UIViewRepresentable {
         func textViewDidChange(_ textView: UITextView) {
             parent.text = textView.text
             parent.recalculateHeight(for: textView)
+        }
+
+        func textViewDidBeginEditing(_ textView: UITextView) {
+            ChatInlineInputFocus.notifyMainComposerDidBeginEditing()
         }
     }
 }

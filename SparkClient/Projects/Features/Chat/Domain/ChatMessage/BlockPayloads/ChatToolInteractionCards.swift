@@ -1,5 +1,21 @@
 import Foundation
 
+nonisolated struct ChatSymptomCollectionCard: Codable, Equatable, Identifiable, Sendable {
+    let id: UUID
+    var snapshot: SymptomCollectionSnapshot
+    var status: ChatInlineToolCardStatus
+    let createdAt: Date
+    var updatedAt: Date
+
+    init(id: UUID = UUID(), snapshot: SymptomCollectionSnapshot, status: ChatInlineToolCardStatus = .pending, createdAt: Date = Date(), updatedAt: Date = Date()) {
+        self.id = id
+        self.snapshot = snapshot
+        self.status = status
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
 nonisolated enum ChatInlineToolCardStatus: String, Codable, Sendable {
     case pending
     case submitted

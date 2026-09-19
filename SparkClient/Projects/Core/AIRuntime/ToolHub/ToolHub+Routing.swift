@@ -40,7 +40,10 @@ extension ToolHub {
     }
 
     private static func normalizeToolName(_ value: String) -> String {
-        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\\_", with: "_")
+            .lowercased()
     }
 
     /// 执行模型返回的 tool_call，并写入统一审计。
@@ -242,6 +245,8 @@ extension ToolHub {
             return await runShowCustomMessageCard(invocation: invocation, context: context)
         case .showMedicalRiskNotice:
             return runShowMedicalRiskNotice(invocation: invocation, context: context)
+        case .collectSymptoms:
+            return await runCollectSymptoms(invocation: invocation, context: context)
         case .askUserQuestion:
             return await runAskUserQuestion(invocation: invocation, context: context)
         case .insertHealthCitationSources:

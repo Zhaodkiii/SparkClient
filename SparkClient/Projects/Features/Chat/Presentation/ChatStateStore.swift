@@ -20,8 +20,6 @@ final class ChatStateStore: ObservableObject {
     @Published private(set) var messagesByThread: [UUID: [ChatMessage]] = [:]
     /// 当前选中的会话ID
     @Published private(set) var selectedThreadID: UUID?
-    /// 全局加载状态（会话/消息列表加载）
-    @Published private(set) var isLoading = false
     /// 消息发送中状态
     @Published private(set) var isSending = false
     /// 按会话ID记录对应会话的错误提示文案
@@ -51,21 +49,18 @@ final class ChatStateStore: ObservableObject {
         threadItems.first(where: { $0.id == selectedThreadID })?.thread
     }
 
-    /// 当前选中会话的所有展示消息
-    var selectedMessages: [ChatMessage] {
-        guard let selectedThreadID else { return [] }
-        return conversationListItems(for: selectedThreadID)
-    }
-
     // MARK: - 消息数据查询
-    /// 获取指定会话纯本地持久化消息（不含流式占位消息）
+    /// 指定会话当前内存中的消息（详情列表与业务读取共用）。
     func persistedMessages(for threadID: UUID) -> [ChatMessage] {
         messagesByThread[threadID] ?? []
     }
 
-    /// 获取会话列表最终展示消息（持久化消息 + 流式消息，避免列表ID抖动）
-    func conversationListItems(for threadID: UUID) -> [ChatMessage] {
-        messagesByThread[threadID] ?? []
+    /// Q7：医院会话按 memberID 归属隔离；普通会话（无 memberID）不受成员切换影响。
+    func isThreadVisible(_ threadID: UUID, selectedMemberID: Int?) -> Bool {
+        guard let memberID = threadItems.first(where: { $0.id == threadID })?.thread.memberID else {
+            return true
+        }
+        return memberID == selectedMemberID
     }
 
     // MARK: - 会话列表 操作
@@ -406,12 +401,6 @@ final class ChatStateStore: ObservableObject {
         return false
     }
 
-    /// 彻底重置指定会话的整个输入草稿
-    func clearComposer(for threadID: UUID?) {
-        guard let threadID else { return }
-        composerDrafts[threadID] = makeDefaultComposerDraft()
-    }
-
     // MARK: - 输入框运行时配置 & 弹窗状态
     /// 批量更新输入框运行时标识
     func updateRuntimeFlags(
@@ -534,12 +523,7 @@ final class ChatStateStore: ObservableObject {
         }
     }
 
-    // MARK: - 全局加载/发送/错误状态
-    /// 设置全局加载状态
-    func setLoading(_ value: Bool) {
-        isLoading = value
-    }
-
+    // MARK: - 全局发送/错误状态
     /// 设置消息发送中状态
     func setSending(_ value: Bool) {
         isSending = value
@@ -573,7 +557,6 @@ final class ChatStateStore: ObservableObject {
         threadItems = []
         messagesByThread = [:]
         selectedThreadID = nil
-        isLoading = false
         isSending = false
         threadErrorMessages = [:]
         composerDrafts = [:]

@@ -1999,6 +1999,8 @@
 "ai_settings.providers.editor.alert.backend_network_error" = "Server-side connectivity test hit a network error. The app has automatically retried with a local direct test. If it still fails, check network, request URL, and model name.";
 "ai_settings.tool_groups.health" = "Health Data";
 "ai_settings.tool_groups.health.description" = "Body, activity, sleep, nutrition, and energy health data.";
+"ai_settings.tool_groups.medical" = "Medical Assistance";
+"ai_settings.tool_groups.medical.description" = "Collect, complete, and confirm symptoms in the current conversation.";
 "ai_settings.tool_groups.member" = "Member Management";
 "ai_settings.tool_groups.member.description" = "Switch, find, and read family member profiles.";
 "ai_settings.tool_groups.location" = "Location and Weather";
@@ -2014,6 +2016,7 @@
 "ai_settings.tools.fetch_nutrition_details" = "Nutrition Details";
 "ai_settings.tools.make_nutrition_data" = "Create Nutrition Data";
 "ai_settings.tools.show_medical_risk_notice" = "Medical Risk Notice";
+"ai_settings.tools.collect_symptoms" = "Symptom Collection";
 "ai_settings.tools.fetch_sleep_details" = "Sleep Details";
 "ai_settings.tools.fetch_workout_details" = "Workout Details";
 "ai_settings.tools.search_knowledge_bag" = "Search Knowledge Bag";
@@ -3308,6 +3311,8 @@
 "ai_settings.ai_tools.category.cards" = "Cards";
 "ai_settings.ai_tools.chat_group.health_data" = "Health Data";
 "ai_settings.ai_tools.chat_group.health_data.subtitle" = "Gets body, activity, sleep, nutrition, energy, and other health data.";
+"ai_settings.ai_tools.chat_group.medical" = "Medical Assistance";
+"ai_settings.ai_tools.chat_group.medical.subtitle" = "Collects and confirms symptoms in the current conversation.";
 "ai_settings.ai_tools.chat_group.member_management" = "Member Management";
 "ai_settings.ai_tools.chat_group.member_management.subtitle" = "Switches, queries, and loads family member information.";
 "ai_settings.ai_tools.chat_group.location_weather" = "Location & Weather";

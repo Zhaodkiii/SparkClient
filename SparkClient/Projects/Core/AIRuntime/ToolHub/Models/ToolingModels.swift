@@ -269,6 +269,7 @@ nonisolated enum SparkToolName: String, CaseIterable {
     case fetchNutritionDetails       = "fetch_nutrition_details"        // 获取营养详情
     case makeNutritionData           = "make_nutrition_data"            // 生成营养数据
     case showMedicalRiskNotice       = "show_medical_risk_notice"       // 医疗风险提示卡片
+    case collectSymptoms             = "collect_symptoms"               // 症状采集
     case fetchSleepDetails           = "fetch_sleep_details"            // 获取睡眠详情
     case fetchWorkoutDetails         = "fetch_workout_details"          // 获取运动详情
     case generateStructuredHealthCard = "generate_structured_health_card" // 生成结构化健康卡片（后台抽取）
@@ -334,6 +335,8 @@ extension SparkToolName {
              .fetchSleepDetails, .fetchWorkoutDetails, .generateStructuredHealthCard,
              .listMemberHealthSources, .getHealthResourceReference, .getHealthResourceContext:
             return .health
+        case .collectSymptoms:
+            return .health
         case .getCurrentMember, .requestMemberSelection, .switchMember, .findMember, .queryMemberProfile:
             return .member
         case .queryLocation, .getCurrentLocation, .searchNearbyLocations, .getRoute, .queryWeather:
@@ -393,6 +396,24 @@ nonisolated struct ToolQuestionItem: Identifiable, Equatable, Codable, Sendable 
     let options: [ChatQuestionOption] // 选项列表
     let allowsOther: Bool           // 是否允许自定义输入
     let selectionMode: ChatQuestionSelectionMode // 选择模式
+    /// 医疗动态字段名；普通 ask_user_question 可为空。
+    let fieldKey: String?
+
+    init(
+        id: String,
+        question: String,
+        options: [ChatQuestionOption],
+        allowsOther: Bool,
+        selectionMode: ChatQuestionSelectionMode,
+        fieldKey: String? = nil
+    ) {
+        self.id = id
+        self.question = question
+        self.options = options
+        self.allowsOther = allowsOther
+        self.selectionMode = selectionMode
+        self.fieldKey = fieldKey
+    }
 }
 
 /// 成员选择提示
@@ -408,15 +429,61 @@ nonisolated struct ToolQuestionPrompt: Identifiable, Equatable, Codable, Sendabl
     let id: UUID                  // 唯一标识
     let toolName: String          // 工具名
     let questions: [ToolQuestionItem] // 问题列表
+    /// 症状采集主卡的稳定标识与本轮快照；普通问答为 nil。
+    let symptomCollectionID: UUID?
+    let symptomSnapshot: SymptomCollectionSnapshot?
+    let isSymptomReview: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case id, toolName, questions
+        // `chatRemote` 使用 snake_case。解码时 `symptom_collection_id` 会先被
+        // JSONDecoder.convertFromSnakeCase 规范化为 `symptomCollectionId`，不会保留
+        // Swift 属性中的全大写缩写 `ID`。
+        case symptomCollectionID = "symptomCollectionId"
+        case symptomSnapshot, isSymptomReview
+    }
 
     init(
         id: UUID = UUID(),
         toolName: String = SparkToolName.askUserQuestion.rawValue,
-        questions: [ToolQuestionItem]
+        questions: [ToolQuestionItem],
+        symptomCollectionID: UUID? = nil,
+        symptomSnapshot: SymptomCollectionSnapshot? = nil,
+        isSymptomReview: Bool = false
     ) {
         self.id = id
         self.toolName = toolName
         self.questions = questions
+        self.symptomCollectionID = symptomCollectionID
+        self.symptomSnapshot = symptomSnapshot
+        self.isSymptomReview = isSymptomReview
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        toolName = try container.decodeIfPresent(String.self, forKey: .toolName) ?? SparkToolName.askUserQuestion.rawValue
+        questions = try container.decode([ToolQuestionItem].self, forKey: .questions)
+        symptomCollectionID = try container.decodeIfPresent(UUID.self, forKey: .symptomCollectionID)
+        let decodedSnapshot = try container.decodeIfPresent(SymptomCollectionSnapshot.self, forKey: .symptomSnapshot)
+        // 历史 snapshot 可能缺少 collection_id，但 prompt 外层已有稳定 ID；
+        // 这里补齐后，重启恢复时仍能和主症状卡正确关联。
+        if let decodedSnapshot, let symptomCollectionID {
+            symptomSnapshot = SymptomCollectionSnapshot(
+                collectionID: symptomCollectionID,
+                primaryComplaint: decodedSnapshot.primaryComplaint,
+                associatedSymptoms: decodedSnapshot.associatedSymptoms,
+                values: decodedSnapshot.values,
+                fieldLabels: decodedSnapshot.fieldLabels,
+                requiredFields: decodedSnapshot.requiredFields,
+                status: decodedSnapshot.status,
+                revision: decodedSnapshot.revision,
+                analysisSummary: decodedSnapshot.analysisSummary
+            )
+        } else {
+            symptomSnapshot = decodedSnapshot
+        }
+        isSymptomReview = try container.decodeIfPresent(Bool.self, forKey: .isSymptomReview) ?? false
     }
 }
 
@@ -430,6 +497,14 @@ nonisolated struct ToolQuestionResponse: Equatable, Codable, Sendable {
     let questionID: String        // 问题ID
     let selectedOptionIDs: [String] // 选中的选项ID
     let otherText: String?        // 自定义输入文本
+
+    private enum CodingKeys: String, CodingKey {
+        // 与 JSONEncoder/JSONDecoder.chatRemote 的 snake_case 策略保持可逆：
+        // question_id -> questionId，selected_option_ids -> selectedOptionIds。
+        case questionID = "questionId"
+        case selectedOptionIDs = "selectedOptionIds"
+        case otherText
+    }
 }
 
 // MARK: - 工具模式匹配
@@ -467,6 +542,7 @@ extension SparkToolName {
 /// 工具分组枚举（用于UI展示）
 enum SparkToolGroup: String, CaseIterable {
     case health      // 健康
+    case medical     // 医疗
     case member      // 成员
     case location    // 位置
     case memory      // 记忆
@@ -488,6 +564,8 @@ enum SparkToolGroup: String, CaseIterable {
         switch self {
         case .health:
             return "heart.text.square"
+        case .medical:
+            return "cross.case"
         case .member:
             return "person.2"
         case .location:
@@ -517,6 +595,8 @@ enum SparkToolGroup: String, CaseIterable {
                 .getHealthResourceReference,
                 .getHealthResourceContext
             ]
+        case .medical:
+            return [.collectSymptoms, .showMedicalRiskNotice]
         case .member:
             return [
                 .getCurrentMember,
@@ -554,7 +634,6 @@ enum SparkToolGroup: String, CaseIterable {
                 .searchCalendarAndReminders,
                 .writeSystemEvent,
                 .showCustomMessageCard,
-                .showMedicalRiskNotice,
                 .createCanvas,
                 .editCanvas,
                 .queryTasksByMember,

@@ -577,6 +577,7 @@ private struct HanlinChatTextUIKitView: UIViewRepresentable {
         textView.textContainer.maximumNumberOfLines = 0
         textView.setContentHuggingPriority(.defaultLow, for: .horizontal)
         textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        textView.accessibilityIdentifier = ChatComposerAccessibilityIdentifier.mainComposerTextView
         return textView
     }
 
@@ -623,6 +624,10 @@ private struct HanlinChatTextUIKitView: UIViewRepresentable {
         func textViewDidChange(_ textView: UITextView) {
             parent.text = textView.text
             parent.recalculateHeight(for: textView)
+        }
+
+        func textViewDidBeginEditing(_ textView: UITextView) {
+            ChatInlineInputFocus.notifyMainComposerDidBeginEditing()
         }
     }
 }

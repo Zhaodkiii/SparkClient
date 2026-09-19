@@ -8,6 +8,7 @@
 "tool.summary.fetch_nutrition_details" = "Purpose: 3‑hour nutrition breakdown (protein, carbs, fat, kcal). Trigger: user reviews diet or plans meals. Same date input. Pair with: make_nutrition_data to create health card.";
 "tool.summary.make_nutrition_data" = "Purpose: Generate nutrition cards from dietary info; values must be non‑negative (g/kcal). Trigger: recording or analyzing a meal. Can pair with fetch_nutrition_details.";
 "tool.summary.show_medical_risk_notice" = "Purpose: Insert a structured medical risk notice when the reply involves health/medical risk. Trigger: interpreting labs/meds/symptoms, treatment or medication advice, sensitive populations, or emergency symptoms. risk_level is required; message should explain the specific caution.";
+"tool.summary.collect_symptoms" = "Do not call this tool by default. Start symptom collection only when the user's latest message proactively and explicitly reports a specific physical discomfort currently affecting the user or the member being discussed, and collecting more symptom detail is genuinely necessary. Messages such as 'I have been dizzy for two days' or 'my child has a fever today' may trigger it. Greetings, small talk, capability questions, general health education, and disease information such as 'hello', 'what can you do?', 'what causes dizziness?', or 'how can I prevent a cold?' must receive a normal text reply without this tool. If the intent is ambiguous, reply normally instead of using the tool to probe. Never invent a complaint from history, profile data, or model inference. The tool only collects, completes, and confirms one primary complaint and related symptoms; it does not diagnose, triage, or treat. action is start, ask, or review. Generate exactly one question per call and wait for the user's answer before the next call. Never read or write long-term health records.";
 "tool.summary.fetch_sleep_details" = "Purpose: Retrieve sleep by session and daily summary (core/deep/REM/unspecified). Trigger: sleep quality review. Input start_date/end_date ≤ today, yyyy‑MM‑dd. Pair with: fetch_step_details, fetch_energy_details.";
 "tool.summary.fetch_workout_details" = "Purpose: retrieve workout records. Input: start_date, end_date; optional types filter; max_items limit. Pair with: fetch_step_details, fetch_energy_details.";
 "tool.summary.generate_structured_health_card" = "Purpose: Saveable structured health cards (async AI extraction). Pass report_type; raw_text must be distilled excerpt (not full OCR). Optional oss_file_id.";
@@ -191,3 +192,11 @@
 "tool.param.ask_user_option_item" = "Option label.";
 "tool.param.ask_user_selection_mode" = "single or multiple.";
 "tool.param.ask_user_allows_other" = "Whether the user may enter another answer.";
+"tool.param.collect_symptoms_action" = "Symptom collection action: start, ask, or review.";
+"tool.param.collect_symptoms_primary_complaint" = "The single primary complaint for this collection.";
+"tool.param.collect_symptoms_collection_id" = "Stable ID for the same collection.";
+"tool.param.collect_symptoms_snapshot_json" = "Current collection snapshot JSON.";
+"tool.param.collect_symptoms_required_fields" = "Model-declared required fields.";
+"tool.param.collect_symptoms_field_item" = "Symptom field name.";
+"tool.param.collect_symptoms_questions" = "Exactly one question for this round, with two to eight options. Generate the next question in a later call after the user submits this answer.";
+"tool.param.collect_symptoms_question_item" = "Question object containing id, question, field_key, options, selection_mode, and allows_other.";

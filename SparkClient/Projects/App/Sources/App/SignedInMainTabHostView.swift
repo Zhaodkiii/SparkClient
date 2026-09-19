@@ -265,14 +265,6 @@ private extension SignedInMainTabHostView {
                 }
             )
             .interactiveDismissDisabled(mainTab.chatStateStore.isSending)
-            .task(id: threadID) {
-                await mainTab.chatListViewModel.selectAndPrepare(threadID: threadID)
-                await mainTab.chatDetailViewModel.loadMessagesIfNeeded(
-                    for: threadID,
-                    lockBottomViewport: true,
-                    scrollToBottom: true
-                )
-            }
         }
     }
 

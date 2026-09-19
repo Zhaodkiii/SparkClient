@@ -657,7 +657,6 @@ final class AppContainer {
             selectMemberUseCase: medical.selectMemberUseCase,
             selectedMemberIDPersistence: auth.selectedMemberIDPersistence,
             loadChatThreadsUseCase: chat.loadChatThreadsUseCase,
-            loadChatMessagesUseCase: chat.loadChatMessagesUseCase,
             createThreadUseCase: chat.createThreadUseCase,
             deleteThreadUseCase: chat.deleteThreadUseCase,
             updateThreadMetadataUseCase: UpdateChatThreadMetadataUseCase(repository: chat.chatRepository),

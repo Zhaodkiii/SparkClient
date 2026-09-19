@@ -1573,7 +1573,9 @@ actor CoreDataChatStore {
                   let toolOrderKey = toolOrderByCallID[anchorToolCallID] else {
                 return block
             }
-            let desiredOrderKey = toolOrderKey + 100
+            // 症状汇总卡必须固定排在本轮问答卡之前。旧版本把两者都归一到
+            // tool + 100，导致同序块按时间/UUID 排序后顺序不稳定。
+            let desiredOrderKey = toolOrderKey + (block.kind == .symptomCollectionCard ? 50 : 100)
             guard block.orderKey != desiredOrderKey else { return block }
             return block.replacingIdentity(id: block.id, orderKey: desiredOrderKey)
         }
@@ -1584,7 +1586,7 @@ actor CoreDataChatStore {
         switch block.kind {
         case .structuredHealthCards, .sleepVisualization, .stepVisualization, .energyVisualization, .nutritionReadVisualization, .weatherVisualization, .weatherConfigCard, .searchSummary, .workoutVisualization, .nutritionCards, .medicalRiskNotice,
              .healthResourceReference, .knowledgeCards, .taskCards, .captureCard, .html,
-             .pendingMemberToolCards, .toolQuestionCards, .toolMemberSelectionCards,
+             .pendingMemberToolCards, .toolQuestionCards, .symptomCollectionCard, .toolMemberSelectionCards,
              .healthResourceCandidateCards, .toolConsentCards, .locationPermissionCards:
             return true
         case .medicalDisclaimerCard:
@@ -1669,7 +1671,9 @@ actor CoreDataChatStore {
             guard let block = ChatMessageBlockCodec.decodeBlock(from: snapshot) else {
                 let kindRaw = snapshot.kind?.rawValue
                 if kindRaw == ChatMessageBlockKind.structuredHealthCards.rawValue
-                    || kindRaw == ChatMessageBlockKind.healthResourceReference.rawValue {
+                    || kindRaw == ChatMessageBlockKind.healthResourceReference.rawValue
+                    || kindRaw == ChatMessageBlockKind.toolQuestionCards.rawValue
+                    || kindRaw == ChatMessageBlockKind.symptomCollectionCard.rawValue {
                     let reason = ChatMessageBlockCodec.decodeFailureReason(
                         payloadData: snapshot.payloadData,
                         kind: snapshot.kind
@@ -1716,7 +1720,12 @@ actor CoreDataChatStore {
                 continue
             }
             let isPendingSync = row.value(forKey: "isPendingSync") as? Bool ?? false
-            if isPendingSync || Self.shouldPreserveLocalBlockOnRemoteMerge(existingBlocksByID[id]) {
+            let storedKind = (row.value(forKey: "kind") as? String).flatMap(ChatMessageBlockKind.init(rawValue:))
+            let isStoredClientLocalInteraction = storedKind == .toolQuestionCards
+                || storedKind == .symptomCollectionCard
+            if isPendingSync
+                || isStoredClientLocalInteraction
+                || Self.shouldPreserveLocalBlockOnRemoteMerge(existingBlocksByID[id]) {
                 continue
             }
             context.delete(row)
@@ -1743,7 +1752,7 @@ actor CoreDataChatStore {
         switch block.kind {
         case .structuredHealthCards, .sleepVisualization, .stepVisualization, .energyVisualization, .nutritionReadVisualization, .weatherVisualization, .weatherConfigCard, .searchSummary, .workoutVisualization, .nutritionCards, .medicalRiskNotice,
              .healthResourceReference, .knowledgeCards, .taskCards, .captureCard, .html,
-             .pendingMemberToolCards, .toolQuestionCards, .toolMemberSelectionCards,
+             .pendingMemberToolCards, .toolQuestionCards, .symptomCollectionCard, .toolMemberSelectionCards,
              .healthResourceCandidateCards, .toolConsentCards, .locationPermissionCards:
             return true
         default:
@@ -1763,6 +1772,8 @@ actor CoreDataChatStore {
                 || block.kind == .chatGuideCard
                 || block.kind == .hospitalDoctorIntroCard
                 || block.kind == .consultationCard
+                // 症状采集卡是客户端交互过程中生成的本地展示块，后端历史消息可能不携带。
+                || block.isInlineToolInteractionPresentationBlock
         }
         let remotePreservedIDs = Set(
             remote

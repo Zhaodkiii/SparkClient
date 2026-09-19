@@ -27,6 +27,7 @@ final class ToolHub: @unchecked Sendable {
     let webSearchGateway: WebSearchGateway
     let weatherGateway: WeatherGateway
     let logger: Logger
+    let symptomCollectionSessionStore = SymptomCollectionSessionStore()
 
     /// 内存画布：标题 → 正文（`createCanvas` / `editCanvas` 使用，进程内有效）。
     var canvasStore: [String: String] = [:]

@@ -26,7 +26,6 @@ final class ChatListViewModel: ObservableObject {
     private let selectMemberUseCase: SelectMemberUseCase
     private let selectedMemberIDPersistence: any SelectedMemberIDPersisting
     private let loadChatThreadsUseCase: LoadChatThreadsUseCase
-    private let loadChatMessagesUseCase: LoadChatMessagesUseCase
     private let createThreadUseCase: CreateThreadUseCase
     private let deleteThreadUseCase: DeleteThreadUseCase
     private let updateThreadMetadataUseCase: UpdateChatThreadMetadataUseCase
@@ -110,7 +109,6 @@ final class ChatListViewModel: ObservableObject {
         selectMemberUseCase: SelectMemberUseCase,
         selectedMemberIDPersistence: any SelectedMemberIDPersisting,
         loadChatThreadsUseCase: LoadChatThreadsUseCase,
-        loadChatMessagesUseCase: LoadChatMessagesUseCase,
         createThreadUseCase: CreateThreadUseCase,
         deleteThreadUseCase: DeleteThreadUseCase,
         updateThreadMetadataUseCase: UpdateChatThreadMetadataUseCase,
@@ -134,7 +132,6 @@ final class ChatListViewModel: ObservableObject {
         self.selectMemberUseCase = selectMemberUseCase
         self.selectedMemberIDPersistence = selectedMemberIDPersistence
         self.loadChatThreadsUseCase = loadChatThreadsUseCase
-        self.loadChatMessagesUseCase = loadChatMessagesUseCase
         self.createThreadUseCase = createThreadUseCase
         self.deleteThreadUseCase = deleteThreadUseCase
         self.updateThreadMetadataUseCase = updateThreadMetadataUseCase
@@ -204,12 +201,10 @@ final class ChatListViewModel: ObservableObject {
 
     func loadIfNeeded() async {
         guard case .signedIn = sessionStore.state else { return }
-        stateStore.setLoading(true)
-        defer { stateStore.setLoading(false) }
-
         await ensureMemberContextLoaded()
         await reloadThreads(selectFirstIfNeeded: true)
     }
+
 
     func refreshThreads() async {
         do {
@@ -294,28 +289,16 @@ final class ChatListViewModel: ObservableObject {
         defer { isCreatingQuickStartThread = false }
 
         let initialMemberID = await resolveInitialMemberIDForNewThread()
-        let thread = await createThreadUseCase.execute(
-            memberID: initialMemberID,
-            title: mode.title
-        )
-        rememberManualOrdinaryAIProvenance(threadID: thread.id)
-        // 新会话元数据由 ChatSyncSupervisor 监听 threadsChanged 后台推送，不阻塞进入会话
-        await reloadThreads(selectFirstIfNeeded: false)
-        stateStore.markThreadAsNewlyCreated(thread.id)
-        stateStore.setSelectedThreadID(thread.id)
-        stateStore.setDraft(mode.initialDraft, for: thread.id)
+        let threadID = await createThread(memberID: initialMemberID, title: mode.title)
+        stateStore.setDraft(mode.initialDraft, for: threadID)
         logger.info(
-            "Chat 快捷建会话完成 thread=\(thread.id.uuidString.prefix(8)) source=\(source)",
+            "Chat 快捷建会话完成 thread=\(threadID.uuidString.prefix(8)) source=\(source)",
             module: .general
         )
-        return thread.id
+        return threadID
     }
 
     func selectThread(_ threadID: UUID) {
-        stateStore.setSelectedThreadID(threadID)
-    }
-
-    func selectAndPrepare(threadID: UUID) async {
         stateStore.setSelectedThreadID(threadID)
     }
 

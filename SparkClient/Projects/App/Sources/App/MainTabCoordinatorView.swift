@@ -233,6 +233,9 @@ struct MainTabCoordinatorView: View {
                     },
                     onOpenTelemedicine: {
                         routeStore.route(to: .hospitalConsultation(.departments))
+                    },
+                    onOpenRegistration: {
+                        routeStore.route(to: .hospitalRegistration)
                     }
                 )
             } else {

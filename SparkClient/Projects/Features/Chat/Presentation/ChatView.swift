@@ -15,6 +15,11 @@ private enum HospitalScopeResolution: Equatable {
     case hospital(HospitalConversationScope)
     case ordinary
     case failed
+
+    var hospitalScope: HospitalConversationScope? {
+        guard case .hospital(let scope) = self else { return nil }
+        return scope
+    }
 }
 
 struct ChatView: View {
@@ -43,8 +48,6 @@ struct ChatView: View {
     /// CHAT-000057 38.6：context 回源的服务端实时服务状态（如 doctor_joined）。
     /// 统一 Manifest 未启用时，这是医生接管状态的唯一实时通道；nil 表示服务端未下发，不猜测。
     @State private var hospitalServiceStatus: ConversationServiceStatus?
-    /// CHAT-000055：当前医院会话的知识 Manifest（仅用于展示/调试；同步由 coordinator 处理）。
-    @State private var hospitalKnowledgeManifest: HospitalAgentKnowledgeManifest?
     /// CHAT-000055：医院会话发送被门禁拦截的提示文案（nil 表示无拦截）。
     @State private var hospitalSendBlockedMessage: String?
     @ObservedObject var stateStore: ChatStateStore
@@ -91,6 +94,8 @@ struct ChatView: View {
     )
     @State private var sendsOriginalImagesToAITemporarily = false
     @State private var isShowingGuideAddDevice = false
+    /// 工具问答卡/症状描述等行内输入聚焦且键盘弹出时，隐藏底部主 Composer。
+    @State private var suppressesBottomComposerForInlineInput = false
     
     /// CHAT-000030：详情页运行时唯一业务 thread 来源（右上角新建后原地切换）。
     private var currentThreadID: UUID {
@@ -106,23 +111,38 @@ struct ChatView: View {
         ChatComposerStyle(rawValue: composerStyleRaw) ?? .hanlin
     }
 
+    /// 已判定为医院会话时的 scope；其余状态为 nil。
+    private var hospitalScope: HospitalConversationScope? {
+        hospitalScopeResolution.hospitalScope
+    }
+
+    /// 本地 scope 仓储命中（不走服务端）。医院线程用它隔离普通模型目录。
+    private func localHospitalScope(for threadID: UUID) -> HospitalConversationScope? {
+        guard let hospitalCare, let accountID = listViewModel.signedInAccountID else { return nil }
+        return hospitalCare.scopeStore.scope(for: threadID, accountID: accountID)
+    }
+
     /// CHAT-000058：医院会话单项锁定模型行（配置缺失为 nil，此时不渲染可用选择器）。
     private var hospitalLockedComposerModelRow: AIScenarioRemoteModelRow? {
-        guard case .hospital = hospitalScopeResolution else { return nil }
+        guard hospitalScope != nil else { return nil }
         return detailViewModel.hospitalComposerModelRows[currentThreadID]
     }
 
     /// CHAT-000058：医院会话后台校验失败/配置失效 → 输入区与发送整体禁用（C-013/C-014）。
     private var isHospitalRuntimeUnavailable: Bool {
-        guard isTelemedicineConversation == false else { return false }
-        guard case .hospital = hospitalScopeResolution else { return false }
+        guard isTelemedicineConversation == false, hospitalScope != nil else { return false }
         return detailViewModel.hospitalRuntimeUnavailableThreadIDs.contains(currentThreadID)
     }
+
+    /// 日志用短 ID（全文件统一，避免到处写 `String(id.uuidString.prefix(8))`）。
+    private func shortID(_ id: UUID) -> String {
+        String(id.uuidString.prefix(8))
+    }
     
-    /// CHAT-000030：消息列表必须按 currentThreadID 读取，不能跟随全局 selectedMessages，
+    /// CHAT-000030：消息列表必须按 currentThreadID 读取，
     /// 避免局部 activeThreadID 与全局 selectedThreadID 短暂不同步时显示错线程消息。
     private var visibleMessages: [ChatMessage] {
-        stateStore.conversationListItems(for: currentThreadID).filter { uiStateStore.isDeleted($0.id) == false }
+        stateStore.persistedMessages(for: currentThreadID).filter { uiStateStore.isDeleted($0.id) == false }
     }
     
     private var hasMoreMessages: Bool {
@@ -155,10 +175,7 @@ struct ChatView: View {
     /// 线上问诊一对一会话：统一投影 kind，或医院 scope 已带 consultationID。
     private var isTelemedicineConversation: Bool {
         if unifiedCurrentItem?.conversationKind == .telemedicine { return true }
-        if case .hospital(let scope) = hospitalScopeResolution, scope.consultationID != nil {
-            return true
-        }
-        return false
+        return hospitalScope?.consultationID != nil
     }
 
     /// CHAT-000057 38.6/L1942：医生接管中（患者可发送，AI 不自动回复）。
@@ -193,7 +210,7 @@ struct ChatView: View {
     }
     
     var body: some View {
-        AnyView(configuredLayout)
+        lifecycleLayout
     }
     
     init(
@@ -228,10 +245,6 @@ struct ChatView: View {
         self.stateStore.setComposerStartupPreferences(aiSettingsViewModel.snapshot.chatComposerStartupPreferences)
     }
     
-    private var baseLayout: some View {
-        messageList
-    }
-    
     @ViewBuilder
     private var composerChrome: some View {
         switch composerStyle {
@@ -239,27 +252,12 @@ struct ChatView: View {
             ChatComposerView(
                 threadID: currentThreadID,
                 stateStore: stateStore,
-                onSend: {
-                    sendCurrentDraftIfChatModelAvailable()
-                },
-                onCancel: {
-                    KeyboardDismissHelper.dismissKeyboard()
-                    detailViewModel.cancelCurrentGeneration()
-                },
-                onAttachmentsPicked: { attachments in
-                    detailViewModel.enqueueComposerAttachments(attachments, for: currentThreadID)
-                },
-                onRemoveAttachment: { attachmentID in
-                    detailViewModel.removeComposerAttachment(id: attachmentID, for: currentThreadID)
-                },
+                onSend: sendCurrentDraftIfChatModelAvailable,
+                onCancel: cancelComposerGeneration,
+                onAttachmentsPicked: enqueueComposerAttachments,
+                onRemoveAttachment: removeComposerAttachment,
                 smallTasks: composerAssociatedSmallTasks,
-                onSmallTaskTapped: { task in
-                    KeyboardDismissHelper.dismissKeyboard()
-                    detailViewModel.startSmallTask(
-                        task,
-                        sendsOriginalImagesToAI: sendsOriginalImagesToAITemporarily
-                    )
-                }
+                onSmallTaskTapped: startComposerSmallTask
             )
         case .hanlin:
             HanlinChatComposerView(
@@ -276,26 +274,11 @@ struct ChatView: View {
                 memberCompleteDataFetcher: detailViewModel,
                 medicalQueryAPI: detailViewModel.sparkMedicalQueryAPI,
                 fileTransferService: detailViewModel.attachmentFileTransferService,
-                onSend: {
-                    sendCurrentDraftIfChatModelAvailable()
-                },
-                onCancel: {
-                    KeyboardDismissHelper.dismissKeyboard()
-                    detailViewModel.cancelCurrentGeneration()
-                },
-                onSmallTaskTapped: { task in
-                    KeyboardDismissHelper.dismissKeyboard()
-                    detailViewModel.startSmallTask(
-                        task,
-                        sendsOriginalImagesToAI: sendsOriginalImagesToAITemporarily
-                    )
-                },
-                onAttachmentsPicked: { attachments in
-                    detailViewModel.enqueueComposerAttachments(attachments, for: currentThreadID)
-                },
-                onRemoveAttachment: { attachmentID in
-                    detailViewModel.removeComposerAttachment(id: attachmentID, for: currentThreadID)
-                },
+                onSend: sendCurrentDraftIfChatModelAvailable,
+                onCancel: cancelComposerGeneration,
+                onSmallTaskTapped: startComposerSmallTask,
+                onAttachmentsPicked: enqueueComposerAttachments,
+                onRemoveAttachment: removeComposerAttachment,
                 onSetMemberBinding: { memberID in
                     Task { await detailViewModel.updateThreadMemberBinding(memberID, for: currentThreadID) }
                 },
@@ -310,7 +293,27 @@ struct ChatView: View {
                 }
             )
         }
-        
+    }
+
+    private func cancelComposerGeneration() {
+        KeyboardDismissHelper.dismissKeyboard()
+        detailViewModel.cancelCurrentGeneration()
+    }
+
+    private func enqueueComposerAttachments(_ attachments: [ChatComposerAttachmentPreview]) {
+        detailViewModel.enqueueComposerAttachments(attachments, for: currentThreadID)
+    }
+
+    private func removeComposerAttachment(_ attachmentID: UUID) {
+        detailViewModel.removeComposerAttachment(id: attachmentID, for: currentThreadID)
+    }
+
+    private func startComposerSmallTask(_ task: SmallTask) {
+        KeyboardDismissHelper.dismissKeyboard()
+        detailViewModel.startSmallTask(
+            task,
+            sendsOriginalImagesToAI: sendsOriginalImagesToAITemporarily
+        )
     }
     
     // MARK: - 编辑器相关计算属性
@@ -364,13 +367,8 @@ struct ChatView: View {
     }
     
     
-    private var configuredLayout: some View {
-        lifecycleLayout
-    }
-    
     private var navigationDecoratedLayout: some View {
-        
-        baseLayout
+        messageList
             .navigationTitle(stateStore.selectedThread?.listDisplayTitle ?? L10n.text("chat.title"))
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(item: $messageNavigationCoordinator.activeSmallTaskPayload) { payload in
@@ -468,22 +466,23 @@ struct ChatView: View {
                     // CHAT-000058 C-013/C-014：后台校验失败 → 输入区上方固定“当前服务已不可用”，发送整体禁用。
                     if isHospitalRuntimeUnavailable {
                         hospitalRuntimeUnavailableBanner
-                    } else if case .hospital = hospitalScopeResolution,
+                    } else if hospitalScope != nil,
                        let capabilities = hospitalCapabilities,
                        capabilities.canSendMessage == false {
                         // CHAT-000055 Q27：智能体下架/会话只读时，输入区上方固定提示，发送入口同步禁用。
                         hospitalReadOnlyBanner(reason: capabilities.readOnlyReason)
                     } else if isTelemedicineWaitingForDoctor {
                         telemedicineWaitingBanner
-//                    } else if isDoctorTakeoverActive {
-//                        // CHAT-000057 38.6：医生接管中轻量提示（可发送，AI 不回复），与只读横幅互斥。
-//                        doctorTakeoverBanner
                     }
-                    composerChrome
-                        // CHAT-000057 34.4：unknown 确认期间输入区/附件/快捷问题整体禁用。
-                        // CHAT-000058：医院配置失效时输入区/发送/重试同步禁用。
-                        .disabled(isComposerBlockedByUnknownConfirmation || isHospitalRuntimeUnavailable)
+                    if suppressesBottomComposerForInlineInput == false {
+                        composerChrome
+                            // CHAT-000057 34.4：unknown 确认期间输入区/附件/快捷问题整体禁用。
+                            // CHAT-000058：医院配置失效时输入区/发送/重试同步禁用。
+                            .disabled(isComposerBlockedByUnknownConfirmation || isHospitalRuntimeUnavailable)
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                    }
                 }
+                .animation(.easeInOut(duration: 0.2), value: suppressesBottomComposerForInlineInput)
             }
         //            .ignoresSafeArea(.container, edges: .bottom)
             .overlay(alignment: .bottom) {
@@ -580,22 +579,9 @@ struct ChatView: View {
                         }
                         Divider()
                         
+                        // 图片送达方式与上下文条数已在上方「设置」子菜单；
+                        // 「导出记录」与「打印调试信息」原本是同一个 logDebugInfo，已合并为后者。
                         Menu(L10n.text("chat.management.records_menu"), systemImage: "bubble.left.and.bubble.right") {
-                            Button {
-                                presentParameterCard(.imageDeliveryMode)
-                            } label: {
-                                Label(L10n.text("chat.image_delivery.menu"), systemImage: "photo.on.rectangle.angled")
-                            }
-                            Button {
-                                presentParameterCard(.maxMessages)
-                            } label: {
-                                Label(L10n.text("chat.management.context_window"), systemImage: "rectangle.compress.vertical")
-                            }
-                            Button {
-                                exportChatRecordsToDebugLog()
-                            } label: {
-                                Label(L10n.text("chat.management.export_records"), systemImage: "square.and.arrow.up")
-                            }
                             Button {
                                 logger.warning("聊天记录导入暂未接入，thread=\(currentThreadID.uuidString)", module: .general)
                             } label: {
@@ -638,12 +624,12 @@ struct ChatView: View {
             }
     }
     
-    private var initialLoadLayout: some View {
+    private var statePersistenceLayout: some View {
         navigationDecoratedLayout
             .task {
+                // 会话选中由下方 `.task(id: currentThreadID)` 统一负责，这里只做一次性快照恢复。
                 guard hasLoaded == false else { return }
                 hasLoaded = true
-                listViewModel.selectThread(currentThreadID)
                 restoreCardActionSnapshotIfNeeded(forceReload: true)
             }
             .onChange(of: threadID) { newValue in
@@ -651,30 +637,30 @@ struct ChatView: View {
                 guard newValue != activeThreadID else { return }
                 switchDetailThread(from: activeThreadID, to: newValue)
             }
-    }
-    
-    private var statePersistenceLayoutStep1: some View {
-        initialLoadLayout
-            .onChange(of: uiStateStore.savedKnowledgeCardIDs) { _ in
-                persistCardActionSnapshot()
-            }
-            .onChange(of: uiStateStore.savedMessageIDs) { _ in
-                persistCardActionSnapshot()
-            }
-    }
-    
-    private var statePersistenceLayout: some View {
-        statePersistenceLayoutStep1
-            .onChange(of: uiStateStore.ignoredTaskCardIDs) { _ in
-                persistCardActionSnapshot()
-            }
-            .onChange(of: uiStateStore.createdTaskCardIDs) { _ in
-                persistCardActionSnapshot()
-            }
+            .onChange(of: uiStateStore.savedKnowledgeCardIDs) { _ in persistCardActionSnapshot() }
+            .onChange(of: uiStateStore.savedMessageIDs) { _ in persistCardActionSnapshot() }
+            .onChange(of: uiStateStore.ignoredTaskCardIDs) { _ in persistCardActionSnapshot() }
+            .onChange(of: uiStateStore.createdTaskCardIDs) { _ in persistCardActionSnapshot() }
     }
     
     private var lifecycleLayout: some View {
         statePersistenceLayout
+            .onReceive(NotificationCenter.default.publisher(for: ChatInlineInputFocus.focusChangedNotification)) { note in
+                guard let focused = note.userInfo?["focused"] as? Bool else { return }
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    suppressesBottomComposerForInlineInput = focused
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: ChatInlineInputFocus.mainComposerDidBeginEditingNotification)) { _ in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    suppressesBottomComposerForInlineInput = false
+                }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    suppressesBottomComposerForInlineInput = false
+                }
+            }
             .onAppear {
                 detailViewModel.updateCachedMemberCompleteData(homeViewModel.dashboard?.medical.completeData)
                 detailViewModel.updateToolInteractionPreferences(aiSettingsViewModel.snapshot.chatToolInteractionPreferences)
@@ -700,24 +686,21 @@ struct ChatView: View {
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .chatRealtimeThreadPullDidComplete)) { note in
-                // CHAT-000056 Q8：定向拉取完成后刷新当前医院会话能力；下架/终结 → 输入立即只读。
-                // Q7：仅当拉取结果属于当前成员时才允许更新当前 UI。
-                guard let pulledThreadID = note.chatRealtimePulledThreadID,
-                      pulledThreadID == currentThreadID,
-                      case .hospital(let scope) = hospitalScopeResolution,
-                      scope.memberID == homeViewModel.memberContextStoreForBinding.context.selectedMemberID else { return }
-                Task {
-                    await refreshHospitalConversationContext(threadID: pulledThreadID, scope: scope)
-                    // CHAT-000057 38.6：拉取事件后同步刷新统一 Manifest，
-                    // 使医生接管/取消接管等服务状态变化在已打开会话内即时生效（驱动 AI 回复门禁）。
-                    await listViewModel.refreshUnifiedManifest(reason: .push)
-                }
-            }
-            .onReceive(NotificationCenter.default.publisher(for: .chatRealtimeThreadPullDidComplete)) { note in
-                // CHAT-000057 26.5：前台可读会话的新到消息按既有实时链路即时确认已读（幂等）；
-                // unknown/身份未确认时 UseCase 内部拒绝，不产生副作用。
                 guard let pulledThreadID = note.chatRealtimePulledThreadID,
                       pulledThreadID == currentThreadID else { return }
+                // CHAT-000056 Q8：定向拉取完成后刷新当前医院会话能力；下架/终结 → 输入立即只读。
+                // Q7：仅当拉取结果属于当前成员时才允许更新当前 UI。
+                if let scope = hospitalScope,
+                   scope.memberID == homeViewModel.memberContextStoreForBinding.context.selectedMemberID {
+                    Task {
+                        await refreshHospitalConversationContext(threadID: pulledThreadID, scope: scope)
+                        // CHAT-000057 38.6：拉取事件后同步刷新统一 Manifest，
+                        // 使医生接管/取消接管等服务状态变化在已打开会话内即时生效（驱动 AI 回复门禁）。
+                        await listViewModel.refreshUnifiedManifest(reason: .push)
+                    }
+                }
+                // CHAT-000057 26.5：前台可读会话的新到消息按既有实时链路即时确认已读（幂等）；
+                // unknown/身份未确认时 UseCase 内部拒绝，不产生副作用。
                 Task {
                     await markCurrentConversationReadIfAllowed(
                         threadID: pulledThreadID,
@@ -727,96 +710,7 @@ struct ChatView: View {
             }
         // CHAT-000030：以 currentThreadID 作为生命周期 key，右上角新建后原地重启新 thread 初始化链路。
             .task(id: currentThreadID) {
-                // 固定本轮 ID，避免 await 期间用户再次新建导致后续步骤串到别的 thread
-                let id = currentThreadID
-                let isInitialConversationOpen = initiallyOpenedThreadID != id
-                if isInitialConversationOpen {
-                    // 必须在第一个 await 前记录；即使随后 push 导致 task 取消，返回也属于导航返回。
-                    initiallyOpenedThreadID = id
-                }
-                let hospitalInitialMessages = stateStore.takeHospitalInitialMessages(for: id)
-                listViewModel.selectThread(id)
-                // CHAT-000058：本地 scope 命中的医院线程使用单项锁定目录；
-                // 普通目录刷新不得修正其草稿选中态与线程模型（目录完全隔离，C-019）。
-                let isHospitalThreadByLocalScope: Bool = {
-                    guard let hospitalCare, let accountID = listViewModel.signedInAccountID else { return false }
-                    return hospitalCare.scopeStore.scope(for: id, accountID: accountID) != nil
-                }()
-                if let initialModel = await detailViewModel.refreshChatModelPicker(
-                    for: id,
-                    skipSelectionCorrection: isHospitalThreadByLocalScope
-                ) {
-                    if isHospitalThreadByLocalScope == false,
-                       stateStore.composerDraft(for: id).runtimeFlags.selectedChatModelName == nil {
-                        stateStore.setSelectedChatModelName(initialModel, for: id)
-                    }
-                }
-                await detailViewModel.refreshThreadImageDeliveryMode(for: id)
-                await detailViewModel.loadMessagesIfNeeded(
-                    for: id,
-                    lockBottomViewport: isInitialConversationOpen,
-                    scrollToBottom: isInitialConversationOpen,
-                    syncRemote: hospitalInitialMessages == nil
-                )
-                if let hospitalInitialMessages {
-                    // 纳入当前 `.task(id:)` 的结构化初始化顺序。
-                    // 初始消息入站并显式重读完成后再继续 scope/context 初始化，
-                    // 避免嵌套 Task 在页面切换或生命周期变化时停在 apply_start。
-                    await detailViewModel.applyHospitalInitialMessages(hospitalInitialMessages, threadID: id)
-                }
-                // CHAT-000054：先完成医院会话身份判定（本地 scope → 服务端 context 回源），
-                // 再决定引导卡/修复/新建继承副作用，避免重装后医院会话被降级为普通会话。
-                let scopeResolution = await resolveHospitalScope(for: id)
-                hospitalScopeResolution = scopeResolution
-                showHospitalScopeResolutionFailure = (scopeResolution == .failed)
-                // CHAT-000055：医院会话进入后后台回源 context（能力 + 知识 Manifest），
-                // 驱动发送门禁与知识同步；失败不降级、不阻断历史可读。
-                if case .hospital(let scope) = scopeResolution {
-                    let capturedScope = scope
-                    Task { await refreshHospitalConversationContext(threadID: id, scope: capturedScope) }
-                    // CHAT-000058：装载专用运行配置（内存 → Keychain → 服务端），
-                    // Keychain 命中时先可用并注册后台静默校验；失败标记服务不可用并阻断发送。
-                    if let accountID = listViewModel.signedInAccountID {
-                        Task {
-                            await detailViewModel.prepareHospitalRuntimeSession(
-                                threadID: id,
-                                scope: capturedScope,
-                                accountID: accountID
-                            )
-                        }
-                    }
-                }
-                // CHAT-000057 D-016/26.6：消息加载成功且身份确认后提交已读；
-                // unknown/conflict/医院身份未确认不提交（26.3），幂等可重复。
-                await markCurrentConversationReadIfAllowed(threadID: id, scopeResolution: scopeResolution)
-                // CHAT-000057 38.6：进入会话后台刷新 Manifest（single-flight），
-                // 获取最新服务状态（如医生接管 doctor_taken_over），驱动发送链路的 AI 回复门禁。
-                await listViewModel.refreshUnifiedManifest(reason: .threadOpenConfirmation)
-                // CHAT-000029：默认绑定已在 thread 创建阶段前置完成，页面不再补绑。
-                // 新建链路：保持新建标记（阻止并发 repair）→ 幂等插入 guide card → 启动生成 → 清除标记；
-                // 重新进入旧对话：只做 guide 卡片异常状态修复，绝不生成。
-                if stateStore.isThreadMarkedAsNewlyCreated(id) {
-                    let didInsertGuideCard: Bool
-                    if case .ordinary = scopeResolution {
-                        didInsertGuideCard = await detailViewModel.ensureFirstGuideCardInsertedForNewThreadIfNeeded(threadID: id)
-                    } else {
-                        // 医院会话或身份未明：不插入普通引导卡，避免降级副作用。
-                        didInsertGuideCard = false
-                    }
-                    if didInsertGuideCard {
-                        await detailViewModel.startGuideQuestionGenerationForNewlyCreatedThread(threadID: id)
-                    }
-                    stateStore.clearThreadWasJustCreatedMarker(id)
-                    logger.info(
-                        "chat.detail.thread_switch.guide_ensured thread=\(String(id.uuidString.prefix(8))) inserted=\(didInsertGuideCard)",
-                        module: .general
-                    )
-                } else {
-                    if case .ordinary = scopeResolution {
-                        await detailViewModel.repairGuideQuestionsForReenteredThreadIfNeeded(threadID: id)
-                    }
-                }
-                await trySendAutoSmallTaskIfReady(for: id)
+                await initializeConversation(id: currentThreadID)
             }
             .task(id: reasoningRefreshId) {
                 await detailViewModel.refreshReasoningToolbarContext(for: currentThreadID)
@@ -829,9 +723,7 @@ struct ChatView: View {
             }
             .sheet(isPresented: $isShowingGuideAddDevice) {
                 NavigationStack {
-                    ChatGuideAddDeviceSheet(
-                        memberContextStore: homeViewModel.memberContextStoreForBinding
-                    )
+                    MyDevicesView(memberContextStore: homeViewModel.memberContextStoreForBinding)
                 }
                 .onDisappear {
                     logger.info("chat.guide.metrics.binding_sheet_closed", module: .general)
@@ -975,7 +867,7 @@ struct ChatView: View {
                 detailViewModel.notifyAskReportMaxRefsReached()
             },
             onConversationThreadSelected: { selectedThreadID in
-                switchThreadFromConversationList(to: selectedThreadID)
+                switchDetailThread(from: currentThreadID, to: selectedThreadID)
             }
         )
         .interactiveDismissDisabled(active.snapshot.requiresForcedSheetDismiss)
@@ -992,10 +884,102 @@ struct ChatView: View {
             detailViewModel: detailViewModel
         )
     }
+
+    /// 进入/切换会话的唯一初始化入口。固定本轮 ID，避免 await 期间再新建导致步骤串到别的 thread。
+    @MainActor
+    private func initializeConversation(id: UUID) async {
+        let isInitialConversationOpen = initiallyOpenedThreadID != id
+        if isInitialConversationOpen {
+            // 必须在第一个 await 前记录；即使随后 push 导致 task 取消，返回也属于导航返回。
+            initiallyOpenedThreadID = id
+        }
+        let hospitalInitialMessages = stateStore.takeHospitalInitialMessages(for: id)
+        listViewModel.selectThread(id)
+        // CHAT-000058：本地 scope 命中的医院线程使用单项锁定目录；
+        // 普通目录刷新不得修正其草稿选中态与线程模型（目录完全隔离，C-019）。
+        let isHospitalThreadByLocalScope = localHospitalScope(for: id) != nil
+        if let initialModel = await detailViewModel.refreshChatModelPicker(
+            for: id,
+            skipSelectionCorrection: isHospitalThreadByLocalScope
+        ), isHospitalThreadByLocalScope == false,
+           stateStore.composerDraft(for: id).runtimeFlags.selectedChatModelName == nil {
+            stateStore.setSelectedChatModelName(initialModel, for: id)
+        }
+        await detailViewModel.refreshThreadImageDeliveryMode(for: id)
+        if let hospitalInitialMessages, hospitalInitialMessages.isEmpty == false {
+            // 创建响应已带首屏消息，只走入站落库 + 重读，不再先空读再覆盖。
+            await detailViewModel.applyHospitalInitialMessages(hospitalInitialMessages, threadID: id)
+        } else {
+            await detailViewModel.loadMessagesIfNeeded(
+                for: id,
+                lockBottomViewport: isInitialConversationOpen,
+                scrollToBottom: isInitialConversationOpen,
+                syncRemote: true
+            )
+        }
+        let scopeResolution = await resolveHospitalScope(for: id)
+        applyHospitalScopeResolution(scopeResolution)
+        if let scope = scopeResolution.hospitalScope {
+            Task { await refreshHospitalConversationContext(threadID: id, scope: scope) }
+            prepareHospitalRuntimeSessionIfNeeded(threadID: id, scope: scope)
+        }
+        await markCurrentConversationReadIfAllowed(threadID: id, scopeResolution: scopeResolution)
+        await listViewModel.refreshUnifiedManifest(reason: .threadOpenConfirmation)
+        await ensureOrRepairGuideCard(for: id, scopeResolution: scopeResolution)
+        await trySendAutoSmallTaskIfReady(for: id)
+    }
+
+    private func applyHospitalScopeResolution(_ resolution: HospitalScopeResolution) {
+        hospitalScopeResolution = resolution
+        showHospitalScopeResolutionFailure = (resolution == .failed)
+    }
+
+    private func resetHospitalConversationUIState() {
+        hospitalScopeResolution = .undetermined
+        showHospitalScopeResolutionFailure = false
+        hospitalCapabilities = nil
+        hospitalServiceStatus = nil
+    }
+
+    private func prepareHospitalRuntimeSessionIfNeeded(threadID: UUID, scope: HospitalConversationScope) {
+        guard let accountID = listViewModel.signedInAccountID else { return }
+        Task {
+            await detailViewModel.prepareHospitalRuntimeSession(
+                threadID: threadID,
+                scope: scope,
+                accountID: accountID
+            )
+        }
+    }
+
+    /// 新建普通会话插入引导卡；重进旧对话只修复异常态。医院/身份未明不插普通引导卡。
+    private func ensureOrRepairGuideCard(
+        for threadID: UUID,
+        scopeResolution: HospitalScopeResolution
+    ) async {
+        if stateStore.isThreadMarkedAsNewlyCreated(threadID) {
+            let didInsertGuideCard: Bool
+            if scopeResolution == .ordinary {
+                didInsertGuideCard = await detailViewModel.ensureFirstGuideCardInsertedForNewThreadIfNeeded(threadID: threadID)
+            } else {
+                didInsertGuideCard = false
+            }
+            if didInsertGuideCard {
+                await detailViewModel.startGuideQuestionGenerationForNewlyCreatedThread(threadID: threadID)
+            }
+            stateStore.clearThreadWasJustCreatedMarker(threadID)
+            logger.info(
+                "chat.detail.thread_switch.guide_ensured thread=\(shortID(threadID)) inserted=\(didInsertGuideCard)",
+                module: .general
+            )
+        } else if scopeResolution == .ordinary {
+            await detailViewModel.repairGuideQuestionsForReenteredThreadIfNeeded(threadID: threadID)
+        }
+    }
     
     /// 医院 / 线上问诊会话：真人医生头像跳转简介详情（agent 来自 scope，医院名优先简介卡快照）。
     private var doctorProfileNavigation: ChatDoctorProfileNavigationContext? {
-        guard case .hospital(let scope) = hospitalScopeResolution else { return nil }
+        guard let scope = hospitalScope else { return nil }
         return ChatDoctorProfileNavigationContext(
             agentID: scope.agentID,
             hospitalName: hospitalNameFromIntroCard(in: visibleMessages) ?? "",
@@ -1018,57 +1002,32 @@ struct ChatView: View {
 
     @ViewBuilder
     private var messageList: some View {
-        switch aiSettingsViewModel.snapshot.chatConversationUIPreferences.architecture {
-        case .uiKit:
-            ChatConversationMessageListContainer(
-                threadID: currentThreadID,
-                stateStore: stateStore,
-                detailViewModel: detailViewModel,
-                aiSettingsViewModel: aiSettingsViewModel,
-                knowledgeDependencies: knowledgeDependencies,
-                knowledgeViewModel: knowledgeViewModel,
-                uiStateStore: uiStateStore,
-                speechHelper: speechHelper,
-                memberContextStore: homeViewModel.memberContextStoreForBinding,
-                navigationCoordinator: messageNavigationCoordinator,
-                taskManager: taskManager,
-                logger: logger,
-                actionStateHandle: actionStateHandle,
-                conversationAppearance: aiSettingsViewModel.snapshot.chatConversationAppearance,
-                visibleMessages: visibleMessages,
-                hasMoreMessages: hasMoreMessages,
-                isLoadingMoreMessages: isLoadingMoreMessages,
-                lockBottomViewport: stateStore.isBottomViewportLocked(for: currentThreadID),
-                scrollToBottomRequestGeneration: stateStore.scrollToBottomRequestGeneration(for: currentThreadID),
-                guideHomeDestinationBuilder: guideHomeDestinationBuilder,
-                doctorProfileNavigation: doctorProfileNavigation
-            )
-        case .swiftUI:
-            ChatSwiftUIConversationView(
-                threadID: currentThreadID,
-                stateStore: stateStore,
-                detailViewModel: detailViewModel,
-                aiSettingsViewModel: aiSettingsViewModel,
-                knowledgeDependencies: knowledgeDependencies,
-                knowledgeViewModel: knowledgeViewModel,
-                uiStateStore: uiStateStore,
-                speechHelper: speechHelper,
-                memberContextStore: homeViewModel.memberContextStoreForBinding,
-                navigationCoordinator: messageNavigationCoordinator,
-                taskManager: taskManager,
-                logger: logger,
-                actionStateHandle: actionStateHandle,
-                conversationAppearance: aiSettingsViewModel.snapshot.chatConversationAppearance,
-                uiPreferences: aiSettingsViewModel.snapshot.chatConversationUIPreferences,
-                visibleMessages: visibleMessages,
-                hasMoreMessages: hasMoreMessages,
-                isLoadingMoreMessages: isLoadingMoreMessages,
-                lockBottomViewport: stateStore.isBottomViewportLocked(for: currentThreadID),
-                scrollToBottomRequestGeneration: stateStore.scrollToBottomRequestGeneration(for: currentThreadID),
-                guideHomeDestinationBuilder: guideHomeDestinationBuilder,
-                doctorProfileNavigation: doctorProfileNavigation
-            )
-        }
+        let uiPreferences = aiSettingsViewModel.snapshot.chatConversationUIPreferences
+        ChatConversationSurface(
+            architecture: uiPreferences.architecture,
+            threadID: currentThreadID,
+            stateStore: stateStore,
+            detailViewModel: detailViewModel,
+            aiSettingsViewModel: aiSettingsViewModel,
+            knowledgeDependencies: knowledgeDependencies,
+            knowledgeViewModel: knowledgeViewModel,
+            uiStateStore: uiStateStore,
+            speechHelper: speechHelper,
+            memberContextStore: homeViewModel.memberContextStoreForBinding,
+            navigationCoordinator: messageNavigationCoordinator,
+            taskManager: taskManager,
+            logger: logger,
+            actionStateHandle: actionStateHandle,
+            conversationAppearance: aiSettingsViewModel.snapshot.chatConversationAppearance,
+            uiPreferences: uiPreferences,
+            visibleMessages: visibleMessages,
+            hasMoreMessages: hasMoreMessages,
+            isLoadingMoreMessages: isLoadingMoreMessages,
+            lockBottomViewport: stateStore.isBottomViewportLocked(for: currentThreadID),
+            scrollToBottomRequestGeneration: stateStore.scrollToBottomRequestGeneration(for: currentThreadID),
+            guideHomeDestinationBuilder: guideHomeDestinationBuilder,
+            doctorProfileNavigation: doctorProfileNavigation
+        )
     }
     
     private func messageForNavigation(clientMessageID: UUID) -> ChatMessage? {
@@ -1124,7 +1083,7 @@ struct ChatView: View {
                 options: temperatureOptions,
                 selection: Binding(
                     get: { overlaySettings.temperature },
-                    set: { updateOverlayTemperature($0) }
+                    set: { value in updateOverlaySettings { $0.temperature = value } }
                 )
             )
         case .topP:
@@ -1135,7 +1094,7 @@ struct ChatView: View {
                 options: topPOptions,
                 selection: Binding(
                     get: { overlaySettings.topP },
-                    set: { updateOverlaySetting(topP: $0) }
+                    set: { value in updateOverlaySettings { $0.topP = value } }
                 )
             )
         case .maxTokens:
@@ -1146,7 +1105,7 @@ struct ChatView: View {
                 options: maxTokenOptions,
                 selection: Binding(
                     get: { overlaySettings.maxTokens },
-                    set: { updateOverlayMaxTokens($0) }
+                    set: { value in updateOverlaySettings { $0.maxTokens = value } }
                 )
             )
         case .maxMessages:
@@ -1157,7 +1116,7 @@ struct ChatView: View {
                 options: maxMessageOptions,
                 selection: Binding(
                     get: { overlaySettings.maxMessages },
-                    set: { updateOverlaySetting(maxMessages: $0) }
+                    set: { value in updateOverlaySettings { $0.maxMessages = value } }
                 )
             )
         case .imageDeliveryMode:
@@ -1169,7 +1128,7 @@ struct ChatView: View {
                     options: imageDeliveryOptions,
                     selection: Binding(
                         get: { overlaySettings.imageDeliveryMode },
-                        set: { updateOverlaySetting(imageDeliveryMode: $0) }
+                        set: { value in updateOverlaySettings { $0.imageDeliveryMode = value } }
                     )
                 )
                 ChatThreadToggleSettingCard(
@@ -1300,91 +1259,77 @@ struct ChatView: View {
         KeyboardDismissHelper.dismissKeyboard()
         // CHAT-000057 34.4：unknown 确认期间禁止发送（输入区已禁用，此处为兜底门禁）。
         guard isComposerBlockedByUnknownConfirmation == false else { return }
-        // CHAT-000055 Q27/Q28：医院会话发送前必须过能力门禁。
-        // 禁发时只提示、不发送；绝不自动重发、绝不改走普通 AI 链路。
-        if case .hospital(let scope) = hospitalScopeResolution {
-            // CHAT-000056 Q7.4：会话绑定成员已不是当前就诊人时禁止继续发送，
-            // 患者需切回该成员或从当前成员重新进入医生卡发起咨询。
-            guard scope.memberID == homeViewModel.memberContextStoreForBinding.context.selectedMemberID else {
-                hospitalSendBlockedMessage = L10n.text(
-                    "chat.hospital.send_member_mismatch",
-                    fallback: "当前就诊人已切换，请切回原就诊人后再继续咨询"
-                )
-                return
-            }
-            // CHAT-000058 C-013/C-014：后台校验失败 → 立即停止后续发送（不中断进行中请求，不改投普通 AI）。
-            // 线上问诊不依赖医生智能体运行配置，不因 AI runtime 失败禁发。
-            if isTelemedicineConversation == false,
-               detailViewModel.hospitalRuntimeUnavailableThreadIDs.contains(currentThreadID) {
-                hospitalSendBlockedMessage = L10n.text(
-                    "chat.hospital.runtime_unavailable",
-                    fallback: "当前服务已不可用"
-                )
-                return
-            }
-            // CHAT-000058 C-003：专用配置未就绪时不发送，先补装载。线上问诊跳过。
-            if isTelemedicineConversation == false,
-               detailViewModel.hospitalComposerModelRows[currentThreadID] == nil {
-                hospitalSendBlockedMessage = L10n.text(
-                    "chat.hospital.runtime_preparing",
-                    fallback: "医生智能体服务尚未就绪，请稍候重试"
-                )
-                if let accountID = listViewModel.signedInAccountID {
-                    let threadID = currentThreadID
-                    Task {
-                        await detailViewModel.prepareHospitalRuntimeSession(
-                            threadID: threadID,
-                            scope: scope,
-                            accountID: accountID
-                        )
-                    }
-                }
-                return
-            }
-            if let capabilities = hospitalCapabilities {
-                guard capabilities.canSendMessage else {
-                    hospitalSendBlockedMessage = hospitalReadOnlyMessage(for: capabilities.readOnlyReason)
-                    return
-                }
-            } else {
-                // context 未回源：先回源再判定，本次不直接发送。
-                let threadID = currentThreadID
-                Task {
-                    await refreshHospitalConversationContext(threadID: threadID, scope: scope)
-                    guard currentThreadID == threadID else { return }
-                    if let capabilities = hospitalCapabilities {
-                        if capabilities.canSendMessage {
-                            sendCurrentDraftIfChatModelAvailable()
-                        } else {
-                            hospitalSendBlockedMessage = hospitalReadOnlyMessage(for: capabilities.readOnlyReason)
-                        }
-                    } else {
-                        hospitalSendBlockedMessage = L10n.text(
-                            "chat.hospital.send_unavailable",
-                            fallback: "无法确认院内会话状态，请检查网络后重试"
-                        )
-                    }
-                }
-                return
-            }
+        if let scope = hospitalScope, allowHospitalSend(scope: scope) == false {
+            return
         }
         // 医生接管中 / 线上问诊：允许发送但 AI 不回复。
         let suppressAIReply = isDoctorTakeoverActive || isTelemedicineConversation
         if suppressAIReply == false {
             // CHAT-000058：医院会话可用性以单项锁定目录为准（上文已校验），普通会话仍以通用目录为准。
-            if case .hospital = hospitalScopeResolution {
+            if hospitalScope != nil {
                 guard detailViewModel.hospitalModelRow(for: currentThreadID) != nil else { return }
-            } else {
-                guard detailViewModel.chatScenarioModels.isEmpty == false else {
-                    showNoAvailableChatModelAlert = true
-                    return
-                }
+            } else if detailViewModel.chatScenarioModels.isEmpty {
+                showNoAvailableChatModelAlert = true
+                return
             }
         }
         detailViewModel.startSendingCurrentDraft(
             sendsOriginalImagesToAI: sendsOriginalImagesToAITemporarily,
             suppressAIReply: suppressAIReply
         )
+    }
+
+    /// 医院会话发送门禁。返回 false 表示已拦截（已写提示或已调度回源），调用方不得继续发送。
+    @discardableResult
+    private func allowHospitalSend(scope: HospitalConversationScope) -> Bool {
+        if scope.memberID != homeViewModel.memberContextStoreForBinding.context.selectedMemberID {
+            hospitalSendBlockedMessage = L10n.text(
+                "chat.hospital.send_member_mismatch",
+                fallback: "当前就诊人已切换，请切回原就诊人后再继续咨询"
+            )
+            return false
+        }
+        if isHospitalRuntimeUnavailable {
+            hospitalSendBlockedMessage = L10n.text(
+                "chat.hospital.runtime_unavailable",
+                fallback: "当前服务已不可用"
+            )
+            return false
+        }
+        if isTelemedicineConversation == false, hospitalLockedComposerModelRow == nil {
+            hospitalSendBlockedMessage = L10n.text(
+                "chat.hospital.runtime_preparing",
+                fallback: "医生智能体服务尚未就绪，请稍候重试"
+            )
+            prepareHospitalRuntimeSessionIfNeeded(threadID: currentThreadID, scope: scope)
+            return false
+        }
+        if let capabilities = hospitalCapabilities {
+            guard capabilities.canSendMessage else {
+                hospitalSendBlockedMessage = hospitalReadOnlyMessage(for: capabilities.readOnlyReason)
+                return false
+            }
+            return true
+        }
+        // context 未回源：先回源再判定，本次不直接发送。
+        let threadID = currentThreadID
+        Task {
+            await refreshHospitalConversationContext(threadID: threadID, scope: scope)
+            guard currentThreadID == threadID else { return }
+            if let capabilities = hospitalCapabilities {
+                if capabilities.canSendMessage {
+                    sendCurrentDraftIfChatModelAvailable()
+                } else {
+                    hospitalSendBlockedMessage = hospitalReadOnlyMessage(for: capabilities.readOnlyReason)
+                }
+            } else {
+                hospitalSendBlockedMessage = L10n.text(
+                    "chat.hospital.send_unavailable",
+                    fallback: "无法确认院内会话状态，请检查网络后重试"
+                )
+            }
+        }
+        return false
     }
 
     /// CHAT-000055：只读原因 → 用户可读文案。
@@ -1399,73 +1344,45 @@ struct ChatView: View {
         }
     }
 
-    /// CHAT-000058 C-013/C-014：后台校验失败后固定展示“当前服务已不可用”。
-    private var hospitalRuntimeUnavailableBanner: some View {
+    /// 输入区上下方横幅的统一「图标 + 文案」形态。
+    private func chatBanner(systemImage: String, style: ChatBannerStyle, text: String) -> some View {
         HStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-            Text(L10n.text("chat.hospital.runtime_unavailable", fallback: "当前服务已不可用"))
+            Image(systemName: systemImage)
+                .foregroundStyle(style.tint)
+            Text(text)
                 .font(.footnote)
                 .foregroundStyle(.primary)
                 .multilineTextAlignment(.leading)
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity)
-        .background(Color.orange.opacity(0.12))
+        .chatBannerChrome(style: style)
+    }
+
+    /// CHAT-000058 C-013/C-014：后台校验失败后固定展示“当前服务已不可用”。
+    private var hospitalRuntimeUnavailableBanner: some View {
+        chatBanner(
+            systemImage: "exclamationmark.triangle.fill",
+            style: .warning,
+            text: L10n.text("chat.hospital.runtime_unavailable", fallback: "当前服务已不可用")
+        )
     }
 
     /// CHAT-000055：只读横幅（输入区上方固定展示）。
-    @ViewBuilder
     private func hospitalReadOnlyBanner(reason: String?) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(.orange)
-            Text(hospitalReadOnlyMessage(for: reason))
-                .font(.footnote)
-                .foregroundStyle(.primary)
-                .multilineTextAlignment(.leading)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity)
-        .background(Color.orange.opacity(0.12))
+        chatBanner(
+            systemImage: "exclamationmark.triangle.fill",
+            style: .warning,
+            text: hospitalReadOnlyMessage(for: reason)
+        )
     }
 
     /// 线上问诊待医生查看：一对一会话，不套用「医生接管中」。
     private var telemedicineWaitingBanner: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "stethoscope")
-                .foregroundStyle(Color.accentColor)
-            Text(L10n.text("chat.hospital.telemedicine.waiting.banner", fallback: "问诊已提交，医生将尽快查看并回复"))
-                .font(.footnote)
-                .foregroundStyle(.primary)
-                .multilineTextAlignment(.leading)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity)
-        .background(Color.accentColor.opacity(0.10))
-    }
-
-    /// CHAT-000057 38.6：医生接管中提示横幅（可发送，AI 不回复；与只读横幅互斥）。
-    private var doctorTakeoverBanner: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "stethoscope")
-                .foregroundStyle(Color.accentColor)
-            Text(L10n.text("chat.hospital.takeover.banner", fallback: "医生已接管，消息将由医生本人回复"))
-                .font(.footnote)
-                .foregroundStyle(.primary)
-                .multilineTextAlignment(.leading)
-            Spacer(minLength: 0)
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity)
-        .background(Color.accentColor.opacity(0.10))
+        chatBanner(
+            systemImage: "stethoscope",
+            style: .info,
+            text: L10n.text("chat.hospital.telemedicine.waiting.banner", fallback: "问诊已提交，医生将尽快查看并回复")
+        )
     }
 
     /// CHAT-000057 34.6/34.4：unknown 会话顶部受控横幅。
@@ -1504,10 +1421,7 @@ struct ChatView: View {
                 Spacer(minLength: 0)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity)
-        .background(Color.orange.opacity(0.12))
+        .chatBannerChrome(style: .warning)
     }
 
     /// CHAT-000057 D-016/26.6：消息加载成功且身份确认后提交统一已读。
@@ -1522,85 +1436,45 @@ struct ChatView: View {
            let item = listViewModel.unifiedItems.first(where: { $0.threadID == threadID }) {
             // 统一投影能力为唯一事实源（含 unknown.canMarkRead == false、撤权剔除）。
             capability = item.capability
-        } else {
-            switch scopeResolution {
-            case .ordinary:
-                capability = .ordinaryAI
-            case .hospital(let scope):
-                if hospitalCapabilities?.canSendMessage == false {
-                    capability = .medicalReadOnly
-                } else if scope.consultationID != nil {
-                    capability = .telemedicineActive
-                } else {
-                    capability = .hospitalAgentActive
-                }
-            case .undetermined, .failed:
-                // 26.3：医院 scope/context 未确认完成时不得当作普通会话提前清未读。
-                return
+        } else if let scope = scopeResolution.hospitalScope {
+            if hospitalCapabilities?.canSendMessage == false {
+                capability = .medicalReadOnly
+            } else if scope.consultationID != nil {
+                capability = .telemedicineActive
+            } else {
+                capability = .hospitalAgentActive
             }
+        } else if scopeResolution == .ordinary {
+            capability = .ordinaryAI
+        } else {
+            // 26.3：医院 scope/context 未确认完成时不得当作普通会话提前清未读。
+            return
         }
         await listViewModel.markConversationRead(threadID: threadID, capability: capability)
     }
 
-    private func updateOverlaySetting(
-        temperature: Double? = nil,
-        topP: Double? = nil,
-        maxTokens: Int? = nil,
-        maxMessages: Int? = nil,
-        imageDeliveryMode: ChatThreadImageDeliveryMode? = nil
-    ) {
+    /// 参数卡统一写入口：改动 overlay 草稿后落库。
+    ///
+    /// 原来按字段拆成 3 个几乎一样的构造函数（其中 2 个只为支持写回 nil），
+    /// 这里统一用 inout 变换；变换后必须再过一次构造器，
+    /// 因为取值裁剪（temperature/topP/maxTokens/maxMessages 的合法区间）只在 init 里做。
+    private func updateOverlaySettings(_ transform: (inout ChatThreadGenerationSettings) -> Void) {
+        var draft = overlaySettings
+        transform(&draft)
         let next = ChatThreadGenerationSettings(
-            currentModelName: overlaySettings.currentModelName,
-            temperature: temperature ?? overlaySettings.temperature,
-            topP: topP ?? overlaySettings.topP,
-            maxTokens: maxTokens ?? overlaySettings.maxTokens,
-            maxMessages: maxMessages ?? overlaySettings.maxMessages,
-            rolePrompt: overlaySettings.rolePrompt,
-            imageDeliveryMode: imageDeliveryMode ?? overlaySettings.imageDeliveryMode
+            currentModelName: draft.currentModelName,
+            temperature: draft.temperature,
+            topP: draft.topP,
+            maxTokens: draft.maxTokens,
+            maxMessages: draft.maxMessages,
+            rolePrompt: draft.rolePrompt,
+            imageDeliveryMode: draft.imageDeliveryMode
         )
         guard next != overlaySettings else { return }
         overlaySettings = next
         Task {
             await detailViewModel.updateThreadGenerationSettings(next, for: currentThreadID)
         }
-    }
-    
-    private func updateOverlayTemperature(_ temperature: Double?) {
-        let next = ChatThreadGenerationSettings(
-            currentModelName: overlaySettings.currentModelName,
-            temperature: temperature,
-            topP: overlaySettings.topP,
-            maxTokens: overlaySettings.maxTokens,
-            maxMessages: overlaySettings.maxMessages,
-            rolePrompt: overlaySettings.rolePrompt,
-            imageDeliveryMode: overlaySettings.imageDeliveryMode
-        )
-        persistOverlaySettings(next)
-    }
-    
-    private func updateOverlayMaxTokens(_ maxTokens: Int?) {
-        let next = ChatThreadGenerationSettings(
-            currentModelName: overlaySettings.currentModelName,
-            temperature: overlaySettings.temperature,
-            topP: overlaySettings.topP,
-            maxTokens: maxTokens,
-            maxMessages: overlaySettings.maxMessages,
-            rolePrompt: overlaySettings.rolePrompt,
-            imageDeliveryMode: overlaySettings.imageDeliveryMode
-        )
-        persistOverlaySettings(next)
-    }
-    
-    private func persistOverlaySettings(_ next: ChatThreadGenerationSettings) {
-        guard next != overlaySettings else { return }
-        overlaySettings = next
-        Task {
-            await detailViewModel.updateThreadGenerationSettings(next, for: currentThreadID)
-        }
-    }
-    
-    private func exportChatRecordsToDebugLog() {
-        logDebugInfo()
     }
     
     // MARK: - CHAT-000030 详情页内部新建对话与 thread 切换
@@ -1618,7 +1492,7 @@ struct ChatView: View {
         defer { isCreatingThreadInDetail = false }
         
         logger.info(
-            "chat.detail.new_thread_button.tap current=\(String(oldThreadID.uuidString.prefix(8))) isSending=\(stateStore.isSending)",
+            "chat.detail.new_thread_button.tap current=\(shortID(oldThreadID)) isSending=\(stateStore.isSending)",
             module: .general
         )
 
@@ -1626,47 +1500,32 @@ struct ChatView: View {
         var resolution = hospitalScopeResolution
         if resolution == .undetermined {
             resolution = await resolveHospitalScope(for: oldThreadID)
-            hospitalScopeResolution = resolution
+            applyHospitalScopeResolution(resolution)
         }
+
+        let newThreadID: UUID?
         switch resolution {
         case .hospital(let scope):
-            guard let newHospitalThreadID = await createHospitalThreadInsideCurrentChatIfNeeded(
-                scope: scope,
-                from: oldThreadID
-            ) else {
-                if detailThreadCreationError == nil {
-                    detailThreadCreationError = L10n.text("chat.thread.create_failed", fallback: "新建对话失败，请稍后再试")
-                }
-                logger.warning(
-                    "chat.detail.new_thread_button.create_failed current=\(String(oldThreadID.uuidString.prefix(8))) hospital=1",
-                    module: .general
-                )
-                return
-            }
-            logger.info(
-                "chat.detail.new_thread_button.create_success old=\(String(oldThreadID.uuidString.prefix(8))) new=\(String(newHospitalThreadID.uuidString.prefix(8))) hospital=1",
-                module: .general
-            )
-            switchDetailThread(from: oldThreadID, to: newHospitalThreadID)
-            return
+            newThreadID = await createHospitalThreadInsideCurrentChatIfNeeded(scope: scope, from: oldThreadID)
         case .failed:
             detailThreadCreationError = "无法确认院内会话身份，请检查网络后重试"
             return
         case .ordinary, .undetermined:
-            break
+            newThreadID = await listViewModel.createThread()
         }
 
-        guard let newThreadID = await listViewModel.createThread() else {
-            detailThreadCreationError = L10n.text("chat.thread.create_failed", fallback: "新建对话失败，请稍后再试")
+        guard let newThreadID else {
+            if detailThreadCreationError == nil {
+                detailThreadCreationError = L10n.text("chat.thread.create_failed", fallback: "新建对话失败，请稍后再试")
+            }
             logger.warning(
-                "chat.detail.new_thread_button.create_failed current=\(String(oldThreadID.uuidString.prefix(8)))",
+                "chat.detail.new_thread_button.create_failed current=\(shortID(oldThreadID)) hospital=\(resolution.hospitalScope != nil ? 1 : 0)",
                 module: .general
             )
             return
         }
-        
         logger.info(
-            "chat.detail.new_thread_button.create_success old=\(String(oldThreadID.uuidString.prefix(8))) new=\(String(newThreadID.uuidString.prefix(8)))",
+            "chat.detail.new_thread_button.create_success old=\(shortID(oldThreadID)) new=\(shortID(newThreadID)) hospital=\(resolution.hospitalScope != nil ? 1 : 0)",
             module: .general
         )
         switchDetailThread(from: oldThreadID, to: newThreadID)
@@ -1675,10 +1534,7 @@ struct ChatView: View {
     /// CHAT-000054：仅普通会话展示“对话列表”入口；
     /// 医院会话与身份未明/判定失败时隐藏，避免跨入口泄露医院 Thread。
     private var showsOrdinaryConversationListButton: Bool {
-        if case .ordinary = hospitalScopeResolution {
-            return true
-        }
-        return false
+        hospitalScopeResolution == .ordinary
     }
 
     /// CHAT-000054：身份判定失败后的手动重试（alert 内“重试”按钮触发）。
@@ -1687,8 +1543,7 @@ struct ChatView: View {
         let id = currentThreadID
         let resolution = await resolveHospitalScope(for: id)
         guard currentThreadID == id else { return }
-        hospitalScopeResolution = resolution
-        showHospitalScopeResolutionFailure = (resolution == .failed)
+        applyHospitalScopeResolution(resolution)
     }
 
     /// CHAT-000054：解析 thread 的医院会话身份。
@@ -1699,7 +1554,7 @@ struct ChatView: View {
         guard let hospitalCare, let accountID = listViewModel.signedInAccountID else {
             return .ordinary
         }
-        if let scope = hospitalCare.scopeStore.scope(for: threadID, accountID: accountID) {
+        if let scope = localHospitalScope(for: threadID) {
             return .hospital(scope)
         }
         // 本地刚新建的普通会话不可能有医院绑定，跳过服务端往返。
@@ -1716,7 +1571,7 @@ struct ChatView: View {
                 return .undetermined
             }
             logger.warning(
-                "chat.detail.hospital_scope.resolve_failed thread=\(String(threadID.uuidString.prefix(8))) error=\(error.localizedDescription)",
+                "chat.detail.hospital_scope.resolve_failed thread=\(shortID(threadID)) error=\(error.localizedDescription)",
                 module: .general
             )
             return .failed
@@ -1740,7 +1595,6 @@ struct ChatView: View {
             // 切换 thread 后迟到的回包不得覆盖新会话状态。
             guard currentThreadID == threadID else { return }
             hospitalCapabilities = result.capabilities
-            hospitalKnowledgeManifest = result.manifest
             // CHAT-000057 38.6：服务端实时服务状态（doctor_joined → 医生接管，AI 不回复）。
             hospitalServiceStatus = result.serviceStatus.map { ConversationServiceStatus(rawValue: $0) }
             // 知识同步：capabilities.canSyncKnowledge == false（下架）时 reconcile 内部直接返回。
@@ -1753,7 +1607,7 @@ struct ChatView: View {
         } catch {
             if error is CancellationError { return }
             logger.warning(
-                "chat.detail.hospital_context.refresh_failed thread=\(String(threadID.uuidString.prefix(8))) error=\(error.localizedDescription)",
+                "chat.detail.hospital_context.refresh_failed thread=\(shortID(threadID)) error=\(error.localizedDescription)",
                 module: .general
             )
         }
@@ -1781,7 +1635,7 @@ struct ChatView: View {
         } catch {
             detailThreadCreationError = error.localizedDescription
             logger.warning(
-                "chat.detail.new_thread_button.hospital_create_failed current=\(String(oldThreadID.uuidString.prefix(8))) error=\(error.localizedDescription)",
+                "chat.detail.new_thread_button.hospital_create_failed current=\(shortID(oldThreadID)) error=\(error.localizedDescription)",
                 module: .general
             )
             return nil
@@ -1794,7 +1648,7 @@ struct ChatView: View {
     private func switchDetailThread(from oldThreadID: UUID, to newThreadID: UUID) {
         guard oldThreadID != newThreadID else { return }
         logger.info(
-            "chat.detail.thread_switch.begin old=\(String(oldThreadID.uuidString.prefix(8))) new=\(String(newThreadID.uuidString.prefix(8)))",
+            "chat.detail.thread_switch.begin old=\(shortID(oldThreadID)) new=\(shortID(newThreadID))",
             module: .general
         )
         // 先用旧 key 持久化当前卡片动作快照，再切 activeThreadID
@@ -1802,34 +1656,19 @@ struct ChatView: View {
         activeThreadID = newThreadID
         stateStore.setSelectedThreadID(newThreadID)
         logger.info(
-            "chat.detail.thread_switch.active_set old=\(String(oldThreadID.uuidString.prefix(8))) new=\(String(newThreadID.uuidString.prefix(8))) selected=\(stateStore.selectedThreadID?.uuidString.prefix(8) ?? "nil")",
+            "chat.detail.thread_switch.active_set old=\(shortID(oldThreadID)) new=\(shortID(newThreadID)) selected=\(stateStore.selectedThreadID.map(shortID) ?? "nil")",
             module: .general
         )
         // 关闭参数弹层/重置消息内导航，避免保存或展示串到旧 thread
         activeParameterCard = nil
         messageNavigationCoordinator.reset()
-        // CHAT-000054：切换 thread 后重置医院身份判定，由 .task(id:) 重新解析。
-        hospitalScopeResolution = .undetermined
-        showHospitalScopeResolutionFailure = false
-        // CHAT-000055：能力与 Manifest 一并重置，避免旧会话门禁串到新会话。
-        hospitalCapabilities = nil
-        hospitalServiceStatus = nil
-        hospitalKnowledgeManifest = nil
+        resetHospitalConversationUIState()
         // 恢复新 thread 的卡片动作快照（forceReload 清掉旧 thread 遗留 UI 状态）
         restoreCardActionSnapshotIfNeeded(forceReload: true)
     }
     
-    /// Sheet 会话列表选择结果：复用当前 ChatView 原地切换，随后关闭列表。
-    @MainActor
-    private func switchThreadFromConversationList(to newThreadID: UUID) {
-        let oldThreadID = currentThreadID
-        if oldThreadID != newThreadID {
-            switchDetailThread(from: oldThreadID, to: newThreadID)
-        }
-    }
-    
     private func logDebugInfo() {
-        let messages = stateStore.conversationListItems(for: currentThreadID)
+        let messages = stateStore.persistedMessages(for: currentThreadID)
         let userMessages = messages.filter { $0.role == .user }.count
         let assistantMessages = messages.filter { $0.role == .assistant }.count
         let thread = stateStore.threadItems.first(where: { $0.id == currentThreadID })?.thread
@@ -1867,7 +1706,7 @@ struct ChatView: View {
                 "role": message.role.rawValue,
                 "delivery_state": message.deliveryState.rawValue,
                 "created_at": iso(message.createdAt),
-                "content_preview": String(contentPreview.prefix(300)),
+                "content_preview": contentPreview,
                 "attachments_count": attachments.count,
                 "blocks_count": message.blocks.count
             ]
@@ -1880,7 +1719,7 @@ struct ChatView: View {
             if let deepThought = message.blocks.last(where: { $0.kind == .deepThought })?.deepThoughtCard,
                let reasoning = deepThought.reasoningContent,
                reasoning.isEmpty == false {
-                row["reasoning_preview"] = String(reasoning.suffix(200))
+                row["reasoning_content"] = reasoning
             }
             if let model = message.modelName, model.isEmpty == false {
                 row["model_name"] = model
@@ -1895,7 +1734,10 @@ struct ChatView: View {
         ]
         if let data = try? JSONSerialization.data(withJSONObject: exportData, options: [.prettyPrinted]),
            let json = String(data: data, encoding: .utf8) {
-            logger.debug("ChatView 对话内容 JSON:\n\(json)", module: .general)
+            logger.debugUntruncated(
+                "ChatView 对话内容 JSON (完整 chars=\(json.count) bytes=\(data.count)):\n\(json)",
+                module: .general
+            )
         } else {
             logger.warning("ChatView 对话内容序列化为 JSON 失败", module: .general)
         }
@@ -1922,16 +1764,114 @@ struct ChatView: View {
     
 }
 
-/// 对话列表内的健康设备管理 sheet，复用设备模块已有的成员与绑定管理流程。
-private struct ChatGuideAddDeviceSheet: View {
-    let memberContextStore: MemberContextStore
-    
-    init(memberContextStore: MemberContextStore) {
-        self.memberContextStore = memberContextStore
+/// 对话页横幅样式（警告 / 信息），只服务 ChatView 内的输入区上下提示条。
+private enum ChatBannerStyle {
+    case warning
+    case info
+
+    var tint: Color {
+        switch self {
+        case .warning: return .orange
+        case .info: return Color.accentColor
+        }
     }
-    
+
+    var background: Color {
+        switch self {
+        case .warning: return Color.orange.opacity(0.12)
+        case .info: return Color.accentColor.opacity(0.10)
+        }
+    }
+}
+
+private extension View {
+    func chatBannerChrome(style: ChatBannerStyle) -> some View {
+        self
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(style.background)
+    }
+}
+
+/// UIKit / SwiftUI 消息列表共用入参，避免 ChatView 里写两份几乎相同的构造。
+private struct ChatConversationSurface: View {
+    let architecture: ChatConversationUIArchitecture
+    let threadID: UUID
+    @ObservedObject var stateStore: ChatStateStore
+    @ObservedObject var detailViewModel: ChatDetailViewModel
+    @ObservedObject var aiSettingsViewModel: AISettingsViewModel
+    let knowledgeDependencies: KnowledgeFeatureDependencies
+    @ObservedObject var knowledgeViewModel: KnowledgeLibraryViewModel
+    @ObservedObject var uiStateStore: ChatMessageUIStateStore
+    @ObservedObject var speechHelper: ChatSpeechHelper
+    @ObservedObject var memberContextStore: MemberContextStore
+    @ObservedObject var navigationCoordinator: ChatMessageNavigationCoordinator
+    let taskManager: TaskManager
+    let logger: Logger
+    let actionStateHandle: ChatMessageActionStateHandle
+    let conversationAppearance: ChatConversationAppearancePreferences
+    let uiPreferences: ChatConversationUIPreferences
+    let visibleMessages: [ChatMessage]
+    let hasMoreMessages: Bool
+    let isLoadingMoreMessages: Bool
+    let lockBottomViewport: Bool
+    let scrollToBottomRequestGeneration: UInt64
+    var guideHomeDestinationBuilder: ChatGuideHomeDestinationBuilder? = nil
+    var doctorProfileNavigation: ChatDoctorProfileNavigationContext? = nil
+
     var body: some View {
-        MyDevicesView(memberContextStore: memberContextStore)
+        switch architecture {
+        case .uiKit:
+            ChatConversationMessageListContainer(
+                threadID: threadID,
+                stateStore: stateStore,
+                detailViewModel: detailViewModel,
+                aiSettingsViewModel: aiSettingsViewModel,
+                knowledgeDependencies: knowledgeDependencies,
+                knowledgeViewModel: knowledgeViewModel,
+                uiStateStore: uiStateStore,
+                speechHelper: speechHelper,
+                memberContextStore: memberContextStore,
+                navigationCoordinator: navigationCoordinator,
+                taskManager: taskManager,
+                logger: logger,
+                actionStateHandle: actionStateHandle,
+                conversationAppearance: conversationAppearance,
+                visibleMessages: visibleMessages,
+                hasMoreMessages: hasMoreMessages,
+                isLoadingMoreMessages: isLoadingMoreMessages,
+                lockBottomViewport: lockBottomViewport,
+                scrollToBottomRequestGeneration: scrollToBottomRequestGeneration,
+                guideHomeDestinationBuilder: guideHomeDestinationBuilder,
+                doctorProfileNavigation: doctorProfileNavigation
+            )
+        case .swiftUI:
+            ChatSwiftUIConversationView(
+                threadID: threadID,
+                stateStore: stateStore,
+                detailViewModel: detailViewModel,
+                aiSettingsViewModel: aiSettingsViewModel,
+                knowledgeDependencies: knowledgeDependencies,
+                knowledgeViewModel: knowledgeViewModel,
+                uiStateStore: uiStateStore,
+                speechHelper: speechHelper,
+                memberContextStore: memberContextStore,
+                navigationCoordinator: navigationCoordinator,
+                taskManager: taskManager,
+                logger: logger,
+                actionStateHandle: actionStateHandle,
+                conversationAppearance: conversationAppearance,
+                uiPreferences: uiPreferences,
+                visibleMessages: visibleMessages,
+                hasMoreMessages: hasMoreMessages,
+                isLoadingMoreMessages: isLoadingMoreMessages,
+                lockBottomViewport: lockBottomViewport,
+                scrollToBottomRequestGeneration: scrollToBottomRequestGeneration,
+                guideHomeDestinationBuilder: guideHomeDestinationBuilder,
+                doctorProfileNavigation: doctorProfileNavigation
+            )
+        }
     }
 }
 

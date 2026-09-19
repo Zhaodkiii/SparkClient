@@ -173,6 +173,17 @@ struct ChatMessageBubbleContentView: View {
     private var effectiveBlocks: [ChatMessageBlock] {
         var blocks = message.blocks
 
+        // collect_symptoms 的工具块只是本次模型运行的进度提示。
+        // 流式结束后由症状汇总卡和问答卡承载结果，不再展示工具过程。
+        if message.deliveryState != .sending {
+            blocks.removeAll {
+                $0.kind == .tool
+                    && $0.toolName?.trimmingCharacters(in: .whitespacesAndNewlines)
+                        .replacingOccurrences(of: "\\_", with: "_")
+                        .lowercased() == SparkToolName.collectSymptoms.rawValue
+            }
+        }
+
         if let translatedText, translatedText.isEmpty == false {
             blocks.removeAll { $0.kind == .translatedText }
             blocks.append(ChatMessageBlock(kind: .translatedText, text: translatedText, createdAt: message.createdAt, updatedAt: message.createdAt))
@@ -182,7 +193,8 @@ struct ChatMessageBubbleContentView: View {
     }
 
     private var effectiveTimeline: [ChatMessageTimelineNode] {
-        ChatMessageTimelineProjector.project(blocks: effectiveBlocks, messageRole: message.role)
+        let projected = ChatMessageTimelineProjector.project(blocks: effectiveBlocks, messageRole: message.role)
+        return ChatMessageTimelineProjector.mergeAnsweredSymptomQuestionGroups(projected)
     }
 
     private var shouldUseBodyFocusedLayout: Bool {
@@ -216,6 +228,8 @@ struct ChatMessageBubbleContentView: View {
                     return true
                 case .healthResourceReferenceGroup:
                     return false
+                case .answeredSymptomQuestions:
+                    return false
                 }
             }
         }
@@ -235,6 +249,8 @@ struct ChatMessageBubbleContentView: View {
                 return ChatMessageTimelineNode(id: node.id, content: .tool(traceOnlyNode))
             case .healthResourceReferenceGroup:
                 return nil
+            case .answeredSymptomQuestions:
+                return nil
             }
         }
     }
@@ -249,6 +265,8 @@ struct ChatMessageBubbleContentView: View {
                     return false
                 case .healthResourceReferenceGroup:
                     return true
+                case .answeredSymptomQuestions:
+                    return true
                 }
             }
         }
@@ -262,6 +280,8 @@ struct ChatMessageBubbleContentView: View {
                     ChatMessageTimelineNode(id: presentation.id, content: .block(presentation))
                 }
             case .healthResourceReferenceGroup:
+                return [node]
+            case .answeredSymptomQuestions:
                 return [node]
             }
         }
@@ -441,6 +461,7 @@ private struct ChatMessageTimelineNode: Identifiable {
         case block(ChatMessageBlock)
         case tool(ChatToolTimelineNode)
         case healthResourceReferenceGroup([ChatHealthResourceReferencePayload])
+        case answeredSymptomQuestions([ChatToolQuestionCard])
     }
 
     let id: UUID
@@ -461,6 +482,8 @@ private struct ChatMessageTimelineNode: Identifiable {
                 onUnavailableTap: context.onHealthResourceUnavailableTap,
                 destinationBuilder: context.healthResourceDestinationFactory
             )
+        case .answeredSymptomQuestions(let cards):
+            ChatAnsweredSymptomQuestionGroupView(cards: cards)
         }
     }
 }
@@ -549,6 +572,67 @@ private enum ChatMessageTimelineProjector {
         return nodes
     }
 
+    /// 已提交的症状问答属于同一采集过程：在时间线上合并成一个可折叠组。
+    /// pending 卡不参与合并，必须继续独立展示并保留用户选择/提交能力。
+    nonisolated static func mergeAnsweredSymptomQuestionGroups(
+        _ nodes: [ChatMessageTimelineNode]
+    ) -> [ChatMessageTimelineNode] {
+        var output: [ChatMessageTimelineNode] = []
+        var groupIndexByCollectionID: [UUID: Int] = [:]
+
+        for node in nodes {
+            guard case .tool(let toolNode) = node.content else {
+                output.append(node)
+                continue
+            }
+
+            let answered = toolNode.presentations.flatMap { presentation -> [ChatToolQuestionCard] in
+                guard case .toolQuestionCards(let cards) = presentation.payload else { return [] }
+                return cards.filter { card in
+                    card.status == .submitted && card.prompt.symptomCollectionID != nil
+                }
+            }
+
+            guard answered.isEmpty == false else {
+                output.append(node)
+                continue
+            }
+
+            let remainingPresentations = toolNode.presentations.filter { presentation in
+                guard case .toolQuestionCards(let cards) = presentation.payload else { return true }
+                return cards.contains { card in
+                    card.status != .submitted || card.prompt.symptomCollectionID == nil
+                }
+            }
+
+            if toolNode.toolBlock != nil || remainingPresentations.isEmpty == false {
+                var remainingToolNode = toolNode
+                remainingToolNode.presentations = remainingPresentations
+                output.append(ChatMessageTimelineNode(id: node.id, content: .tool(remainingToolNode)))
+            }
+
+            for card in answered {
+                guard let collectionID = card.prompt.symptomCollectionID else { continue }
+                if let groupIndex = groupIndexByCollectionID[collectionID],
+                   case .answeredSymptomQuestions(var groupedCards) = output[groupIndex].content {
+                    groupedCards.append(card)
+                    output[groupIndex] = ChatMessageTimelineNode(
+                        id: output[groupIndex].id,
+                        content: .answeredSymptomQuestions(groupedCards)
+                    )
+                } else {
+                    groupIndexByCollectionID[collectionID] = output.count
+                    output.append(ChatMessageTimelineNode(
+                        id: card.id,
+                        content: .answeredSymptomQuestions([card])
+                    ))
+                }
+            }
+        }
+
+        return output
+    }
+
     nonisolated private static func healthResourcePayload(from block: ChatMessageBlock) -> ChatHealthResourceReferencePayload? {
         guard block.kind == .healthResourceReference else { return nil }
         if case .healthResourceReference(let payload) = block.payload {
@@ -614,6 +698,7 @@ private enum ChatMessageTimelineProjector {
                 .healthCards,
                 .pendingMemberToolCards,
                 .toolQuestionCards,
+                .symptomCollectionCard,
                 .toolMemberSelectionCards,
                 .healthResourceCandidateCards,
                 .toolConsentCards,
@@ -716,6 +801,8 @@ private struct ChatToolTimelineNodeView: View {
             return "正在准备采集卡片..."
         case .toolQuestionCards:
             return "等待用户回答..."
+        case .symptomCollectionCard:
+            return "正在准备症状采集..."
         case .toolMemberSelectionCards, .pendingMemberToolCards:
             return "等待选择成员..."
         case .healthResourceCandidateCards:
