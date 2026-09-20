@@ -36,7 +36,8 @@ struct SettingsView: View {
                 MainNavigationLink {
                     GeneralSettingsView(
                         viewModel: viewModel,
-                        versionUpdateCoordinator: versionUpdateCoordinator
+                        versionUpdateCoordinator: versionUpdateCoordinator,
+                        accountID: session.accountID
                     )
                 } label: {
                     HStack {

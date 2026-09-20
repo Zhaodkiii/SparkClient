@@ -56,8 +56,24 @@ final class HospitalHomeViewModel: ObservableObject {
     }
 
     func onAppear() async {
-        guard hasLoadedOnce == false else { return }
+        if hasLoadedOnce {
+            guard let accountID,
+                  let selectedHospitalID = dependencies.selectionStore.selectedHospitalID(accountID: accountID),
+                  hospital?.id != selectedHospitalID else { return }
+        }
         hasLoadedOnce = true
+        await load()
+    }
+
+    func handleHospitalSelectionChange(_ change: HospitalSelectionChange) async {
+        guard change.accountID == accountID else { return }
+        hasLoadedOnce = true
+        hospital = nil
+        departments = []
+        agentCards = []
+        openingAgentID = nil
+        loadState = .loading
+        freshness = .live
         await load()
     }
 
@@ -121,9 +137,10 @@ final class HospitalHomeViewModel: ObservableObject {
         }
 
         // Q18：有缓存先展示缓存，再后台刷新；无缓存进入首次加载骨架。
+        let selectedHospitalID = dependencies.selectionStore.selectedHospitalID(accountID: accountID)
         if let cachedHospital = dependencies.catalogCache.hospitals(accountID: accountID)?.first(where: {
-            $0.code == ResolveDemoHospitalUseCase.preferredHospitalCode
-        }) ?? dependencies.catalogCache.hospitals(accountID: accountID)?.first {
+            $0.id == selectedHospitalID
+        }) {
             applyCachedSnapshot(accountID: accountID, hospital: cachedHospital)
             loadState = .ready
             freshness = .cachedRefreshing

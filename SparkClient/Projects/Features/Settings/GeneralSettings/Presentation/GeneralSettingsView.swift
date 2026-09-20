@@ -3,6 +3,8 @@ import SwiftUI
 struct GeneralSettingsView: View {
     @ObservedObject var viewModel: SettingsViewModel
     @ObservedObject var versionUpdateCoordinator: AppVersionUpdateCoordinator
+    let accountID: Int64
+    @Environment(\.hospitalCare) private var hospitalCare
     @ObservedObject private var preferencesStore = HomeNutritionEntryPreferencesStore.shared
     @ObservedObject private var quickStartPreferenceStore = HomeQuickStartConversationPreferenceStore.shared
     @ObservedObject private var medicationPreferencesStore = MedicationReminderPreferencesStore.shared
@@ -14,11 +16,22 @@ struct GeneralSettingsView: View {
             homeStyleSection
             homeAIConversationSection
             homeNutritionEntrySection
+            hospitalSection
             medicalSection
             MedicalExtractionRetrySettingsSection()
             cacheSection
         }
         .navigationTitle(L10n.text("settings.general.title"))
+    }
+
+    @ViewBuilder
+    private var hospitalSection: some View {
+        if let hospitalCare {
+            HospitalSelectionSettingsSection(
+                accountID: accountID,
+                dependencies: hospitalCare
+            )
+        }
     }
 
     private var homeStyleSection: some View {

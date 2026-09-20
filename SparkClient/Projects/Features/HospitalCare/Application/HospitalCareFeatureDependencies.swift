@@ -3,6 +3,8 @@ import SwiftUI
 struct HospitalCareFeatureDependencies {
     let remoteAPI: HospitalCareRemoteAPI
     let catalogCache: HospitalCatalogMemoryCache
+    let selectionStore: HospitalSelectionStore = .shared
+    let selectHospital: SelectHospitalUseCase = SelectHospitalUseCase(selectionStore: .shared)
     let scopeStore: HospitalConversationScopeStore
     let loadDirectory: LoadHospitalAgentDirectoryUseCase
     let resolveDemoHospital: ResolveDemoHospitalUseCase

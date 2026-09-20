@@ -60,6 +60,10 @@ struct HospitalHomeView: View {
             // Q14：切换成员后刷新与患者相关的内容（医生卡片的最近会话归属），保留页面位置。
             Task { await viewModel.reloadAgentsForCurrentMember() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .hospitalSelectionDidChange)) { notification in
+            guard let change = notification.object as? HospitalSelectionChange else { return }
+            Task { await viewModel.handleHospitalSelectionChange(change) }
+        }
         .alert(item: $alertItem) { item in
             Alert(
                 title: Text(item.title),

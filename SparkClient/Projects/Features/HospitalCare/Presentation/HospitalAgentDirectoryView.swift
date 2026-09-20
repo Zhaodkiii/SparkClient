@@ -42,6 +42,10 @@ struct HospitalAgentDirectoryView: View {
         .onChange(of: memberContextStore.context.selectedMemberID) { _ in
             Task { await viewModel.retry() }
         }
+        .onReceive(NotificationCenter.default.publisher(for: .hospitalSelectionDidChange)) { notification in
+            guard let change = notification.object as? HospitalSelectionChange else { return }
+            Task { await viewModel.handleHospitalSelectionChange(change) }
+        }
         .alert(
             "无法开始咨询",
             isPresented: Binding(

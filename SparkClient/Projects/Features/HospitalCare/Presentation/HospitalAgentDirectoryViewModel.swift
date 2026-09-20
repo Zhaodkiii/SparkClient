@@ -48,7 +48,30 @@ final class HospitalAgentDirectoryViewModel: ObservableObject {
     }
 
     func onAppear() async {
+        if let accountID,
+           let selectedHospitalID = dependencies.selectionStore.selectedHospitalID(accountID: accountID),
+           hospital?.id != nil,
+           hospital?.id != selectedHospitalID {
+            hospital = nil
+            departments = []
+            cards = []
+            selectedDepartmentID = nil
+            keyword = ""
+            loadState = .idle
+        }
         await reload(force: false)
+    }
+
+    func handleHospitalSelectionChange(_ change: HospitalSelectionChange) async {
+        guard change.accountID == accountID else { return }
+        searchTask?.cancel()
+        hospital = nil
+        departments = []
+        cards = []
+        selectedDepartmentID = nil
+        keyword = ""
+        loadState = .idle
+        await reload(force: true)
     }
 
     func retry() async {
