@@ -257,6 +257,7 @@ struct ChatView: View {
                 onAttachmentsPicked: enqueueComposerAttachments,
                 onRemoveAttachment: removeComposerAttachment,
                 smallTasks: composerAssociatedSmallTasks,
+                showsContextTaskBar: isTelemedicineConversation == false,
                 onSmallTaskTapped: startComposerSmallTask
             )
         case .hanlin:
@@ -270,6 +271,7 @@ struct ChatView: View {
                 modelRows: detailViewModel.chatScenarioModels,
                 lockedHospitalModelRow: hospitalLockedComposerModelRow,
                 smallTasks: composerAssociatedSmallTasks,
+                showsContextTaskBar: isTelemedicineConversation == false,
                 initialCompleteData: homeViewModel.dashboard?.medical.completeData,
                 memberCompleteDataFetcher: detailViewModel,
                 medicalQueryAPI: detailViewModel.sparkMedicalQueryAPI,

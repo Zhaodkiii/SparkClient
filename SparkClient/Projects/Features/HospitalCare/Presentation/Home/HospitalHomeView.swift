@@ -187,7 +187,7 @@ struct HospitalHomeView: View {
         HStack(alignment: .center, spacing: 12) {
             hospitalLogo
             VStack(alignment: .leading, spacing: 2) {
-                Text(viewModel.hospital?.name ?? "天长市中医院")
+                Text(viewModel.hospital?.name ?? "天长市人民医院")
                     .font(.title.weight(.bold))
                     .lineLimit(1)
                 Text("官方医疗服务")

@@ -1154,6 +1154,9 @@
 "chat.capture_card.report.disclaimer" = "Note: AI extraction and organization are for health management reference only and do not constitute diagnosis, treatment advice, or medication guidance. Please consult a doctor for medical help.";
 "chat.capture_card.report.example.flat" = "Lay it flat";
 "chat.capture_card.report.example.complete" = "Capture fully";
+"chat.capture_card.supplementary_report.title" = "Add Medical Reports";
+"chat.capture_card.supplementary_report.subtitle" = "Your doctor needs more information. Take a photo, choose from your library, or select a PDF to upload it directly.";
+"chat.capture_card.supplementary_report.disclaimer" = "Reports are used only for this online consultation. Make sure they are clear and belong to the current patient.";
 "chat.capture_card.medicine_box.title" = "AI Medication Box Recognition";
 "chat.capture_card.medicine_box.subtitle" = "Send a clear, complete photo of the medication box, and I can help explain the medication details.";
 "chat.capture_card.medicine_box.example.flat" = "Lay it flat";

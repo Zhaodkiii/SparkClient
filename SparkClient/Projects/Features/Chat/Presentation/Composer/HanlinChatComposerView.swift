@@ -14,6 +14,7 @@ struct HanlinChatComposerView: View {
     /// CHAT-000058：医生智能体会话标记。非 nil 时隐藏模型选择模块。
     var lockedHospitalModelRow: AIScenarioRemoteModelRow? = nil
     let smallTasks: [SmallTask]
+    var showsContextTaskBar = true
     let initialCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData?
     let memberCompleteDataFetcher: any MemberCompleteDataFetching
     let medicalQueryAPI: SparkMedicalQueryAPI
@@ -66,23 +67,25 @@ struct HanlinChatComposerView: View {
 
     var body: some View {
         VStack(spacing: 4) {
-            ChatComposerContextTaskBar(
-                boundMemberID: boundMemberID,
-                isSending: stateStore.isSending,
-                smallTasks: smallTasks,
-                healthResourceRefs: composerDraft.pendingHealthResourceRefs,
-                onAskReport: onPresentAskReportPicker,
-                onSmallTaskTapped: onSmallTaskTapped,
-                onHealthResourceTapped: { ref in
-                    healthResourcePreviewRef = ref
-                },
-                onRemoveHealthResourceRef: { ref in
-                    stateStore.removeHealthResourceRef(ref, for: threadID)
-                },
-                onClearHealthResourceRefs: {
-                    stateStore.clearHealthResourceRefs(for: threadID)
-                }
-            )
+            if showsContextTaskBar {
+                ChatComposerContextTaskBar(
+                    boundMemberID: boundMemberID,
+                    isSending: stateStore.isSending,
+                    smallTasks: smallTasks,
+                    healthResourceRefs: composerDraft.pendingHealthResourceRefs,
+                    onAskReport: onPresentAskReportPicker,
+                    onSmallTaskTapped: onSmallTaskTapped,
+                    onHealthResourceTapped: { ref in
+                        healthResourcePreviewRef = ref
+                    },
+                    onRemoveHealthResourceRef: { ref in
+                        stateStore.removeHealthResourceRef(ref, for: threadID)
+                    },
+                    onClearHealthResourceRefs: {
+                        stateStore.clearHealthResourceRefs(for: threadID)
+                    }
+                )
+            }
 
             HanlinChatInputView(
                 threadID: threadID,

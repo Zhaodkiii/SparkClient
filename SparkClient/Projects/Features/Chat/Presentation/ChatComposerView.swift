@@ -12,6 +12,7 @@ struct ChatComposerView: View {
     let onAttachmentsPicked: ([ChatComposerAttachmentPreview]) -> Void
     let onRemoveAttachment: (UUID) -> Void
     let smallTasks: [SmallTask]
+    var showsContextTaskBar = true
     let onSmallTaskTapped: (SmallTask) -> Void
 
     @State private var inputHeight: CGFloat = 24
@@ -115,17 +116,19 @@ struct ChatComposerView: View {
 
     private var signalComposerContent: some View {
         VStack(spacing: 8) {
-            ChatComposerContextTaskBar(
-                boundMemberID: nil,
-                isSending: stateStore.isSending,
-                smallTasks: smallTasks,
-                healthResourceRefs: [],
-                onAskReport: {},
-                onSmallTaskTapped: onSmallTaskTapped,
-                onHealthResourceTapped: { _ in },
-                onRemoveHealthResourceRef: { _ in },
-                onClearHealthResourceRefs: {}
-            )
+            if showsContextTaskBar {
+                ChatComposerContextTaskBar(
+                    boundMemberID: nil,
+                    isSending: stateStore.isSending,
+                    smallTasks: smallTasks,
+                    healthResourceRefs: [],
+                    onAskReport: {},
+                    onSmallTaskTapped: onSmallTaskTapped,
+                    onHealthResourceTapped: { _ in },
+                    onRemoveHealthResourceRef: { _ in },
+                    onClearHealthResourceRefs: {}
+                )
+            }
 
             if composerDraft.attachments.isEmpty == false {
                 attachmentStrip

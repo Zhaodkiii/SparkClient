@@ -121,7 +121,9 @@ final class HospitalHomeViewModel: ObservableObject {
         }
 
         // Q18：有缓存先展示缓存，再后台刷新；无缓存进入首次加载骨架。
-        if let cachedHospital = dependencies.catalogCache.hospitals(accountID: accountID)?.first {
+        if let cachedHospital = dependencies.catalogCache.hospitals(accountID: accountID)?.first(where: {
+            $0.code == ResolveDemoHospitalUseCase.preferredHospitalCode
+        }) ?? dependencies.catalogCache.hospitals(accountID: accountID)?.first {
             applyCachedSnapshot(accountID: accountID, hospital: cachedHospital)
             loadState = .ready
             freshness = .cachedRefreshing

@@ -3,17 +3,17 @@ import Foundation
 @testable import SparkClient
 import XCTest
 
-/// CHAT-000055：Q30 取医院列表第一家 + Q31 空/无缓存失败回退 + 目录缓存 stale-while-revalidate。
+/// CHAT-000055：演示医院优先匹配配置机构 + Q31 空/无缓存失败回退 + 目录缓存 stale-while-revalidate。
 final class HospitalCareDirectoryUseCaseTests: XCTestCase {
     private let accountID: Int64 = 42
 
-    // MARK: - Q30：取列表第一家（服务端返回顺序）
+    // MARK: - Q30：优先使用天长市人民医院，找不到时回退列表第一家
 
     func testDemoHospitalResolvedByFirstRowNotCode() async {
         let remote = StubHospitalCareRemoteAPI()
         let first = HospitalCareTestFixtures.hospitalDTO(code: "000009", name: "首位医院")
         let second = HospitalCareTestFixtures.hospitalDTO(code: "000001", name: "次位医院")
-        // Q30：不使用 code/名称匹配，必须取服务端顺序第一家。
+        // 没有默认机构时，保持原有服务端顺序回退。
         remote.hospitalsResult = .success([first, second])
         let useCase = ResolveDemoHospitalUseCase(
             remoteAPI: remote,
@@ -27,6 +27,25 @@ final class HospitalCareDirectoryUseCaseTests: XCTestCase {
         }
         XCTAssertEqual(hospital.id, first.id)
         XCTAssertEqual(hospital.name, "首位医院")
+    }
+
+    func testDemoHospitalPrefersTianchangPeopleHospital() async {
+        let remote = StubHospitalCareRemoteAPI()
+        let fallback = HospitalCareTestFixtures.hospitalDTO(code: "000001", name: "天长市中医院")
+        let preferred = HospitalCareTestFixtures.hospitalDTO(code: "000002", name: "天长市人民医院")
+        remote.hospitalsResult = .success([fallback, preferred])
+        let useCase = ResolveDemoHospitalUseCase(
+            remoteAPI: remote,
+            catalogCache: HospitalCatalogMemoryCache()
+        )
+
+        let resolution = await useCase.execute(accountID: accountID)
+
+        guard case .resolved(let hospital) = resolution else {
+            return XCTFail("期望 resolved，实际 \(resolution)")
+        }
+        XCTAssertEqual(hospital.code, ResolveDemoHospitalUseCase.preferredHospitalCode)
+        XCTAssertEqual(hospital.name, "天长市人民医院")
     }
 
     // MARK: - Q31：列表空 / 无缓存失败

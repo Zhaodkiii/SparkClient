@@ -10,9 +10,13 @@ enum DemoHospitalResolution: Equatable, Sendable {
     case failed
 }
 
-/// CHAT-000055 Q30：取服务端医院列表第一家作为演示医院——不使用 code、固定 UUID 或名称匹配。
+/// CHAT-000055：演示医院优先使用当前演示机构编码；未返回时回退服务端列表第一家。
 /// 缓存数组保留服务端顺序；命中缓存先返回，过期时后台静默刷新（stale-while-revalidate）。
 struct ResolveDemoHospitalUseCase: Sendable {
+    /// 医院 Demo 默认机构：天长市人民医院。
+    /// 该值只控制客户端演示入口，不替代服务端医院权限校验。
+    static let preferredHospitalCode = "000002"
+
     let remoteAPI: any HospitalCareRemoteServing
     let catalogCache: HospitalCatalogMemoryCache
     let logger: any Logger = ConsoleLogger()
@@ -22,7 +26,7 @@ struct ResolveDemoHospitalUseCase: Sendable {
             if catalogCache.isHospitalsStale(accountID: accountID) {
                 scheduleBackgroundRefresh(accountID: accountID)
             }
-            return resolveFirst(from: cached)
+            return resolvePreferred(from: cached)
         }
         do {
             let hospitals = try await catalogCache.singleFlightHospitals(accountID: accountID) {
@@ -37,11 +41,11 @@ struct ResolveDemoHospitalUseCase: Sendable {
                     )
                 }
             }
-            return resolveFirst(from: hospitals)
+            return resolvePreferred(from: hospitals)
         } catch {
             // 刷新失败继续使用旧缓存（Q31：仅无缓存失败才回退普通对话）。
             if let cached = catalogCache.hospitals(accountID: accountID) {
-                return resolveFirst(from: cached)
+                return resolvePreferred(from: cached)
             }
             logger.warning(
                 "hospital.demo.resolve_failed error=\(error.localizedDescription)",
@@ -51,17 +55,16 @@ struct ResolveDemoHospitalUseCase: Sendable {
         }
     }
 
-    /// Q30：取列表第一家并记录日志，方便演示联调检查；后台调整首位医院属演示配置行为。
-    private func resolveFirst(from hospitals: [HospitalSummary]) -> DemoHospitalResolution {
-        guard let first = hospitals.first else {
+    private func resolvePreferred(from hospitals: [HospitalSummary]) -> DemoHospitalResolution {
+        guard let hospital = hospitals.first(where: { $0.code == Self.preferredHospitalCode }) ?? hospitals.first else {
             logger.warning("hospital.demo.resolve_first empty=true", module: .general)
             return .missing
         }
         logger.info(
-            "hospital.demo.resolve_first id=\(first.id.uuidString) name=\(first.name)",
+            "hospital.demo.resolve id=\(hospital.id.uuidString) name=\(hospital.name) code=\(hospital.code)",
             module: .general
         )
-        return .resolved(first)
+        return .resolved(hospital)
     }
 
     /// 后台静默刷新：失败仅记录日志，不影响已返回的缓存结果。

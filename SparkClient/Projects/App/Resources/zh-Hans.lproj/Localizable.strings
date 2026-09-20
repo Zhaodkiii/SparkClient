@@ -1154,6 +1154,9 @@
 "chat.capture_card.report.disclaimer" = "注：AI 提取和整理结果仅供健康管理参考，不构成诊断、治疗建议或用药依据。如需医疗帮助，请咨询医生。";
 "chat.capture_card.report.example.flat" = "平整放置";
 "chat.capture_card.report.example.complete" = "完整拍摄";
+"chat.capture_card.supplementary_report.title" = "请补充检查报告";
+"chat.capture_card.supplementary_report.subtitle" = "医生需要查看更多资料。您可以拍摄、从相册选择，或上传 PDF 等报告文件；选择后将直接上传。";
+"chat.capture_card.supplementary_report.disclaimer" = "报告仅用于本次线上问诊，请确认内容清晰且属于当前就诊人。";
 "chat.capture_card.medicine_box.title" = "AI智能识别药盒";
 "chat.capture_card.medicine_box.subtitle" = "请将清晰、完整的药盒图片发送给我，我可以为你提供关于药品的详细内容。";
 "chat.capture_card.medicine_box.example.flat" = "平面放置";

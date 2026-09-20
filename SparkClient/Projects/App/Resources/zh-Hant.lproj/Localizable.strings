@@ -112,6 +112,9 @@
 "chat.capture_card.report.disclaimer" = "註：AI 提取和整理結果僅供健康管理參考，不構成診斷、治療建議或用藥依據。如需醫療協助，請諮詢醫師。";
 "chat.capture_card.report.example.flat" = "平整放置";
 "chat.capture_card.report.example.complete" = "完整拍攝";
+"chat.capture_card.supplementary_report.title" = "請補充檢查報告";
+"chat.capture_card.supplementary_report.subtitle" = "醫師需要查看更多資料。您可以拍攝、從相簿選擇，或上傳 PDF 等報告文件；選擇後將直接上傳。";
+"chat.capture_card.supplementary_report.disclaimer" = "報告僅用於本次線上問診，請確認內容清晰且屬於目前就診人。";
 "chat.capture_card.medicine_box.title" = "AI 智慧識別藥盒";
 "chat.capture_card.medicine_box.subtitle" = "請將清晰、完整的藥盒圖片傳送給我，我可以為你提供藥品的詳細內容。";
 "chat.capture_card.medicine_box.example.flat" = "平面放置";

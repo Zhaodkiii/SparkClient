@@ -83,6 +83,7 @@ struct ConsultFormView: View {
 
     @State private var showPreviewSheet = false
     @State private var previewIndex = 0
+    @State private var showDemoPayment = false
 
     init(
         dependencies: HospitalCareFeatureDependencies,
@@ -119,6 +120,13 @@ struct ConsultFormView: View {
         .background(Color(uiColor: .systemGroupedBackground))
         .navigationTitle("填写问诊材料")
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(isPresented: $showDemoPayment) {
+            DemoConsultPaymentView {
+                guard let consultation = await viewModel.submit() else { return false }
+                onSubmitted(consultation)
+                return true
+            }
+        }
         .safeAreaInset(edge: .bottom) {
             submitBar
         }
@@ -357,11 +365,7 @@ struct ConsultFormView: View {
                     .foregroundStyle(.secondary)
             }
             Button {
-                Task {
-                    if let consultation = await viewModel.submit() {
-                        onSubmitted(consultation)
-                    }
-                }
+                showDemoPayment = true
             } label: {
                 HStack {
                     if viewModel.isSubmitting {
@@ -391,5 +395,291 @@ struct ConsultFormView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+/// 演示用收银台：不接入真实支付渠道，模拟支付成功后再执行原问诊提交链路。
+private struct DemoConsultPaymentView: View {
+    private enum PaymentMethod: String, CaseIterable, Identifiable {
+        case medicalInsurance
+        case wechat
+
+        var id: Self { self }
+
+        var title: String {
+            switch self {
+            case .medicalInsurance: "医保支付"
+            case .wechat: "微信支付"
+            }
+        }
+
+        var sectionTitle: String {
+            switch self {
+            case .medicalInsurance: "医保支付"
+            case .wechat: "自费支付"
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .medicalInsurance: "cross.case.fill"
+            case .wechat: "message.fill"
+            }
+        }
+
+        var tint: Color {
+            switch self {
+            case .medicalInsurance: Color(uiColor: .systemBlue)
+            case .wechat: Color(red: 0.05, green: 0.70, blue: 0.24)
+            }
+        }
+    }
+
+    private enum PaymentPhase: Equatable {
+        case ready
+        case paying
+        case success
+        case submitting
+        case retrySubmission
+
+        var isBusy: Bool {
+            switch self {
+            case .paying, .success, .submitting: true
+            case .ready, .retrySubmission: false
+            }
+        }
+    }
+
+    private let onPaymentCompleted: () async -> Bool
+
+    @State private var selectedMethod: PaymentMethod = .wechat
+    @State private var phase: PaymentPhase = .ready
+    @State private var expiresAt = Date().addingTimeInterval(30 * 60)
+    @State private var successFeedback = 0
+
+    init(onPaymentCompleted: @escaping () async -> Bool) {
+        self.onPaymentCompleted = onPaymentCompleted
+    }
+
+    var body: some View {
+        ZStack {
+            Color(uiColor: .systemGroupedBackground)
+                .ignoresSafeArea()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    countdownBanner
+                    orderSummary
+
+                    Text("请选择支付方式")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 4)
+
+                    paymentMethods
+                    demoNotice
+                }
+                .padding(16)
+                .padding(.bottom, 24)
+            }
+
+            if phase == .success {
+                successOverlay
+                    .transition(.scale(scale: 0.88).combined(with: .opacity))
+            }
+        }
+        .navigationTitle("收银台")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(phase.isBusy)
+        .safeAreaInset(edge: .bottom) {
+            confirmBar
+        }
+        .sensoryFeedback(.success, trigger: successFeedback)
+    }
+
+    private var countdownBanner: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            Text("请在 \(remainingTime(at: context.date)) 内完成支付，超时将自动取消")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(Color(uiColor: .systemRed))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 11)
+                .background(Color(uiColor: .systemRed).opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+    }
+
+    private var orderSummary: some View {
+        VStack(spacing: 0) {
+            summaryRow(title: "业务类型", value: "在线问诊")
+            Divider()
+                .padding(.leading, 14)
+            summaryRow(title: "付款金额", value: "¥ 12.00", emphasized: true)
+        }
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func summaryRow(title: String, value: String, emphasized: Bool = false) -> some View {
+        HStack {
+            Text(title)
+                .foregroundStyle(.secondary)
+            Spacer()
+            Text(value)
+                .fontWeight(emphasized ? .semibold : .regular)
+                .foregroundStyle(emphasized ? Color(uiColor: .systemOrange) : .primary)
+        }
+        .padding(16)
+    }
+
+    private var paymentMethods: some View {
+        VStack(spacing: 0) {
+            ForEach(Array(PaymentMethod.allCases.enumerated()), id: \.element.id) { index, method in
+                if index > 0 {
+                    Divider()
+                        .padding(.leading, 58)
+                }
+                paymentMethodRow(method)
+            }
+        }
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func paymentMethodRow(_ method: PaymentMethod) -> some View {
+        Button {
+            guard phase == .ready else { return }
+            selectedMethod = method
+        } label: {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 6) {
+                    RoundedRectangle(cornerRadius: 2)
+                        .fill(Color.accentColor)
+                        .frame(width: 4, height: 18)
+                    Text(method.sectionTitle)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                }
+
+                HStack(spacing: 12) {
+                    Image(systemName: method.icon)
+                        .font(.system(size: 21, weight: .semibold))
+                        .foregroundStyle(.white)
+                        .frame(width: 42, height: 42)
+                        .background(method.tint)
+                        .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+
+                    Text(method.title)
+                        .font(.body)
+                        .foregroundStyle(.primary)
+
+                    Spacer()
+
+                    Image(systemName: selectedMethod == method ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 24))
+                        .foregroundStyle(selectedMethod == method ? Color.accentColor : Color(uiColor: .systemGray3))
+                }
+            }
+            .padding(16)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(method.title)
+        .accessibilityValue(selectedMethod == method ? "已选择" : "未选择")
+    }
+
+    private var demoNotice: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "info.circle.fill")
+                .foregroundStyle(Color(uiColor: .systemTeal))
+            Text("当前为演示支付，不会调用微信或医保，也不会产生真实扣款。")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(uiColor: .systemTeal).opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private var confirmBar: some View {
+        Button {
+            Task { await payAndContinue() }
+        } label: {
+            HStack(spacing: 8) {
+                if phase == .paying || phase == .submitting {
+                    ProgressView()
+                        .tint(.white)
+                }
+                Text(confirmButtonTitle)
+                    .font(.headline)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 13)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(Color(uiColor: .systemTeal))
+        .disabled(phase.isBusy)
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .background(.bar)
+    }
+
+    private var confirmButtonTitle: String {
+        switch phase {
+        case .ready: "确认支付 ¥ 12.00"
+        case .paying: "支付处理中…"
+        case .success: "支付成功"
+        case .submitting: "正在提交问诊…"
+        case .retrySubmission: "继续提交问诊"
+        }
+    }
+
+    private var successOverlay: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 58))
+                .foregroundStyle(Color(uiColor: .systemGreen))
+            Text("支付成功")
+                .font(.title3.bold())
+            Text("正在继续提交问诊")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 38)
+        .padding(.vertical, 30)
+        .background(.regularMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .shadow(color: .black.opacity(0.12), radius: 24, y: 10)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func payAndContinue() async {
+        guard phase.isBusy == false else { return }
+
+        if phase == .ready {
+            phase = .paying
+            try? await Task.sleep(for: .milliseconds(850))
+            guard Task.isCancelled == false else { return }
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.82)) {
+                phase = .success
+            }
+            successFeedback += 1
+            try? await Task.sleep(for: .milliseconds(900))
+            guard Task.isCancelled == false else { return }
+        }
+
+        withAnimation(.easeOut(duration: 0.2)) {
+            phase = .submitting
+        }
+        let submitted = await onPaymentCompleted()
+        if submitted == false {
+            phase = .retrySubmission
+        }
+    }
+
+    private func remainingTime(at date: Date) -> String {
+        let remaining = max(0, Int(expiresAt.timeIntervalSince(date)))
+        return String(format: "%02d分%02d秒", remaining / 60, remaining % 60)
     }
 }

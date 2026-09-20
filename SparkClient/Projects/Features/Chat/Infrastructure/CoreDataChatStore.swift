@@ -1169,8 +1169,12 @@ actor CoreDataChatStore {
                 ),
                    let deliveryState = message.value(forKey: "deliveryState") as? String {
                     // block_updates 要求服务端已有父消息；整包重推时父消息可能是 .pending。
+                    // 已读消息同样是服务端已存在的父消息。患者上传补充报告时，
+                    // 医生发出的卡片通常已经被标记为 .read，若排除该状态，
+                    // 本地块虽已写入待同步，却永远不会进入 block_updates 队列。
                     let canPushBlocks = deliveryState == ChatDeliveryState.sent.rawValue
                         || deliveryState == ChatDeliveryState.pending.rawValue
+                        || deliveryState == ChatDeliveryState.read.rawValue
                     if canPushBlocks == false {
                         continue
                     }

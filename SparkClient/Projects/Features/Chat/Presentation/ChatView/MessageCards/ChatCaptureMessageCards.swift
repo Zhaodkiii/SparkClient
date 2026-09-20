@@ -5,6 +5,7 @@ import UIKit
 
 struct ChatCaptureTypeMessageCard: View {
     let payload: ChatCaptureMessageCardPayload
+    let fileTransferService: FileTransferService
     let onAttachmentsPicked: ([ChatComposerAttachmentPreview]) -> Void
     let onCancel: () -> Void
 
@@ -46,7 +47,8 @@ struct ChatCaptureTypeMessageCard: View {
                 }
             }
 
-            if payload.status == .pending || payload.status == .failed || payload.status == .selected {
+            if spec.supportsInteraction,
+               payload.status == .pending || payload.status == .failed || payload.status == .selected {
                 HStack(spacing: 10) {
                     actionButton(icon: "camera.fill", title: L10n.text("chat.capture_card.action.camera"), color: spec.tint) {
                         showCamera = true
@@ -255,9 +257,11 @@ struct ChatCaptureTypeMessageCard: View {
 
     private func attachmentList(spec: CaptureCardSpec) -> some View {
         VStack(spacing: 8) {
-            ForEach(Array(payload.selectedAttachments.enumerated()), id: \.element.id) { index, attachment in
+            ForEach(payload.selectedAttachments) { attachment in
                 Button {
-                    openPreview(startIndex: index)
+                    Task {
+                        await openPreview(attachmentID: attachment.id)
+                    }
                 } label: {
                     attachmentRow(attachment, spec: spec)
                 }
@@ -350,15 +354,22 @@ struct ChatCaptureTypeMessageCard: View {
         }
     }
 
-    private func openPreview(startIndex: Int) {
-        let inputs = payload.selectedAttachments.compactMap(previewInput(for:))
+    @MainActor
+    private func openPreview(attachmentID: UUID) async {
+        var inputs: [FilePreviewInput] = []
+        for attachment in payload.selectedAttachments {
+            if let input = await previewInput(for: attachment) {
+                inputs.append(input)
+            }
+        }
         guard inputs.isEmpty == false else { return }
         previewInputs = inputs
-        previewStartIndex = min(max(0, startIndex), inputs.count - 1)
+        previewStartIndex = inputs.firstIndex(where: { $0.id == attachmentID }) ?? 0
         showUnifiedFilePreview = true
     }
 
-    private func previewInput(for attachment: ChatInlineCapturedAttachment) -> FilePreviewInput? {
+    @MainActor
+    private func previewInput(for attachment: ChatInlineCapturedAttachment) async -> FilePreviewInput? {
         if let url = attachment.localPreviewURL {
             return FilePreviewInput(
                 id: attachment.id,
@@ -368,12 +379,35 @@ struct ChatCaptureTypeMessageCard: View {
             )
         }
         if let url = attachment.publicURL {
-            return FilePreviewInput(
+            // 服务端返回的 OSS 地址可能需要鉴权，统一先落到文件缓存，再交给
+            // UnifiedFilePreview/Quick Look；直接把远端 URL 交给预览器会导致 PDF
+            // 或非公开附件无法打开。
+            let chatAttachment = ChatAttachment(
                 id: attachment.id,
-                fileURL: url,
-                displayName: attachment.displayName,
-                mimeType: attachment.mimeType
+                type: attachment.kind == .image ? .image : (attachment.kind == .pdf ? .pdf : .file),
+                url: url,
+                fileId: attachment.fileID,
+                fullCacheKey: attachment.fullCacheKey,
+                fileMd5: attachment.fileMd5
             )
+            let managedFile = chatAttachment.managedFileRecord(downloadURL: url)
+            if let cachedURL = await fileTransferService.cachedURL(file: managedFile) {
+                return FilePreviewInput(
+                    id: attachment.id,
+                    fileURL: cachedURL,
+                    displayName: attachment.displayName,
+                    mimeType: attachment.mimeType
+                )
+            }
+            if let localURL = try? await fileTransferService.download(file: managedFile) {
+                return FilePreviewInput(
+                    id: attachment.id,
+                    fileURL: localURL,
+                    displayName: attachment.displayName,
+                    mimeType: attachment.mimeType
+                )
+            }
+            return nil
         }
         return nil
     }
@@ -390,9 +424,21 @@ private struct CaptureCardSpec {
     let tint: Color
     let examples: [CaptureCardExample]
     let supportsFiles: Bool
+    let supportsInteraction: Bool
 
     init(_ type: ChatCaptureCardType) {
         switch type {
+        case .supplementaryReport:
+            title = L10n.text("chat.capture_card.supplementary_report.title")
+            subtitle = L10n.text("chat.capture_card.supplementary_report.subtitle")
+            disclaimer = L10n.text("chat.capture_card.supplementary_report.disclaimer")
+            tint = .blue
+            examples = [
+                CaptureCardExample(title: L10n.text("chat.capture_card.report.example.flat"), icon: "doc.text.fill"),
+                CaptureCardExample(title: L10n.text("chat.capture_card.report.example.complete"), icon: "iphone")
+            ]
+            supportsFiles = true
+            supportsInteraction = true
         case .reportPhoto:
             title = L10n.text("chat.capture_card.report.title")
             subtitle = L10n.text("chat.capture_card.report.subtitle")
@@ -403,6 +449,7 @@ private struct CaptureCardSpec {
                 CaptureCardExample(title: L10n.text("chat.capture_card.report.example.complete"), icon: "iphone")
             ]
             supportsFiles = true
+            supportsInteraction = true
         case .medicineBoxPhoto:
             title = L10n.text("chat.capture_card.medicine_box.title")
             subtitle = L10n.text("chat.capture_card.medicine_box.subtitle")
@@ -413,6 +460,7 @@ private struct CaptureCardSpec {
                 CaptureCardExample(title: L10n.text("chat.capture_card.medicine_box.example.front"), icon: "iphone")
             ]
             supportsFiles = false
+            supportsInteraction = true
         case .skinPhoto:
             title = L10n.text("chat.capture_card.skin.title")
             subtitle = L10n.text("chat.capture_card.skin.subtitle")
@@ -420,6 +468,21 @@ private struct CaptureCardSpec {
             tint = .green
             examples = []
             supportsFiles = false
+            supportsInteraction = true
+        case .unsupported:
+            title = L10n.text(
+                "chat.capture_card.unsupported.title",
+                fallback: "暂不支持的材料卡片"
+            )
+            subtitle = L10n.text(
+                "chat.capture_card.unsupported.subtitle",
+                fallback: "该卡片由较新版本创建，请更新客户端后查看和操作。"
+            )
+            disclaimer = nil
+            tint = .secondary
+            examples = []
+            supportsFiles = false
+            supportsInteraction = false
         }
     }
 }

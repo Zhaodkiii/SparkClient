@@ -46,6 +46,11 @@ actor ChatSyncSupervisor {
         try await syncEngine.pullThreadMessagesIncrementalOnOpen(threadID: threadID)
     }
 
+    /// 交互式消息卡片完成后立即上送 block_updates，不等待下一次生命周期同步。
+    func pushOutboxOnly() async throws {
+        try await syncEngine.pushOutboxOnly()
+    }
+
     func applyAlreadyFetchedMessages(
         _ messages: [ChatMessage],
         enqueueAttachmentDownloadJobs: Bool

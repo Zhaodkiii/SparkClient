@@ -1,9 +1,53 @@
 import Foundation
 
-enum ChatCaptureCardType: String, Codable, CaseIterable, Sendable {
-    case reportPhoto = "report_photo"
-    case medicineBoxPhoto = "medicine_box_photo"
-    case skinPhoto = "skin_photo"
+/// 服务端可独立发布新的材料采集卡类型，因此这里不能使用编译器合成的
+/// `RawRepresentable + Codable` 解码。合成实现遇到未知字符串会抛错，进而让
+/// 整个增量消息响应解码失败、游标无法推进。
+nonisolated enum ChatCaptureCardType: RawRepresentable, Codable, CaseIterable, Sendable, Equatable {
+    case reportPhoto
+    case supplementaryReport
+    case medicineBoxPhoto
+    case skinPhoto
+    /// 前向兼容：保留服务端原始值，但只读展示，不开放错误的上传入口。
+    case unsupported(String)
+
+    static let allCases: [ChatCaptureCardType] = [
+        .reportPhoto,
+        .supplementaryReport,
+        .medicineBoxPhoto,
+        .skinPhoto,
+    ]
+
+    init?(rawValue: String) {
+        switch rawValue {
+        case "report_photo": self = .reportPhoto
+        case "supplementary_report": self = .supplementaryReport
+        case "medicine_box_photo": self = .medicineBoxPhoto
+        case "skin_photo": self = .skinPhoto
+        default: return nil
+        }
+    }
+
+    var rawValue: String {
+        switch self {
+        case .reportPhoto: return "report_photo"
+        case .supplementaryReport: return "supplementary_report"
+        case .medicineBoxPhoto: return "medicine_box_photo"
+        case .skinPhoto: return "skin_photo"
+        case .unsupported(let rawValue): return rawValue
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        self = Self(rawValue: rawValue) ?? .unsupported(rawValue)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
 }
 
 nonisolated enum ChatCaptureCardStatus: String, Codable, Sendable {

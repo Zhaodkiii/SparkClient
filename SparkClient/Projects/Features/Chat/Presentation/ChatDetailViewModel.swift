@@ -2563,6 +2563,15 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         guard attachments.isEmpty == false else {
             return
         }
+        if card.cardType == .supplementaryReport {
+            await uploadSupplementaryReportAttachments(
+                threadID: threadID,
+                message: message,
+                card: card,
+                attachments: attachments
+            )
+            return
+        }
         // composer 模式（工具调用 upload_mode=composer）：与历史插入卡片版本一致，
         // 材料直接进入输入框预览区，自动上传+OCR，随下一条消息发送，不在消息内处理。
         // inline 模式下 AI 回复已结束（continuation 已释放或卡片缺少 completionID，如中断生成/App 重启后的历史卡片）时，
@@ -2785,6 +2794,73 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
             $0.updatedAt = Date()
         }
         notificationClient.info(summary, title: nil, source: "chat.capture_card.handover")
+    }
+
+    /// 医生发起的“补充报告”不经过输入框：患者选择后直接上传，完成状态和附件
+    /// 回写到原消息卡片。文件绑定问诊会话，医生工作台可按既有文件权限预览。
+    private func uploadSupplementaryReportAttachments(
+        threadID: UUID,
+        message: ChatMessage,
+        card: ChatCaptureMessageCardPayload,
+        attachments: [ChatComposerAttachmentPreview]
+    ) async {
+        do {
+            var uploadedAttachments: [ChatInlineCapturedAttachment] = []
+            for preview in attachments {
+                var captured = makeInlineCapturedAttachment(preview)
+                let record = try await fileTransferService.upload(
+                    ManagedFileUploadPayload(
+                        data: preview.data,
+                        fileName: preview.displayName,
+                        businessType: "hospital_conversation",
+                        businessId: threadID.uuidString,
+                        isPublic: false,
+                        // 补充报告卡片不展示“上传中”中间态；上传完成后一次性
+                        // 回写 completed 卡片并立即同步到医生端。
+                        onUploadProgress: nil
+                    )
+                )
+                captured.uploadProgress = 1
+                captured.localPreviewURL = nil
+                captured.fileID = record.id
+                captured.publicURL = await fileTransferService.publicHTTPSURLForObjectKey(record.objectKey)
+                captured.fullCacheKey = ChatAttachment.makeFullCacheKey(
+                    fileUUID: record.fileUuid,
+                    fileName: record.originalName
+                )
+                captured.fileMd5 = record.fileMd5
+                uploadedAttachments.append(captured)
+            }
+
+            let summary = "已补充 \(uploadedAttachments.count) 份报告，医生可直接查看。"
+            await updateInlineCaptureCard(
+                threadID: threadID,
+                messageClientID: message.clientMessageID,
+                cardID: card.id
+            ) {
+                $0.selectedAttachments = uploadedAttachments
+                $0.status = .completed
+                $0.errorMessage = nil
+                $0.resultSummary = summary
+                $0.updatedAt = Date()
+            }
+            // 卡片不是普通用户消息，不会经过发送消息用例的主动 flush；完成后立即
+            // 推送 block_updates，保证医生端可以马上看到同一张卡片的附件。
+            try? await chatSyncSupervisor.pushOutboxOnly()
+            notificationClient.info(summary, title: nil, source: "chat.supplementary_report.upload")
+        } catch {
+            await updateInlineCaptureCard(
+                threadID: threadID,
+                messageClientID: message.clientMessageID,
+                cardID: card.id
+            ) {
+                $0.status = .failed
+                $0.errorMessage = error.localizedDescription
+                $0.updatedAt = Date()
+            }
+            try? await chatSyncSupervisor.pushOutboxOnly()
+            notificationClient.error(error.localizedDescription, title: nil, source: "chat.supplementary_report.upload")
+        }
     }
 
     func showInlineToolConsentDetails(
@@ -3169,6 +3245,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
             messageClientID: messageClientID,
             cardID: cardID
         ) {
+            guard $0.status == .uploading else { return }
             guard let index = $0.selectedAttachments.firstIndex(where: { $0.id == attachmentID }) else { return }
             $0.selectedAttachments[index].uploadProgress = max(0, min(1, progress))
             $0.status = .uploading

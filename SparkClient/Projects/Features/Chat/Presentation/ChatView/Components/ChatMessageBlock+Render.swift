@@ -201,6 +201,7 @@ extension ChatMessageBlock {
         case .captureCard(let captureCard):
             ChatCaptureTypeMessageCard(
                 payload: captureCard,
+                fileTransferService: context.fileTransferService,
                 onAttachmentsPicked: { attachments in
                     context.onCaptureAttachmentsPicked(captureCard, attachments)
                 },
