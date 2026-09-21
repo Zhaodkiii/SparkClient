@@ -256,6 +256,13 @@ struct SyncUnifiedConversationManifestUseCase: Sendable {
                             .invalidHospitalIdentity(change.threadId)
                     }
                 }
+                if resolvedKind == .aiTriage {
+                    guard change.memberId != nil,
+                          change.identity?.hospitalId != nil else {
+                        throw UnifiedConversationManifestValidationError
+                            .invalidHospitalIdentity(change.threadId)
+                    }
+                }
                 return UnifiedConversationBinding(
                     threadID: change.threadId,
                     kind: resolvedKind,

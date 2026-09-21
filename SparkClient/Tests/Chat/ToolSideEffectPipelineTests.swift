@@ -26,6 +26,34 @@ final class ToolSideEffectPipelineTests: XCTestCase {
         }
     }
 
+    func testRegistrationRecommendationSideEffectMapsToTimelineCard() {
+        let assistantID = UUID()
+        let payload = ChatRegistrationRecommendationCardPayload(
+            hospitalID: UUID(),
+            hospitalName: "天长市中医院",
+            departmentID: UUID(),
+            departmentName: "内一科",
+            agentID: UUID(),
+            doctorID: UUID(),
+            doctorName: "张医生",
+            doctorTitle: "主治医师",
+            doctorAvatarURL: nil,
+            reasonSummary: "先排查血压与脑供血。"
+        )
+        let blocks = ToolSideEffectBlockMapper.blocks(
+            for: .registrationRecommendation(payload),
+            assistantClientMessageID: assistantID,
+            normalizedAnchor: "call-reg-1"
+        )
+
+        XCTAssertEqual(blocks?.count, 1)
+        XCTAssertEqual(blocks?.first?.kind, .registrationRecommendationCards)
+        XCTAssertEqual(blocks?.first?.nodeRole, .timeline)
+        XCTAssertEqual(blocks?.first?.toolCallID, "call-reg-1")
+        XCTAssertEqual(blocks?.first?.registrationRecommendationCards.count, 1)
+        XCTAssertEqual(blocks?.first?.registrationRecommendationCards.first?.departmentName, "内一科")
+    }
+
     func testMessageRunActorAppliesToolSideEffectSerially() async {
         let repository = RecordingChatRepository()
         let actor = MessageRunActor(repository: repository)

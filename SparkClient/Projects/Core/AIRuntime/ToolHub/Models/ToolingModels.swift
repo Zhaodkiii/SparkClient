@@ -53,6 +53,7 @@ enum ToolSideEffect: Sendable {
     case searchSummary(ChatSearchSummaryCardPayload)
     case nutritionReadVisualization(ChatHealthNutritionReadModel)
     case nutritionCards([ChatNutritionCardPayload])
+    case registrationRecommendation(ChatRegistrationRecommendationCardPayload)
     case medicalRiskNotice(ChatMedicalRiskNoticePayload)
     case locationPermissionCards([ChatLocationPermissionCard])
     case externalConnectorRichBlocks([ChatMessageBlock])
@@ -269,6 +270,8 @@ nonisolated enum SparkToolName: String, CaseIterable {
     case fetchNutritionDetails       = "fetch_nutrition_details"        // 获取营养详情
     case makeNutritionData           = "make_nutrition_data"            // 生成营养数据
     case showMedicalRiskNotice       = "show_medical_risk_notice"       // 医疗风险提示卡片
+    case queryRegistrationCatalog    = "query_registration_catalog"    // 查询挂号目录
+    case showRegistrationRecommendation = "show_registration_recommendation" // 展示挂号推荐卡
     case collectSymptoms             = "collect_symptoms"               // 症状采集
     case fetchSleepDetails           = "fetch_sleep_details"            // 获取睡眠详情
     case fetchWorkoutDetails         = "fetch_workout_details"          // 获取运动详情
@@ -349,7 +352,8 @@ extension SparkToolName {
             return .calendar
         case .searchOnline, .insertHealthCitationSources, .readWebPage, .searchArxivPapers, .extractRemoteFileContent:
             return .publicWeb
-        case .showCustomMessageCard, .askUserQuestion, .showMedicalRiskNotice:
+        case .showCustomMessageCard, .askUserQuestion, .showMedicalRiskNotice,
+             .queryRegistrationCatalog, .showRegistrationRecommendation:
             return .ui
         case .generateChatTitle, .createCanvas, .editCanvas, .queryTasksByMember, .generateTask:
             return .system
@@ -596,7 +600,12 @@ enum SparkToolGroup: String, CaseIterable {
                 .getHealthResourceContext
             ]
         case .medical:
-            return [.collectSymptoms, .showMedicalRiskNotice]
+            return [
+                .collectSymptoms,
+                .showMedicalRiskNotice,
+                .queryRegistrationCatalog,
+                .showRegistrationRecommendation
+            ]
         case .member:
             return [
                 .getCurrentMember,

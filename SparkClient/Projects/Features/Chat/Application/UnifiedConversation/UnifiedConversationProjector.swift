@@ -241,6 +241,8 @@ struct UnifiedConversationProjector: Sendable {
                  .consultationCompleted, .unsupported:
                 return .medicalReadOnly
             }
+        case .aiTriage:
+            return .aiTriageActive
         case .unknown:
             return .unknownReadOnly
         }
@@ -286,6 +288,13 @@ struct UnifiedConversationProjector: Sendable {
             return Titles(
                 primary: primary,
                 secondary: identity.hospitalDisplayName?.nonEmpty,
+                thread: threadDisplayTitle
+            )
+        case .aiTriage:
+            let primary = identity?.hospitalDisplayName?.nonEmpty ?? threadDisplayTitle
+            return Titles(
+                primary: primary,
+                secondary: L10n.text("chat.unified.ai_triage.subtitle", fallback: "AI 导诊"),
                 thread: threadDisplayTitle
             )
         case .unknown:
@@ -368,6 +377,7 @@ struct UnifiedConversationProjector: Sendable {
         case .ordinaryAI: return .ordinaryAI
         case .hospitalAgent: return .hospitalAgent
         case .telemedicine: return .telemedicine
+        case .aiTriage: return .aiTriage
         case .unknown:
             return classificationState == .retryableFailure ? .confirmationFailed : .confirming
         }
@@ -392,6 +402,8 @@ struct UnifiedConversationProjector: Sendable {
                     ?? identity?.doctorDisplayName?.nonEmpty,
                 avatarURL: identity?.doctorAvatarURLString.flatMap(URL.init(string:))
             )
+        case .aiTriage:
+            return .threadAppearance(iconName: "sparkles", iconColorName: "systemTeal")
         case .unknown:
             return .neutralPending
         }
@@ -462,6 +474,12 @@ struct UnifiedConversationProjector: Sendable {
                 consultationID: consultationID,
                 memberID: memberID
             )
+        case .aiTriage:
+            let hospitalID = identity?.hospitalID ?? scope?.hospitalID
+            guard let hospitalID, let memberID else {
+                return .confirmationRequired(threadID: threadID)
+            }
+            return .aiTriage(threadID: threadID, hospitalID: hospitalID, memberID: memberID)
         case .unknown:
             return .confirmationRequired(threadID: threadID)
         }

@@ -5,6 +5,7 @@ import Foundation
 enum UnifiedConversationRoute: Equatable, Sendable {
     case ordinaryAI(threadID: UUID, memberID: Int?)
     case hospitalAgent(threadID: UUID, hospitalID: UUID, agentID: UUID, memberID: Int)
+    case aiTriage(threadID: UUID, hospitalID: UUID, memberID: Int)
     case telemedicine(threadID: UUID, consultationID: UUID, memberID: Int?)
     /// unknown：先进入受控确认流程，确认前禁发/禁已读
     case confirmationRequired(threadID: UUID)
@@ -13,6 +14,7 @@ enum UnifiedConversationRoute: Equatable, Sendable {
         switch self {
         case .ordinaryAI(let threadID, _),
              .hospitalAgent(let threadID, _, _, _),
+             .aiTriage(let threadID, _, _),
              .telemedicine(let threadID, _, _),
              .confirmationRequired(let threadID):
             return threadID
@@ -67,7 +69,7 @@ struct UnifiedConversationListItem: Identifiable, Equatable, Sendable {
 
     /// 医疗类会话（hospital_agent / telemedicine）：仅允许置顶与「从消息列表移除」。
     var isMedicalKind: Bool {
-        conversationKind == .hospitalAgent || conversationKind == .telemedicine
+        conversationKind == .hospitalAgent || conversationKind == .telemedicine || conversationKind == .aiTriage
     }
 
     /// D-026：仅永久 legacy unknown 允许真实删除会话。

@@ -23,6 +23,7 @@ struct ToolInteractionPresentationSheet: View {
     let onAskReportSetMemberBinding: (Int?) -> Void
     let onAskReportMaxRefsReached: () -> Void
     let onConversationThreadSelected: (UUID) -> Void
+    let hospitalCare: HospitalCareFeatureDependencies?
 
     var body: some View {
         switch active.snapshot {
@@ -121,6 +122,18 @@ struct ToolInteractionPresentationSheet: View {
             .presentationDetents([.fraction(0.80)])
             .presentationDragIndicator(.visible)
             .interactiveDismissDisabled(false)
+        case .registrationRecommendation(let payload):
+            if let hospitalCare {
+                HospitalRegistrationRecommendationSheet(
+                    payload: payload,
+                    dependencies: hospitalCare,
+                    memberContextStore: memberContextStore,
+                    sessionStore: listViewModel.sessionStore,
+                    onFinish: { coordinator.dismissRegistrationRecommendation(id: active.id) }
+                )
+            } else {
+                ContentUnavailableView("挂号服务不可用", systemImage: "cross.case")
+            }
         }
     }
 }

@@ -42,6 +42,8 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
     private let hospitalRuntimeConfigStore: HospitalAgentRuntimeConfigStore?
     /// CHAT-000058：医院专用运行配置查询（single-flight + 业务码映射）。
     private let fetchHospitalRuntimeConfigUseCase: FetchHospitalAgentRuntimeConfigUseCase?
+    /// 医院 AI 导诊专用运行配置查询。
+    private let fetchHospitalAITriageRuntimeConfigUseCase: FetchHospitalAITriageRuntimeConfigUseCase?
     /// CHAT-000058：threadID → 进入时固定的专用运行配置（前台会话不无感换模）。
     private var hospitalConfigsByThread: [UUID: HospitalAgentRuntimeConfig] = [:]
     /// CHAT-000058：threadID → 后台静默校验任务。
@@ -120,6 +122,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         guideQuestionClickReporter: (any ChatGuideQuestionClickReporting)? = nil,
         hospitalRuntimeConfigStore: HospitalAgentRuntimeConfigStore? = nil,
         fetchHospitalRuntimeConfigUseCase: FetchHospitalAgentRuntimeConfigUseCase? = nil,
+        fetchHospitalAITriageRuntimeConfigUseCase: FetchHospitalAITriageRuntimeConfigUseCase? = nil,
         logger: Logger = ConsoleLogger()
     ) {
         self.stateStore = stateStore
@@ -156,6 +159,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         self.guideQuestionClickReporter = guideQuestionClickReporter
         self.hospitalRuntimeConfigStore = hospitalRuntimeConfigStore
         self.fetchHospitalRuntimeConfigUseCase = fetchHospitalRuntimeConfigUseCase
+        self.fetchHospitalAITriageRuntimeConfigUseCase = fetchHospitalAITriageRuntimeConfigUseCase
         self.logger = logger
 
         NotificationCenter.default.publisher(for: .sparkChatDatabaseDidChange)
@@ -527,28 +531,37 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
             markHospitalRuntimeUnavailable(for: threadID)
             return false
         }
-        let configScope = HospitalAgentRuntimeConfigStore.Scope(
-            accountID: accountID,
-            hospitalID: scope.hospitalID,
-            memberID: scope.memberID,
-            agentID: scope.agentID
-        )
+        let configScope = runtimeConfigStoreScope(accountID: accountID, scope: scope)
         if let cached = store.cachedConfig(for: configScope) {
             adoptHospitalConfig(cached, for: threadID)
             startHospitalRuntimeValidation(threadID: threadID, scope: scope, accountID: accountID)
             return true
         }
-        guard let fetchUseCase = fetchHospitalRuntimeConfigUseCase else {
-            markHospitalRuntimeUnavailable(for: threadID)
-            return false
-        }
         do {
-            let config = try await fetchUseCase.execute(
-                agentID: scope.agentID,
-                memberID: scope.memberID,
-                hospitalID: scope.hospitalID,
-                accountID: accountID
-            )
+            let config: HospitalAgentRuntimeConfig
+            if scope.isAITriage {
+                guard let fetchUseCase = fetchHospitalAITriageRuntimeConfigUseCase else {
+                    markHospitalRuntimeUnavailable(for: threadID)
+                    return false
+                }
+                config = try await fetchUseCase.execute(
+                    hospitalID: scope.hospitalID,
+                    memberID: scope.memberID,
+                    accountID: accountID
+                )
+            } else {
+                guard let agentID = scope.agentID,
+                      let fetchUseCase = fetchHospitalRuntimeConfigUseCase else {
+                    markHospitalRuntimeUnavailable(for: threadID)
+                    return false
+                }
+                config = try await fetchUseCase.execute(
+                    agentID: agentID,
+                    memberID: scope.memberID,
+                    hospitalID: scope.hospitalID,
+                    accountID: accountID
+                )
+            }
             store.save(config, accountID: accountID)
             adoptHospitalConfig(config, for: threadID)
             return true
@@ -593,17 +606,29 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         accountID: Int64
     ) {
         hospitalValidationTasks[threadID]?.cancel()
-        guard let store = hospitalRuntimeConfigStore,
-              let fetchUseCase = fetchHospitalRuntimeConfigUseCase else { return }
+        guard let store = hospitalRuntimeConfigStore else { return }
+        let configScope = runtimeConfigStoreScope(accountID: accountID, scope: scope)
         hospitalValidationTasks[threadID] = Task { [weak self] in
             guard let self else { return }
             do {
-                let fresh = try await fetchUseCase.execute(
-                    agentID: scope.agentID,
-                    memberID: scope.memberID,
-                    hospitalID: scope.hospitalID,
-                    accountID: accountID
-                )
+                let fresh: HospitalAgentRuntimeConfig
+                if scope.isAITriage {
+                    guard let fetchUseCase = fetchHospitalAITriageRuntimeConfigUseCase else { return }
+                    fresh = try await fetchUseCase.execute(
+                        hospitalID: scope.hospitalID,
+                        memberID: scope.memberID,
+                        accountID: accountID
+                    )
+                } else {
+                    guard let agentID = scope.agentID,
+                          let fetchUseCase = fetchHospitalRuntimeConfigUseCase else { return }
+                    fresh = try await fetchUseCase.execute(
+                        agentID: agentID,
+                        memberID: scope.memberID,
+                        hospitalID: scope.hospitalID,
+                        accountID: accountID
+                    )
+                }
                 guard Task.isCancelled == false else { return }
                 store.save(fresh, accountID: accountID)
                 self.hospitalValidationTasks[threadID] = nil
@@ -613,18 +638,24 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
                     "医院专用运行配置后台校验失败，thread=\(shortID(threadID)) error=\(error.localizedDescription)",
                     module: .general
                 )
-                store.delete(
-                    for: HospitalAgentRuntimeConfigStore.Scope(
-                        accountID: accountID,
-                        hospitalID: scope.hospitalID,
-                        memberID: scope.memberID,
-                        agentID: scope.agentID
-                    )
-                )
+                store.delete(for: configScope)
                 self.hospitalValidationTasks[threadID] = nil
                 self.markHospitalRuntimeUnavailable(for: threadID)
             }
         }
+    }
+
+    private func runtimeConfigStoreScope(
+        accountID: Int64,
+        scope: HospitalConversationScope
+    ) -> HospitalAgentRuntimeConfigStore.Scope {
+        HospitalAgentRuntimeConfigStore.Scope(
+            accountID: accountID,
+            hospitalID: scope.hospitalID,
+            memberID: scope.memberID,
+            agentID: scope.agentID ?? scope.hospitalID,
+            isAITriage: scope.isAITriage
+        )
     }
 
     /// 当远程模型列表变化时，丢弃已不在可选列表中的选择并回退为场景默认。
@@ -1118,6 +1149,18 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         await sendCurrentDraft(programmaticInput: question.prompt)
     }
 
+    /// AI 导诊引导卡片快捷症状：程序化发送完整 message 文本。
+    func sendAITriageGuidePrompt(_ prompt: AITriageGuidePrompt, in threadID: UUID) {
+        guard stateStore.selectedThreadID == threadID else { return }
+        guard sendingGuideQuestionIDs.contains(prompt.id) == false else { return }
+        guard currentGenerationTask == nil else { return }
+        sendingGuideQuestionIDs.insert(prompt.id)
+        currentGenerationTask = Task { [weak self] in
+            defer { self?.sendingGuideQuestionIDs.remove(prompt.id) }
+            await self?.sendCurrentDraft(programmaticInput: prompt.message)
+        }
+    }
+
     func startSmallTask(_ task: SmallTask, sendsOriginalImagesToAI: Bool = false) {
         guard currentGenerationTask == nil else { return }
         currentGenerationTask = Task { [weak self] in
@@ -1155,7 +1198,8 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         smallTask: SmallTask? = nil,
         sendsOriginalImagesToAI: Bool = false,
         programmaticInput: String? = nil,
-        suppressAIReply: Bool = false
+        suppressAIReply: Bool = false,
+        symptomCollectionOnly: Bool = false
     ) async {
         // 防止重复发送：如果正在发送中，直接返回
         guard stateStore.isSending == false else { return }
@@ -1201,7 +1245,8 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
             useWebSearch: flags.useWebSearch,
             reasoningEnabled: flags.reasoningEnabled,
             reasoningEffortTier: flags.reasoningEffortTier,
-            allowedToolNames: nil
+            allowedToolNames: nil,
+            symptomCollectionOnly: symptomCollectionOnly
         )
 
         // 日志：开始发送对话
@@ -1313,7 +1358,7 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
             let finalMessages = await loadChatMessagesUseCase.execute(threadID: snapshot.thread.id)
             stateStore.setMessages(finalMessages, for: snapshot.thread.id)
             // CHAT-000057 38.6：医生接管中不调用 AI 生成会话标题。
-            if suppressAIReply == false {
+            if suppressAIReply == false, symptomCollectionOnly == false {
                 maybeGenerateConversationTitle(threadID: snapshot.thread.id, isRegenerate: false)
             }
             // 清空已发送的文本/附件（程序化发送不触碰用户草稿）
@@ -2282,7 +2327,8 @@ final class ChatDetailViewModel: ObservableObject, ChatInlineToolInteractionCard
         }) else { return }
         guard await persistInlineToolInteractionBlock(threadID: threadID, message: message, block: updatedBlock) else { return }
         await sendCurrentDraft(
-            programmaticInput: complaint
+            programmaticInput: complaint,
+            symptomCollectionOnly: true
         )
     }
 

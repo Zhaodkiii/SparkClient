@@ -59,9 +59,16 @@ struct SmallTaskCapabilityStrategy: ChatCapabilityStrategy {
                 modelName: "user"
             )
         ]
-        let allowedToolNames = Set(smallTask.toolList).intersection(
+        var allowedToolNames = Set(smallTask.toolList).intersection(
             input.modelAllowedToolNames ?? Set(smallTask.toolList)
         )
+        // 挂号推荐是 query → show 的连续工具链。旧配置可能只登记了查询工具，
+        // 若此处继续做严格交集，模型会把推荐参数写进文本而不会产生卡片 side effect。
+        if allowedToolNames.contains(SparkToolName.queryRegistrationCatalog.rawValue)
+            || allowedToolNames.contains(SparkToolName.showRegistrationRecommendation.rawValue) {
+            allowedToolNames.insert(SparkToolName.queryRegistrationCatalog.rawValue)
+            allowedToolNames.insert(SparkToolName.showRegistrationRecommendation.rawValue)
+        }
         let inference = ChatOrchestratorInferenceOptions(
             useTools: smallTask.toolList.isEmpty == false,
             useKnowledgeBag: input.inference.useKnowledgeBag,

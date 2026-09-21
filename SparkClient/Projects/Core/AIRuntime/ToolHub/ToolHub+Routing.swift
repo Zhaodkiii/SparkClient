@@ -245,6 +245,10 @@ extension ToolHub {
             return await runShowCustomMessageCard(invocation: invocation, context: context)
         case .showMedicalRiskNotice:
             return runShowMedicalRiskNotice(invocation: invocation, context: context)
+        case .queryRegistrationCatalog:
+            return await runQueryRegistrationCatalog(invocation: invocation, context: context)
+        case .showRegistrationRecommendation:
+            return await runShowRegistrationRecommendation(invocation: invocation, context: context)
         case .collectSymptoms:
             return await runCollectSymptoms(invocation: invocation, context: context)
         case .askUserQuestion:

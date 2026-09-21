@@ -224,8 +224,11 @@ nonisolated struct HospitalCreateConversationResponseDTO: Codable, Sendable {
 nonisolated struct HospitalConversationContextDTO: Codable, Sendable {
     let threadId: UUID
     let hospital: HospitalPublicDTO
-    let agent: HospitalConversationAgentDTO
+    /// 医生智能体会话必填；`kind == ai_triage` 时为空。
+    let agent: HospitalConversationAgentDTO?
     let memberId: Int?
+    /// 服务端会话类型（如 `ai_triage`）；旧服务端缺省为 nil。
+    let kind: String?
     /// CHAT-000055 Q22/Q27：会话能力（缺省字段容忍旧服务端）。
     let capabilities: HospitalConversationCapabilitiesDTO?
     /// CHAT-000055 Q22：知识 Manifest；缺省/null 表示无绑定或已全量下线。
@@ -234,6 +237,41 @@ nonisolated struct HospitalConversationContextDTO: Codable, Sendable {
     let serviceStatus: String?
     /// 有值表示该 Thread 是线上问诊专属会话；旧服务端缺省为 nil。
     var consultation: HospitalConversationConsultationRefDTO? = nil
+
+    init(
+        threadId: UUID,
+        hospital: HospitalPublicDTO,
+        agent: HospitalConversationAgentDTO?,
+        memberId: Int?,
+        kind: String? = nil,
+        capabilities: HospitalConversationCapabilitiesDTO? = nil,
+        knowledgeManifest: HospitalKnowledgeManifestDTO? = nil,
+        serviceStatus: String? = nil,
+        consultation: HospitalConversationConsultationRefDTO? = nil
+    ) {
+        self.threadId = threadId
+        self.hospital = hospital
+        self.agent = agent
+        self.memberId = memberId
+        self.kind = kind
+        self.capabilities = capabilities
+        self.knowledgeManifest = knowledgeManifest
+        self.serviceStatus = serviceStatus
+        self.consultation = consultation
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        threadId = try container.decode(UUID.self, forKey: .threadId)
+        hospital = try container.decode(HospitalPublicDTO.self, forKey: .hospital)
+        agent = try container.decodeIfPresent(HospitalConversationAgentDTO.self, forKey: .agent)
+        memberId = try container.decodeIfPresent(Int.self, forKey: .memberId)
+        kind = try container.decodeIfPresent(String.self, forKey: .kind)
+        capabilities = try container.decodeIfPresent(HospitalConversationCapabilitiesDTO.self, forKey: .capabilities)
+        knowledgeManifest = try container.decodeIfPresent(HospitalKnowledgeManifestDTO.self, forKey: .knowledgeManifest)
+        serviceStatus = try container.decodeIfPresent(String.self, forKey: .serviceStatus)
+        consultation = try container.decodeIfPresent(HospitalConversationConsultationRefDTO.self, forKey: .consultation)
+    }
 }
 
 nonisolated struct HospitalConversationCapabilitiesDTO: Codable, Sendable {
@@ -332,4 +370,24 @@ nonisolated struct HospitalAgentRuntimeDTO: Codable, Sendable {
     let streaming: Bool?
     /// 与 Pro bootstrap `chat.models` 行字段完全一致，直接复用宽容解码。
     let model: AIScenarioRemoteModelRow
+}
+
+nonisolated struct HospitalAITriageCreateResponseDTO: Codable, Sendable {
+    let threadId: UUID
+    let thread: ChatRemoteThreadDTO?
+    let initialMessages: [ChatRemoteMessageDTO]
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        threadId = try container.decode(UUID.self, forKey: .threadId)
+        thread = try container.decodeIfPresent(ChatRemoteThreadDTO.self, forKey: .thread)
+        initialMessages = try container.decodeIfPresent([ChatRemoteMessageDTO].self, forKey: .initialMessages) ?? []
+    }
+}
+
+nonisolated struct HospitalAITriageRuntimeConfigDTO: Codable, Sendable {
+    let hospitalId: UUID
+    let memberId: Int
+    let profile: HospitalAgentRuntimeProfileDTO
+    let runtime: HospitalAgentRuntimeDTO
 }

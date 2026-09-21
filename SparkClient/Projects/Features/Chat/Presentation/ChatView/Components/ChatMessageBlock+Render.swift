@@ -280,6 +280,11 @@ extension ChatMessageBlock {
         case .medicalRiskNotice(let payload):
             ChatMedicalRiskNoticeCardView(payload: payload)
 
+        case .registrationRecommendationCards(let cards):
+            ForEach(cards) { card in
+                ChatRegistrationRecommendationCardView(payload: card)
+            }
+
         case .medicalDisclaimerCard(let payload):
             if context.message.deliveryState == .sending {
                 EmptyView()
@@ -300,6 +305,14 @@ extension ChatMessageBlock {
 
         case .hospitalDoctorIntroCard(let payload):
             HospitalDoctorIntroCardView(payload: payload)
+
+        case .hospitalTriageIntroCard(let payload):
+            HospitalTriageIntroCardView(payload: payload)
+
+        case .aiTriageGuideCard(let payload):
+            AITriageGuideCardView(payload: payload) { prompt in
+                context.onAITriagePromptTap?(prompt)
+            }
 
         case .consultationCard(let payload):
             ConsultationMessageCardView(
@@ -419,8 +432,14 @@ extension ChatMessageBlock {
             return "正在准备健康引导卡片..."
         case .hospitalDoctorIntroCard:
             return "正在准备医生简介..."
+        case .hospitalTriageIntroCard:
+            return "正在准备导诊介绍..."
+        case .aiTriageGuideCard:
+            return "正在准备导诊引导..."
         case .consultationCard:
             return "正在准备问诊卡片..."
+        case .registrationRecommendationCards:
+            return "正在准备挂号推荐..."
         default:
             return "正在整理结果..."
         }

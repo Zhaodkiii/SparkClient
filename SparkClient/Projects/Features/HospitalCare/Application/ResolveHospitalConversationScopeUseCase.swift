@@ -19,14 +19,19 @@ struct ResolveHospitalConversationScopeUseCase {
             // 医院会话必有绑定成员；缺失时不按医院会话处理。
             return nil
         }
+        let isAITriage = context.kind == "ai_triage"
         let scope = HospitalConversationScope(
             threadID: context.threadId,
-            agentID: context.agent.id,
+            agentID: isAITriage ? nil : context.agent?.id,
             memberID: memberID,
             hospitalID: context.hospital.id,
+            isAITriage: isAITriage,
             consultationID: context.consultation?.consultationId,
             consultNo: context.consultation?.consultNo
         )
+        guard isAITriage || context.agent != nil else {
+            return nil
+        }
         scopeStore.remember(scope, accountID: accountID)
         return scope
     }

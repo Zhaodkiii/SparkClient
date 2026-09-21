@@ -96,6 +96,29 @@ final class HospitalHomeViewModel: ObservableObject {
     }
 
     /// 点击医生卡片 / "去问 AI 助手"：复用医院会话创建/继续逻辑，绑定 hospitalID + agentID + memberID。
+    func openAITriage() async -> UUID? {
+        guard let accountID else {
+            actionError = "请先登录后再使用 AI 导诊"
+            return nil
+        }
+        guard let memberID = memberContextStore.context.selectedMemberID else {
+            actionError = "请先选择就诊人"
+            return nil
+        }
+        guard let hospital else { return nil }
+        actionError = nil
+        do {
+            return try await dependencies.resolveOrCreateAITriage.execute(
+                hospitalID: hospital.id,
+                memberID: memberID,
+                accountID: accountID
+            )
+        } catch {
+            actionError = error.localizedDescription
+            return nil
+        }
+    }
+
     func openAgent(_ card: HospitalAgentCard) async -> UUID? {
         guard let accountID else {
             actionError = "请先登录后再咨询医生智能体"

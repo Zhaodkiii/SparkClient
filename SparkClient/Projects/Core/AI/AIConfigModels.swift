@@ -538,6 +538,8 @@ extension AIScenarioRemoteBundlesCollection {
             nutritionIntakeExtraction = bundle
         case .medicalExamPlanGeneration:
             reportInterpretation = bundle
+        case .aiTriage:
+            aiTriage = bundle
         }
     }
 }
@@ -580,6 +582,8 @@ nonisolated struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendab
     var reportInterpretation: AIScenarioRemoteBundle
     /// 营养摄入结构化抽取场景模型集合。
     var nutritionIntakeExtraction: AIScenarioRemoteBundle
+    /// 医院 AI 导诊场景模型集合。
+    var aiTriage: AIScenarioRemoteBundle
 
     init(
         chat: AIScenarioRemoteBundle,
@@ -599,7 +603,8 @@ nonisolated struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendab
         router: AIScenarioRemoteBundle,
         modelConfig: AIScenarioRemoteBundle,
         reportInterpretation: AIScenarioRemoteBundle,
-        nutritionIntakeExtraction: AIScenarioRemoteBundle
+        nutritionIntakeExtraction: AIScenarioRemoteBundle,
+        aiTriage: AIScenarioRemoteBundle = AIScenarioRemoteBundle(defaultModelName: "", models: [])
     ) {
         self.chat = chat
         self.embedding = embedding
@@ -619,6 +624,7 @@ nonisolated struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendab
         self.modelConfig = modelConfig
         self.reportInterpretation = reportInterpretation
         self.nutritionIntakeExtraction = nutritionIntakeExtraction
+        self.aiTriage = aiTriage
     }
 
     /// 与服务端字段命名的映射。
@@ -647,6 +653,8 @@ nonisolated struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendab
         prescriptionExtraction = try c.decode(AIScenarioRemoteBundle.self, forKey: .key("prescriptionExtraction"))
         medicationExtraction = try c.decode(AIScenarioRemoteBundle.self, forKey: .key("medicationExtraction"))
         medicineBoxExtraction = try c.decodeIfPresent(AIScenarioRemoteBundle.self, forKey: .key("medicineBoxExtraction"))
+            ?? AIScenarioRemoteBundle(defaultModelName: "", models: [])
+        aiTriage = try c.decodeIfPresent(AIScenarioRemoteBundle.self, forKey: .key("aiTriage"))
             ?? AIScenarioRemoteBundle(defaultModelName: "", models: [])
     }
 
@@ -691,6 +699,8 @@ nonisolated struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendab
             return nutritionIntakeExtraction
         case .medicalExamPlanGeneration:
             return reportInterpretation
+        case .aiTriage:
+            return aiTriage
         }
     }
 
@@ -721,7 +731,8 @@ nonisolated struct AIScenarioRemoteBundlesCollection: Codable, Equatable, Sendab
             router,
             modelConfig,
             reportInterpretation,
-            nutritionIntakeExtraction
+            nutritionIntakeExtraction,
+            aiTriage
         ]
 
         var seen = Set<String>()

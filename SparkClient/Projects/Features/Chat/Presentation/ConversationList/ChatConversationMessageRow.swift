@@ -187,7 +187,12 @@ struct ChatConversationMessageRow: View {
 
     /// 医院医生简介 / 问诊卡片不进入长按菜单，避免被当成普通 AI 消息操作。
     private var disablesBubbleMenu: Bool {
-        message.blocks.contains { $0.kind == .hospitalDoctorIntroCard || $0.kind == .consultationCard }
+        message.blocks.contains {
+            $0.kind == .hospitalDoctorIntroCard
+                || $0.kind == .hospitalTriageIntroCard
+                || $0.kind == .aiTriageGuideCard
+                || $0.kind == .consultationCard
+        }
     }
 
     /// 带长按手势的气泡，替代系统 contextMenu
@@ -543,6 +548,9 @@ struct ChatConversationMessageRow: View {
             },
             onGuideQuestionTap: { question in
                 detailViewModel.sendGuideQuestion(question, in: threadID)
+            },
+            onAITriagePromptTap: { prompt in
+                detailViewModel.sendAITriageGuidePrompt(prompt, in: threadID)
             },
             onConsultationCardTap: { payload in
                 consultationDetail = payload

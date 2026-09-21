@@ -199,3 +199,11 @@
 "tool.param.collect_symptoms_field_item" = "症状字段名。";
 "tool.param.collect_symptoms_questions" = "本轮必须且只能生成 1 个问题，包含 2 至 8 个选项；用户提交后下一轮再生成下一个问题。";
 "tool.param.collect_symptoms_question_item" = "包含 id、question、field_key、options、selection_mode、allows_other 的问题对象。";
+"tool.summary.query_registration_catalog" = "用途：查询当前医院的本地挂号目录，再推荐科室或医生。scope 为 departments 或 doctors。";
+"tool.summary.show_registration_recommendation" = "用途：展示一个已校验的挂号推荐卡片，可带一名医生和简短推荐理由。必须先查询目录；完成推荐时必须调用本工具，不要把 JSON 参数直接写进回复文本。";
+"tool.param.registration_catalog_scope" = "目录范围：departments 或 doctors。";
+"tool.param.registration_department_id" = "query_registration_catalog 返回的当前医院科室 UUID。";
+"tool.param.registration_keyword" = "可选，科室或医生搜索关键词。";
+"tool.param.registration_limit" = "可选，目录结果数量上限。";
+"tool.param.registration_agent_id" = "query_registration_catalog 返回的可选医生 UUID。";
+"tool.param.registration_reason_summary" = "简短推荐依据；概括说明，不要复制用户原始症状。";

@@ -149,6 +149,43 @@ struct HospitalCareRemoteAPI: Sendable {
         )
     }
 
+    func createAITriageConversation(hospitalID: UUID, memberID: Int) async throws -> HospitalAITriageCreateResponseDTO {
+        let body = try JSONEncoder.chatRemote.encode(["member_id": memberID])
+        let operation = CacheableSparkNetworkOperation(
+            name: "HospitalCare.CreateAITriageConversation",
+            apiName: "HospitalCareRemoteAPI",
+            request: SparkNetworkRequest(
+                method: .post,
+                path: "/api/v1/hospital-care/hospitals/\(hospitalID.hospitalCarePathID)/ai-triage/conversations/",
+                headers: ["Idempotency-Key": UUID().uuidString],
+                body: .raw(body, contentType: "application/json"),
+                strategy: NetworkStrategy(
+                    requiresAuth: true,
+                    allowETag: false,
+                    serialKey: "hospital_care.ai_triage.create.\(hospitalID.hospitalCarePathID).\(memberID)",
+                    retryConfig: .default,
+                    isIdempotent: true,
+                    queuePriority: .high
+                )
+            )
+        )
+        let response = try await configuration.execute(operation)
+        return try APIResponseDecoder.decodeWrappedData(
+            HospitalAITriageCreateResponseDTO.self,
+            from: response,
+            decoder: JSONDecoder.chatRemote
+        )
+    }
+
+    func fetchAITriageRuntimeConfig(hospitalID: UUID, memberID: Int) async throws -> HospitalAITriageRuntimeConfigDTO {
+        try await get(
+            name: "HospitalCare.AITriageRuntimeConfig",
+            path: "/api/v1/hospital-care/hospitals/\(hospitalID.hospitalCarePathID)/ai-triage/runtime-config/",
+            queryItems: [URLQueryItem(name: "member_id", value: String(memberID))],
+            serialKey: "hospital_care.ai_triage.runtime.\(hospitalID.hospitalCarePathID).\(memberID)"
+        )
+    }
+
     func createConversation(agentID: UUID, memberID: Int) async throws -> HospitalCreateConversationResponseDTO {
         let body = try JSONEncoder.chatRemote.encode(
             HospitalCreateConversationRequestDTO(agentId: agentID, memberId: memberID)
@@ -294,6 +331,8 @@ protocol HospitalCareRemoteServing: Sendable {
     func submitConsultation(_ payload: HospitalConsultationSubmitRequestDTO) async throws -> HospitalConsultationDTO
     /// 当前账号的线上问诊单列表（可按 memberID 过滤）。
     func listConsultations(memberID: Int?, page: Int, pageSize: Int) async throws -> [HospitalConsultationDTO]
+    func createAITriageConversation(hospitalID: UUID, memberID: Int) async throws -> HospitalAITriageCreateResponseDTO
+    func fetchAITriageRuntimeConfig(hospitalID: UUID, memberID: Int) async throws -> HospitalAITriageRuntimeConfigDTO
 }
 
 extension HospitalCareRemoteAPI: HospitalCareRemoteServing {}

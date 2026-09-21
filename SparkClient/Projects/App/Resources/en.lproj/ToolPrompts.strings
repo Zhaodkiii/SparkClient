@@ -200,3 +200,11 @@
 "tool.param.collect_symptoms_field_item" = "Symptom field name.";
 "tool.param.collect_symptoms_questions" = "Exactly one question for this round, with two to eight options. Generate the next question in a later call after the user submits this answer.";
 "tool.param.collect_symptoms_question_item" = "Question object containing id, question, field_key, options, selection_mode, and allows_other.";
+"tool.summary.query_registration_catalog" = "Purpose: query the current hospital's local registration directory before recommending a department or doctor. scope is departments or doctors.";
+"tool.summary.show_registration_recommendation" = "Purpose: show one validated registration recommendation card with an optional doctor and a concise reason summary. Use only after querying the directory; you MUST call this tool to finish the recommendation and must not write its JSON arguments into assistant text.";
+"tool.param.registration_catalog_scope" = "Directory scope: departments or doctors.";
+"tool.param.registration_department_id" = "Current-hospital department UUID returned by query_registration_catalog.";
+"tool.param.registration_keyword" = "Optional department or doctor search keyword.";
+"tool.param.registration_limit" = "Optional maximum number of directory results.";
+"tool.param.registration_agent_id" = "Optional doctor UUID returned by query_registration_catalog.";
+"tool.param.registration_reason_summary" = "Short recommendation rationale; summarize without copying the user's raw symptoms.";

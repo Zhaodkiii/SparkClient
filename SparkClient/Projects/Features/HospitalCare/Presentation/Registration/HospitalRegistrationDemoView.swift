@@ -112,6 +112,25 @@ final class HospitalRegistrationDemoViewModel: ObservableObject {
         guard isLoadingEntry else { return }
         guard case .signedIn(let session) = sessionStore.state else { isLoadingEntry = false; entryError = "请先登录"; return }
         defer { isLoadingEntry = false }
+        let selectedID = await dependencies.selectionStore.selectedHospitalID(accountID: session.accountID)
+        if let selectedID,
+           let selected = try? await dependencies.remoteAPI.listHospitals(page: 1, pageSize: 100).first(where: { $0.id == selectedID }) {
+            let summary = HospitalSummary(
+                id: selected.id,
+                code: selected.code ?? "",
+                name: selected.name,
+                shortName: selected.shortName ?? selected.name,
+                introduction: selected.introduction ?? "",
+                status: selected.status
+            )
+            self.hospital = summary
+            do {
+                departments = try await dependencies.loadDirectory.loadDepartments(accountID: session.accountID, hospitalID: summary.id)
+            } catch {
+                entryError = "科室加载失败，请稍后重试"
+            }
+            return
+        }
         switch await dependencies.resolveDemoHospital.execute(accountID: session.accountID) {
         case .resolved(let hospital):
             self.hospital = hospital

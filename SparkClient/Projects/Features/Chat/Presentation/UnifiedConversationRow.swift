@@ -157,6 +157,8 @@ struct UnifiedConversationRow: View {
             return ChatThreadAppearanceResources.color(from: "hlGreen")
         case .telemedicine:
             return .purple
+        case .aiTriage:
+            return ChatThreadAppearanceResources.color(from: "hlOrange")
         case .confirming, .confirmationFailed:
             return .secondary
         }

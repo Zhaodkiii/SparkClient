@@ -913,7 +913,18 @@ struct SendChatMessageUseCase: Sendable {
             return []
         }
         let normalized = Set(storedToolNames).intersection(Set(SparkToolName.all))
-        return normalized.isEmpty ? nil : normalized
+        guard normalized.isEmpty == false else { return nil }
+
+        // 挂号目录查询和推荐卡是一个不可拆分的客户端工具链：
+        // 只配置 query 工具时，模型仍必须能继续调用 show 工具，否则会把
+        // 推荐参数直接输出到文本中，永远不会触发消息卡片 side effect。
+        var effective = normalized
+        if effective.contains(SparkToolName.queryRegistrationCatalog.rawValue)
+            || effective.contains(SparkToolName.showRegistrationRecommendation.rawValue) {
+            effective.insert(SparkToolName.queryRegistrationCatalog.rawValue)
+            effective.insert(SparkToolName.showRegistrationRecommendation.rawValue)
+        }
+        return effective
     }
 
     private static func healthResourceRefs(from blocks: [ChatMessageBlock]) -> [HealthResourceRef] {

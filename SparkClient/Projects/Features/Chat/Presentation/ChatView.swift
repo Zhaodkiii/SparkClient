@@ -178,6 +178,14 @@ struct ChatView: View {
         return hospitalScope?.consultationID != nil
     }
 
+    /// AI 导诊仅保留医院介绍和导诊入口，不展示输入框上方的小任务/发报告工具栏。
+    private var isAITriageConversation: Bool {
+        if unifiedCurrentItem?.conversationKind == .aiTriage { return true }
+        return visibleMessages.contains { message in
+            message.blocks.contains { $0.kind == .aiTriageGuideCard }
+        }
+    }
+
     /// CHAT-000057 38.6/L1942：医生接管中（患者可发送，AI 不自动回复）。
     /// 仅适用于医生智能体；线上问诊本身就没有 AI，不能套用「医生接管中」文案。
     private var isDoctorTakeoverActive: Bool {
@@ -257,7 +265,7 @@ struct ChatView: View {
                 onAttachmentsPicked: enqueueComposerAttachments,
                 onRemoveAttachment: removeComposerAttachment,
                 smallTasks: composerAssociatedSmallTasks,
-                showsContextTaskBar: isTelemedicineConversation == false,
+                showsContextTaskBar: isTelemedicineConversation == false && isAITriageConversation == false,
                 onSmallTaskTapped: startComposerSmallTask
             )
         case .hanlin:
@@ -271,7 +279,7 @@ struct ChatView: View {
                 modelRows: detailViewModel.chatScenarioModels,
                 lockedHospitalModelRow: hospitalLockedComposerModelRow,
                 smallTasks: composerAssociatedSmallTasks,
-                showsContextTaskBar: isTelemedicineConversation == false,
+                showsContextTaskBar: isTelemedicineConversation == false && isAITriageConversation == false,
                 initialCompleteData: homeViewModel.dashboard?.medical.completeData,
                 memberCompleteDataFetcher: detailViewModel,
                 medicalQueryAPI: detailViewModel.sparkMedicalQueryAPI,
@@ -723,6 +731,10 @@ struct ChatView: View {
             .onReceive(NotificationCenter.default.publisher(for: .chatGuideBindHealthRequested)) { _ in
                 isShowingGuideAddDevice = true
             }
+            .onReceive(NotificationCenter.default.publisher(for: .chatRegistrationRecommendationTapped)) { note in
+                guard let payload = note.object as? ChatRegistrationRecommendationCardPayload else { return }
+                detailViewModel.toolInteractionCoordinator.presentRegistrationRecommendation(payload)
+            }
             .sheet(isPresented: $isShowingGuideAddDevice) {
                 NavigationStack {
                     MyDevicesView(memberContextStore: homeViewModel.memberContextStoreForBinding)
@@ -870,7 +882,8 @@ struct ChatView: View {
             },
             onConversationThreadSelected: { selectedThreadID in
                 switchDetailThread(from: currentThreadID, to: selectedThreadID)
-            }
+            },
+            hospitalCare: hospitalCare
         )
         .interactiveDismissDisabled(active.snapshot.requiresForcedSheetDismiss)
     }
@@ -981,9 +994,9 @@ struct ChatView: View {
     
     /// 医院 / 线上问诊会话：真人医生头像跳转简介详情（agent 来自 scope，医院名优先简介卡快照）。
     private var doctorProfileNavigation: ChatDoctorProfileNavigationContext? {
-        guard let scope = hospitalScope else { return nil }
+        guard let scope = hospitalScope, scope.isAITriage == false, let agentID = scope.agentID else { return nil }
         return ChatDoctorProfileNavigationContext(
-            agentID: scope.agentID,
+            agentID: agentID,
             hospitalName: hospitalNameFromIntroCard(in: visibleMessages) ?? "",
             accountID: listViewModel.signedInAccountID
         )
@@ -1264,7 +1277,7 @@ struct ChatView: View {
         if let scope = hospitalScope, allowHospitalSend(scope: scope) == false {
             return
         }
-        // 医生接管中 / 线上问诊：允许发送但 AI 不回复。
+        // 医生接管中 / 线上问诊普通消息只上送医生；症状采集由卡片提交入口单独开启受限 AI。
         let suppressAIReply = isDoctorTakeoverActive || isTelemedicineConversation
         if suppressAIReply == false {
             // CHAT-000058：医院会话可用性以单项锁定目录为准（上文已校验），普通会话仍以通用目录为准。
@@ -1599,13 +1612,15 @@ struct ChatView: View {
             hospitalCapabilities = result.capabilities
             // CHAT-000057 38.6：服务端实时服务状态（doctor_joined → 医生接管，AI 不回复）。
             hospitalServiceStatus = result.serviceStatus.map { ConversationServiceStatus(rawValue: $0) }
-            // 知识同步：capabilities.canSyncKnowledge == false（下架）时 reconcile 内部直接返回。
-            await hospitalCare.knowledgeSync.reconcileWithManifest(
-                result.manifest,
-                agentID: scope.agentID,
-                capabilities: result.capabilities,
-                accountID: accountID
-            )
+            if scope.isAITriage == false, let agentID = scope.agentID {
+                // 知识同步：capabilities.canSyncKnowledge == false（下架）时 reconcile 内部直接返回。
+                await hospitalCare.knowledgeSync.reconcileWithManifest(
+                    result.manifest,
+                    agentID: agentID,
+                    capabilities: result.capabilities,
+                    accountID: accountID
+                )
+            }
         } catch {
             if error is CancellationError { return }
             logger.warning(
@@ -1627,8 +1642,19 @@ struct ChatView: View {
             return nil
         }
         do {
+            if scope.isAITriage {
+                return try await hospitalCare.resolveOrCreateAITriage.execute(
+                    hospitalID: scope.hospitalID,
+                    memberID: memberID,
+                    accountID: accountID
+                )
+            }
+            guard let agentID = scope.agentID else {
+                detailThreadCreationError = "无法识别当前医院智能体"
+                return nil
+            }
             return try await hospitalCare.resolveOrCreate.execute(
-                agentID: scope.agentID,
+                agentID: agentID,
                 memberID: memberID,
                 hospitalID: scope.hospitalID,
                 accountID: accountID,

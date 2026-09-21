@@ -1588,7 +1588,7 @@ actor CoreDataChatStore {
     private static func isToolPresentationRichBlock(_ block: ChatMessageBlock) -> Bool {
         guard block.nodeRole == .toolPresentation else { return false }
         switch block.kind {
-        case .structuredHealthCards, .sleepVisualization, .stepVisualization, .energyVisualization, .nutritionReadVisualization, .weatherVisualization, .weatherConfigCard, .searchSummary, .workoutVisualization, .nutritionCards, .medicalRiskNotice,
+        case .structuredHealthCards, .sleepVisualization, .stepVisualization, .energyVisualization, .nutritionReadVisualization, .weatherVisualization, .weatherConfigCard, .searchSummary, .workoutVisualization, .nutritionCards, .medicalRiskNotice, .registrationRecommendationCards,
              .healthResourceReference, .knowledgeCards, .taskCards, .captureCard, .html,
              .pendingMemberToolCards, .toolQuestionCards, .symptomCollectionCard, .toolMemberSelectionCards,
              .healthResourceCandidateCards, .toolConsentCards, .locationPermissionCards:
@@ -1677,7 +1677,12 @@ actor CoreDataChatStore {
                 if kindRaw == ChatMessageBlockKind.structuredHealthCards.rawValue
                     || kindRaw == ChatMessageBlockKind.healthResourceReference.rawValue
                     || kindRaw == ChatMessageBlockKind.toolQuestionCards.rawValue
-                    || kindRaw == ChatMessageBlockKind.symptomCollectionCard.rawValue {
+                    || kindRaw == ChatMessageBlockKind.symptomCollectionCard.rawValue
+                    || kindRaw == ChatMessageBlockKind.registrationRecommendationCards.rawValue
+                    || kindRaw == ChatMessageBlockKind.hospitalTriageIntroCard.rawValue
+                    || kindRaw == ChatMessageBlockKind.aiTriageGuideCard.rawValue
+                    || kindRaw == ChatMessageBlockKind.hospitalDoctorIntroCard.rawValue
+                    || kindRaw == ChatMessageBlockKind.chatGuideCard.rawValue {
                     let reason = ChatMessageBlockCodec.decodeFailureReason(
                         payloadData: snapshot.payloadData,
                         kind: snapshot.kind
@@ -1754,7 +1759,7 @@ actor CoreDataChatStore {
         }
         guard block.nodeRole == .toolPresentation else { return false }
         switch block.kind {
-        case .structuredHealthCards, .sleepVisualization, .stepVisualization, .energyVisualization, .nutritionReadVisualization, .weatherVisualization, .weatherConfigCard, .searchSummary, .workoutVisualization, .nutritionCards, .medicalRiskNotice,
+        case .structuredHealthCards, .sleepVisualization, .stepVisualization, .energyVisualization, .nutritionReadVisualization, .weatherVisualization, .weatherConfigCard, .searchSummary, .workoutVisualization, .nutritionCards, .medicalRiskNotice, .registrationRecommendationCards,
              .healthResourceReference, .knowledgeCards, .taskCards, .captureCard, .html,
              .pendingMemberToolCards, .toolQuestionCards, .symptomCollectionCard, .toolMemberSelectionCards,
              .healthResourceCandidateCards, .toolConsentCards, .locationPermissionCards:
@@ -1775,7 +1780,10 @@ actor CoreDataChatStore {
                 || block.kind == .medicalDisclaimerCard
                 || block.kind == .chatGuideCard
                 || block.kind == .hospitalDoctorIntroCard
+                || block.kind == .hospitalTriageIntroCard
+                || block.kind == .aiTriageGuideCard
                 || block.kind == .consultationCard
+                || block.kind == .registrationRecommendationCards
                 // 症状采集卡是客户端交互过程中生成的本地展示块，后端历史消息可能不携带。
                 || block.isInlineToolInteractionPresentationBlock
         }

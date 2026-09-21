@@ -29,7 +29,8 @@ nonisolated enum AILocalScenarioBundleBuilder {
             router: buildBundle(for: .router, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),
             modelConfig: buildBundle(for: .modelConfig, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),
             reportInterpretation: buildBundle(for: .reportInterpretation, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),
-            nutritionIntakeExtraction: buildBundle(for: .nutritionIntakeExtraction, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings)
+            nutritionIntakeExtraction: buildBundle(for: .nutritionIntakeExtraction, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings),
+            aiTriage: buildBundle(for: .aiTriage, allModels: allModels, apiKeys: apiKeys, scenarioBindings: scenarioBindings)
         )
     }
 

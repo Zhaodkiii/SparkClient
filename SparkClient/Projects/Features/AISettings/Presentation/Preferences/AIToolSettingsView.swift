@@ -901,7 +901,12 @@ enum AIToolCatalog {
                 id: "medical",
                 title: chatGroupTitle("medical", fallback: "Medical Assistance"),
                 subtitle: chatGroupSubtitle("medical", fallback: "Collect and confirm symptoms in the current conversation."),
-                tools: matching([.collectSymptoms, .showMedicalRiskNotice])
+                tools: matching([
+                    .collectSymptoms,
+                    .showMedicalRiskNotice,
+                    .queryRegistrationCatalog,
+                    .showRegistrationRecommendation
+                ])
             ),
             AIToolSettingsGroup(
                 id: "system_tasks",
@@ -958,7 +963,8 @@ enum AIToolCatalog {
              .fetchSleepDetails, .fetchWorkoutDetails, .generateStructuredHealthCard,
              .listMemberHealthSources, .getHealthResourceReference, .getHealthResourceContext:
             return chatGroupTitle("health_data", fallback: "Health Data")
-        case .collectSymptoms, .showMedicalRiskNotice:
+        case .collectSymptoms, .showMedicalRiskNotice,
+             .queryRegistrationCatalog, .showRegistrationRecommendation:
             return chatGroupTitle("medical", fallback: "Medical Assistance")
         case .getCurrentMember, .requestMemberSelection, .switchMember, .findMember, .queryMemberProfile:
             return chatGroupTitle("member_management", fallback: "Member Management")
@@ -1115,6 +1121,19 @@ private enum ChatToolSchemaCatalog {
                 "message": prop("string", "tool.param.medical_risk_message"),
                 "recommended_action": prop("string", "tool.param.medical_risk_recommended_action"),
                 "related_reason": prop("string", "tool.param.medical_risk_related_reason")
+            ]
+        case .queryRegistrationCatalog:
+            return [
+                "scope": prop("string", "tool.param.registration_catalog_scope", enumValues: ["departments", "doctors"]),
+                "department_id": prop("string", "tool.param.registration_department_id"),
+                "keyword": prop("string", "tool.param.registration_keyword"),
+                "limit": prop("integer", "tool.param.registration_limit")
+            ]
+        case .showRegistrationRecommendation:
+            return [
+                "department_id": prop("string", "tool.param.registration_department_id"),
+                "agent_id": prop("string", "tool.param.registration_agent_id"),
+                "reason_summary": prop("string", "tool.param.registration_reason_summary")
             ]
         case .collectSymptoms:
             let optionProperty = literalProp(
@@ -1352,6 +1371,10 @@ private enum ChatToolSchemaCatalog {
             return ["card_type"]
         case .showMedicalRiskNotice:
             return ["risk_level", "message"]
+        case .queryRegistrationCatalog:
+            return ["scope"]
+        case .showRegistrationRecommendation:
+            return ["department_id", "reason_summary"]
         case .collectSymptoms:
             return ["action"]
         case .queryMemberProfile:

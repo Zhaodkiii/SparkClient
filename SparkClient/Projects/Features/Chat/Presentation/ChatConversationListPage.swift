@@ -710,7 +710,7 @@ struct ChatConversationListPage: View {
             } label: {
                 Label(L10n.text("common.delete"), systemImage: "trash")
             }
-        case .hospitalAgent, .telemedicine:
+        case .hospitalAgent, .telemedicine, .aiTriage:
             Button(role: .destructive) {
                 pendingHideMedicalItem = item
             } label: {
@@ -814,6 +814,14 @@ struct ChatConversationListPage: View {
                     Text(L10n.text("chat.unified.empty.telemedicine.hint", fallback: "暂无线上问诊记录"))
                         .font(.subheadline)
                         .foregroundColor(.secondary)
+                case .aiTriage:
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 44))
+                        .foregroundColor(.secondary)
+                    Text(L10n.text("chat.unified.empty.ai_triage", fallback: "暂无 AI 导诊消息"))
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+                    switchToHospitalButton
                 }
             }
         }

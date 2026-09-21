@@ -388,11 +388,11 @@ struct HospitalHomeView: View {
         case .registration:
             onOpenRegistration()
         case .aiTriage:
-            // Q5–Q7：未开放服务仅提示，不创建 Thread、不进入空页面。
-            alertItem = HospitalHomeAlertItem(
-                title: service.title,
-                message: "功能正在实现，敬请期待"
-            )
+            Task {
+                if let threadID = await viewModel.openAITriage() {
+                    onOpenThread(threadID)
+                }
+            }
         }
     }
 
@@ -686,7 +686,7 @@ private enum HospitalHomeService: String, CaseIterable, Identifiable {
         case .reportInterpretation: return "进入报告解读对话"
         case .telemedicine: return "选择科室与医生问诊"
         case .registration: return "选择科室后预约挂号"
-        case .aiTriage: return "功能正在实现"
+        case .aiTriage: return "智能科室推荐"
         }
     }
 
@@ -699,7 +699,7 @@ private enum HospitalHomeService: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Q6：AI 导诊保持主视觉高亮，同时带"功能正在实现"状态。
+    /// AI 导诊作为首页主入口保持高亮。
     var isHighlighted: Bool {
         self == .aiTriage
     }

@@ -90,6 +90,34 @@ final class SparkNetworkEngineTests: XCTestCase {
         let value: Int
     }
 
+    func testNetworkLogSanitizerRedactsSensitiveJSONRecursively() throws {
+        let body = Data(
+            """
+            {"api_key":"provider-secret","nested":{"accessToken":"access-secret","safe":"visible"},"items":[{"refresh_token":"refresh-secret"}]}
+            """.utf8
+        )
+
+        let logged = NetworkLogSanitizer.bodyFullUTF8(
+            data: body,
+            contentType: "application/json; charset=utf-8"
+        )
+
+        XCTAssertFalse(logged.contains("provider-secret"))
+        XCTAssertFalse(logged.contains("access-secret"))
+        XCTAssertFalse(logged.contains("refresh-secret"))
+        XCTAssertTrue(logged.contains("\"api_key\":\"***\""))
+        XCTAssertTrue(logged.contains("\"safe\":\"visible\""))
+    }
+
+    func testNetworkLogSanitizerLeavesNonJSONTextUntouched() {
+        let body = Data("plain response".utf8)
+
+        XCTAssertEqual(
+            NetworkLogSanitizer.bodyFullUTF8(data: body, contentType: "text/plain"),
+            "plain response"
+        )
+    }
+
     func testETag304MergesCachedBody() async throws {
         URLProtocolStub.reset()
 

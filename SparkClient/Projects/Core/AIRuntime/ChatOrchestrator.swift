@@ -88,7 +88,9 @@ struct ChatOrchestrator: Sendable {
         try cancellationToken?.checkCancellation()
         let promptLocalizer = PromptLocalizer()
         // 构建推理配置（是否开启深度思考、提示词回退等）
-        let reasoningOpts = buildRuntimeReasoningOptions(inference: inference, model: modelReasoning)
+        let reasoningOpts = inference.symptomCollectionOnly
+            ? AIRuntimeReasoningOptions(isEnabled: false, effortTier: 0, usePromptFallback: false)
+            : buildRuntimeReasoningOptions(inference: inference, model: modelReasoning)
         
         logger.debug(
             "对话编排开始，history=\(history.count), member=\(shortID(memberID)), inputLength=\(userInput.count), tools=\(inference.useTools), knowledge=\(inference.useKnowledgeBag), web=\(inference.useWebSearch), reasoning=\(reasoningOpts.isEnabled), promptFallback=\(reasoningOpts.usePromptFallback)",
@@ -103,7 +105,9 @@ struct ChatOrchestrator: Sendable {
             toolResult = await toolHub.runIfNeeded(
                 userInput: userInput,
                 memberID: memberID,
-                allowedToolNames: inference.allowedToolNames,
+                allowedToolNames: inference.symptomCollectionOnly
+                    ? Set([SparkToolName.collectSymptoms.rawValue])
+                    : inference.allowedToolNames,
                 threadID: threadID
             )
         } else {
@@ -166,7 +170,9 @@ struct ChatOrchestrator: Sendable {
         // MARK: - 无工具直接命中 → 进入AI模型推理流程
         let baseToolDefinitions = filteredToolDefinitions(inference: inference)
         var activeToolDefinitions = baseToolDefinitions
-        var activeToolChoice: AIRuntimeToolChoice = inference.useTools && baseToolDefinitions.isEmpty == false ? .auto : .none
+        var activeToolChoice: AIRuntimeToolChoice = inference.symptomCollectionOnly
+            ? (baseToolDefinitions.isEmpty ? .none : .required)
+            : (inference.useTools && baseToolDefinitions.isEmpty == false ? .auto : .none)
         var roundToolLocked = false // 工具锁定标记
         let toolCallLoopStrategy = RuntimeToolCallLoopStrategy(
             providerCompanyUppercased: providerCompanyUppercased,
@@ -232,7 +238,7 @@ struct ChatOrchestrator: Sendable {
             }
             let promptMessageTokenEstimate = Self.estimateTokens(for: loopMessages)
             let mustContinueSymptomCollection = symptomCollectionRequiresContinuation(executedTools)
-            if mustContinueSymptomCollection {
+            if inference.symptomCollectionOnly || mustContinueSymptomCollection {
                 // 只有模型已经实际进入症状采集且工具返回需要继续时，才强制续采集。
                 // 普通医生对话始终保留完整工具集，由模型自主决定是否进入症状采集。
                 activeToolDefinitions = baseToolDefinitions.filter {
@@ -263,7 +269,7 @@ struct ChatOrchestrator: Sendable {
                     toolCallID: operationalToolCallID
                 )
 
-                if mustContinueSymptomCollection {
+                if inference.symptomCollectionOnly || mustContinueSymptomCollection {
                     // 已进入采集续接阶段时，先插入稳定运行态，避免模型响应较慢时界面空白。
                     await onPartial(operationalDelta)
                 }
@@ -271,7 +277,7 @@ struct ChatOrchestrator: Sendable {
                     let isCollectSymptomsTool = delta.kind == .tool
                         && Self.normalizeToolName(delta.toolName ?? "")
                             == Self.normalizeToolName(SparkToolName.collectSymptoms.rawValue)
-                    if isCollectSymptomsTool || mustContinueSymptomCollection {
+                    if inference.symptomCollectionOnly && (isCollectSymptomsTool || mustContinueSymptomCollection) {
                         // 症状采集只展示运行态，不向消息暴露模型正文、思考链、工具参数或结果 JSON。
                         await onPartial(operationalDelta)
                     } else {
@@ -323,11 +329,14 @@ struct ChatOrchestrator: Sendable {
                     isEstimated: hasProviderUsage == false
                 )
             }
-            let toolTrace = makeToolTrace(from: executedTools)
+            let toolTrace = makeToolTrace(
+                from: executedTools,
+                symptomCollectionOnly: inference.symptomCollectionOnly
+            )
 
             // MARK: - AI 不调用工具 → 直接返回文本结果
             if response.hasToolCalls == false {
-                if mustContinueSymptomCollection {
+                if inference.symptomCollectionOnly || mustContinueSymptomCollection {
                     symptomContinuationNoProgressRounds += 1
                     if symptomContinuationNoProgressRounds >= 2 {
                         return symptomCollectionStalledOutput()
@@ -340,8 +349,31 @@ struct ChatOrchestrator: Sendable {
                     )
                     continue
                 }
+                if inference.symptomCollectionOnly {
+                    return symptomCollectionStalledOutput()
+                }
                 let text = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 if text.isEmpty {
+                    // 上一轮已成功插入挂号推荐卡时，允许以空正文收束，避免把已落库卡片冲成错误气泡。
+                    if hasCardFinalToolBypass(executedTools) {
+                        return ChatOrchestratorOutput(
+                            text: "",
+                            reasoningText: nil,
+                            reasoningDurationMs: collected.reasoningDurationMs,
+                            finishReason: response.finishReason ?? "tool_bypass",
+                            kind: .tool,
+                            toolName: nil,
+                            toolContent: nil,
+                            blocks: buildOutputBlocks(
+                                text: "",
+                                reasoning: nil,
+                                toolName: nil,
+                                toolContent: nil,
+                                executedTools: executedTools,
+                                symptomCollectionOnly: inference.symptomCollectionOnly
+                            )
+                        )
+                    }
                     logger.warning("AI 返回空文本，转为可见错误气泡", module: .aiConfig)
                     throw AIRuntimeError.emptyOutput
                 }
@@ -360,7 +392,8 @@ struct ChatOrchestrator: Sendable {
                         reasoning: reasoning.flatMap { $0.isEmpty ? nil : $0 },
                         toolName: toolTrace?.name,
                         toolContent: toolTrace?.content,
-                        executedTools: executedTools
+                        executedTools: executedTools,
+                        symptomCollectionOnly: inference.symptomCollectionOnly
                     )
                 )
             }
@@ -388,6 +421,25 @@ struct ChatOrchestrator: Sendable {
 
                 let text = response.text.trimmingCharacters(in: .whitespacesAndNewlines)
                 if text.isEmpty {
+                    if hasCardFinalToolBypass(executedTools) {
+                        return ChatOrchestratorOutput(
+                            text: "",
+                            reasoningText: nil,
+                            reasoningDurationMs: collected.reasoningDurationMs,
+                            finishReason: response.finishReason ?? "tool_bypass",
+                            kind: .tool,
+                            toolName: nil,
+                            toolContent: nil,
+                            blocks: buildOutputBlocks(
+                                text: "",
+                                reasoning: nil,
+                                toolName: nil,
+                                toolContent: nil,
+                                executedTools: executedTools,
+                                symptomCollectionOnly: inference.symptomCollectionOnly
+                            )
+                        )
+                    }
                     logger.warning("AI 返回空文本（工具禁用分支），转为可见错误气泡", module: .aiConfig)
                     throw AIRuntimeError.emptyOutput
                 }
@@ -406,7 +458,8 @@ struct ChatOrchestrator: Sendable {
                         reasoning: reasoning.flatMap { $0.isEmpty ? nil : $0 },
                         toolName: toolTrace?.name,
                         toolContent: toolTrace?.content,
-                        executedTools: executedTools
+                        executedTools: executedTools,
+                        symptomCollectionOnly: inference.symptomCollectionOnly
                     )
                 )
             }
@@ -476,7 +529,10 @@ struct ChatOrchestrator: Sendable {
                         toolName: canonicalCallName
                     )
                 }
-                if Self.normalizeToolName(canonicalCallName) != Self.normalizeToolName(SparkToolName.collectSymptoms.rawValue) {
+                if shouldSuppressToolProcessChrome(
+                    for: canonicalCallName,
+                    symptomCollectionOnly: inference.symptomCollectionOnly
+                ) == false {
                     await emitToolPartial(
                         answer: roundAnswer,
                         reasoning: roundReasoning,
@@ -514,7 +570,10 @@ struct ChatOrchestrator: Sendable {
                 }
 
                 // 工具执行完成 → 前端显示「参数 + 输出」，供气泡与工具详情 Sheet 共用
-                if Self.normalizeToolName(canonicalCallName) != Self.normalizeToolName(SparkToolName.collectSymptoms.rawValue) {
+                if shouldSuppressToolProcessChrome(
+                    for: canonicalCallName,
+                    symptomCollectionOnly: inference.symptomCollectionOnly
+                ) == false {
                     await emitToolPartial(
                         answer: roundAnswer,
                         reasoning: roundReasoning,
@@ -563,7 +622,8 @@ struct ChatOrchestrator: Sendable {
 
                 // 如果工具需要用户输入 → 暂停本轮生成，等待 UI 卡片提交
                 if toolResult.isAwaitingUserInput {
-                    let isSymptomCollection = toolResult.toolName == SparkToolName.collectSymptoms.rawValue
+                    let isSymptomCollection = inference.symptomCollectionOnly
+                        && toolResult.toolName == SparkToolName.collectSymptoms.rawValue
                     let text = isSymptomCollection
                         ? ""
                         : (roundAnswer.isEmpty
@@ -587,13 +647,26 @@ struct ChatOrchestrator: Sendable {
                             reasoning: reasoning,
                             toolName: toolTrace?.name,
                             toolContent: toolTrace?.content,
-                            executedTools: executedTools
+                            executedTools: executedTools,
+                            symptomCollectionOnly: inference.symptomCollectionOnly
                         )
                     )
                 }
             }
 
-            if symptomCollectionWasConfirmed(executedTools) {
+            // 挂号推荐卡与睡眠可视化一致：sideEffect / finalize 双写展示卡后，仍允许模型续写说明正文。
+            // 不再因 bypass 提前结束本轮——否则只剩工具过程文案被抑制，用户会感觉「没有卡片」。
+            let roundToolResults = Array(executedTools.dropFirst(executedToolCountAtRoundStart))
+            if hasCardFinalToolBypass(roundToolResults) {
+                logger.info(
+                    "挂号推荐卡已写入，允许模型续写说明，tools=\(roundToolResults.map(\.toolName).joined(separator: ","))",
+                    module: .aiConfig
+                )
+            }
+
+            // 只有线上问诊的“仅采集”模式在确认后结束；普通对话必须继续当前 turn，
+            // 将完整症状工具结果交回模型生成正式内容（分析/建议/下一步）。
+            if inference.symptomCollectionOnly && symptomCollectionWasConfirmed(executedTools) {
                 return ChatOrchestratorOutput(
                     text: "",
                     reasoningText: nil,
@@ -606,7 +679,7 @@ struct ChatOrchestrator: Sendable {
                 )
             }
 
-            if mustContinueSymptomCollection {
+            if inference.symptomCollectionOnly || mustContinueSymptomCollection {
                 // 当前轮工具集已经被限制为 collect_symptoms；这里仍保留防御，
                 // 防止不兼容提供方无视 tool_choice 后无限消耗额度。
                 let didAdvance = executedTools.dropFirst(executedToolCountAtRoundStart).contains {
@@ -1303,9 +1376,17 @@ struct ChatOrchestrator: Sendable {
         return ms
     }
 
-    private func makeToolTrace(from results: [ToolExecutionResult]) -> (name: String, content: String)? {
-        // 症状采集的 JSON 只服务于下一轮模型调用，不能作为普通工具结果显示给用户。
-        let visibleResults = results.filter { $0.toolName != SparkToolName.collectSymptoms.rawValue }
+    private func makeToolTrace(
+        from results: [ToolExecutionResult],
+        symptomCollectionOnly: Bool
+    ) -> (name: String, content: String)? {
+        // 症状采集 / 挂号推荐卡的工具文本只服务于运行时，不能作为普通工具结果显示给用户。
+        let visibleResults = results.filter {
+            shouldSuppressToolProcessChrome(
+                for: $0.toolName,
+                symptomCollectionOnly: symptomCollectionOnly
+            ) == false
+        }
         guard visibleResults.isEmpty == false else { return nil }
         let names = Array(Set(visibleResults.map(\.toolName)))
             .map(localizedToolDisplayName(for:))
@@ -1321,6 +1402,28 @@ struct ChatOrchestrator: Sendable {
         .trimmingCharacters(in: .whitespacesAndNewlines)
         guard content.isEmpty == false else { return nil }
         return (names, content)
+    }
+
+    /// 消息内专用卡片工具：过程文本不能再降级成普通工具块。
+    private func shouldSuppressToolProcessChrome(
+        for toolName: String,
+        symptomCollectionOnly: Bool = false
+    ) -> Bool {
+        let normalized = Self.normalizeToolName(toolName)
+        return (symptomCollectionOnly
+            && normalized == Self.normalizeToolName(SparkToolName.collectSymptoms.rawValue))
+            || normalized == Self.normalizeToolName(SparkToolName.showRegistrationRecommendation.rawValue)
+    }
+
+    /// 挂号推荐卡成功后必须以卡片结束本轮，禁止模型续写。
+    /// 以工具名 + bypass 为准（与 sleep 等 sideEffect 卡的「工具已成功」语义对齐），
+    /// 不依赖 sideEffects 是否已拷贝进结果，避免续写把「卡片已插入」冲成纯文本。
+    private func hasCardFinalToolBypass(_ results: [ToolExecutionResult]) -> Bool {
+        results.contains { result in
+            guard result.shouldBypassModel else { return false }
+            let normalized = Self.normalizeToolName(result.toolName)
+            return normalized == Self.normalizeToolName(SparkToolName.showRegistrationRecommendation.rawValue)
+        }
     }
 
     private func symptomCollectionRequiresContinuation(_ results: [ToolExecutionResult]) -> Bool {
@@ -1398,13 +1501,20 @@ struct ChatOrchestrator: Sendable {
         reasoning: String?,
         toolName: String?,
         toolContent: String?,
-        executedTools: [ToolExecutionResult]
+        executedTools: [ToolExecutionResult],
+        symptomCollectionOnly: Bool = false
     ) -> [ChatMessageBlock] {
         var blocks: [ChatMessageBlock] = []
 
         for result in executedTools {
-            if result.toolName == SparkToolName.collectSymptoms.rawValue {
-                // 症状采集由消息内主卡片和问题卡片承载，不能再次降级成普通工具文本。
+            if shouldSuppressToolProcessChrome(
+                for: result.toolName,
+                symptomCollectionOnly: symptomCollectionOnly
+            ) {
+                // 症状采集 / 挂号推荐卡由消息内专用卡片承载，不能再降级成普通工具文本。
+                // 但仍把 sideEffect 卡片并入 finalize，与睡眠卡等「工具 + 展示块」双写一致，
+                // 避免仅依赖中途 sideEffect 落库时卡片丢失。
+                blocks.append(contentsOf: registrationRecommendationBlocks(from: result))
                 continue
             }
             let output = result.outputText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1418,6 +1528,7 @@ struct ChatOrchestrator: Sendable {
                     toolCallID: result.toolCallID
                 )
             )
+            blocks.append(contentsOf: registrationRecommendationBlocks(from: result))
         }
 
         if executedTools.isEmpty,
@@ -1437,6 +1548,22 @@ struct ChatOrchestrator: Sendable {
             blocks.append(ChatMessageBlock(kind: .text, text: trimmedText))
         }
         return blocks
+    }
+
+    /// 将挂号推荐 sideEffect 转为可 finalize 的 timeline 卡片块（与睡眠可视化等同路径）。
+    private func registrationRecommendationBlocks(from result: ToolExecutionResult) -> [ChatMessageBlock] {
+        let anchor = result.anchorToolCallID ?? result.toolCallID
+        return result.sideEffects.compactMap { effect in
+            guard case .registrationRecommendation(let payload) = effect else { return nil }
+            return ChatMessageBlock(
+                anchor: anchor.map(ChatBlockAnchor.toolCall),
+                kind: .registrationRecommendationCards,
+                toolCallID: anchor,
+                parentToolCallID: anchor,
+                nodeRole: .timeline,
+                registrationRecommendationCards: [payload]
+            )
+        }
     }
 
     private func localizedToolOperationText(toolName: String, detail: String?) -> String {

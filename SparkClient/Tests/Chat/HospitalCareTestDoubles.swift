@@ -23,6 +23,8 @@ final class StubHospitalCareRemoteAPI: HospitalCareRemoteServing, @unchecked Sen
     /// 线上问诊：提交结果（nil 时抛 network）。
     var submitConsultationResult: Result<HospitalConsultationDTO, Error>?
     var consultationsResult: Result<[HospitalConsultationDTO], Error> = .success([])
+    var createAITriageConversationResult: Result<HospitalAITriageCreateResponseDTO, Error>?
+    var aiTriageRuntimeConfigResult: Result<HospitalAITriageRuntimeConfigDTO, Error>?
 
     private(set) var fetchContextCallCount = 0
     private(set) var listAllConversationsCallCount = 0
@@ -32,6 +34,8 @@ final class StubHospitalCareRemoteAPI: HospitalCareRemoteServing, @unchecked Sen
     private(set) var fetchRuntimeConfigCallCount = 0
     private(set) var submitConsultationCallCount = 0
     private(set) var lastConsultationPayload: HospitalConsultationSubmitRequestDTO?
+    private(set) var createAITriageConversationCallCount = 0
+    private(set) var fetchAITriageRuntimeConfigCallCount = 0
 
     func listHospitals(page: Int, pageSize: Int) async throws -> [HospitalPublicDTO] {
         try hospitalsResult.get()
@@ -117,6 +121,22 @@ final class StubHospitalCareRemoteAPI: HospitalCareRemoteServing, @unchecked Sen
 
     func listConsultations(memberID: Int?, page: Int, pageSize: Int) async throws -> [HospitalConsultationDTO] {
         try consultationsResult.get()
+    }
+
+    func createAITriageConversation(hospitalID: UUID, memberID: Int) async throws -> HospitalAITriageCreateResponseDTO {
+        createAITriageConversationCallCount += 1
+        guard let createAITriageConversationResult else {
+            throw StubError.network
+        }
+        return try createAITriageConversationResult.get()
+    }
+
+    func fetchAITriageRuntimeConfig(hospitalID: UUID, memberID: Int) async throws -> HospitalAITriageRuntimeConfigDTO {
+        fetchAITriageRuntimeConfigCallCount += 1
+        guard let aiTriageRuntimeConfigResult else {
+            throw StubError.network
+        }
+        return try aiTriageRuntimeConfigResult.get()
     }
 }
 

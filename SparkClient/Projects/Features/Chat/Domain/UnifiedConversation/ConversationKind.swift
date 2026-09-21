@@ -12,6 +12,8 @@ enum ConversationKind: String, Codable, Sendable, CaseIterable {
     case hospitalAgent = "hospital_agent"
     /// 线上问诊对话（一对一医生会话，不走医生智能体 AI）
     case telemedicine = "telemedicine"
+    /// 医院 AI 导诊对话
+    case aiTriage = "ai_triage"
     /// 暂时无法判定（Manifest 未覆盖、旧数据或协议异常）；仅客户端使用，服务端不下发该值
     case unknown = "unknown"
 }
@@ -101,6 +103,16 @@ struct ConversationCapability: Equatable, Sendable {
         canRead: true,
         canSend: false,
         canUseAI: false,
+        canUseHospitalKnowledge: false,
+        canUseTelemedicine: false,
+        canMarkRead: true
+    )
+
+    /// 医院 AI 导诊：可发送、AI 自动回复，不使用医院知识库同步
+    static let aiTriageActive = ConversationCapability(
+        canRead: true,
+        canSend: true,
+        canUseAI: true,
         canUseHospitalKnowledge: false,
         canUseTelemedicine: false,
         canMarkRead: true
@@ -262,6 +274,7 @@ enum ConversationTypeBadge: Equatable, Sendable {
     case ordinaryAI
     case hospitalAgent
     case telemedicine
+    case aiTriage
     /// unknown 确认中
     case confirming
     /// unknown 确认失败（暂无法确认）
@@ -275,6 +288,8 @@ enum ConversationTypeBadge: Equatable, Sendable {
             return L10n.text("chat.unified.badge.hospital_agent", fallback: "医生智能体")
         case .telemedicine:
             return L10n.text("chat.unified.badge.telemedicine", fallback: "线上问诊")
+        case .aiTriage:
+            return L10n.text("chat.unified.badge.ai_triage", fallback: "AI 导诊")
         case .confirming:
             return L10n.text("chat.unified.badge.confirming", fallback: "会话信息确认中")
         case .confirmationFailed:
@@ -289,6 +304,7 @@ enum MessageListTypeFilter: String, CaseIterable, Hashable, Sendable {
     case ordinaryAI
     case hospitalAgent
     case telemedicine
+    case aiTriage
 
     var localizedTitle: String {
         switch self {
@@ -300,6 +316,8 @@ enum MessageListTypeFilter: String, CaseIterable, Hashable, Sendable {
             return L10n.text("chat.unified.filter.hospital_agent", fallback: "医生智能体")
         case .telemedicine:
             return L10n.text("chat.unified.filter.telemedicine", fallback: "线上问诊")
+        case .aiTriage:
+            return L10n.text("chat.unified.filter.ai_triage", fallback: "AI 导诊")
         }
     }
 
@@ -314,6 +332,8 @@ enum MessageListTypeFilter: String, CaseIterable, Hashable, Sendable {
             return kind == .hospitalAgent
         case .telemedicine:
             return kind == .telemedicine
+        case .aiTriage:
+            return kind == .aiTriage
         }
     }
 }

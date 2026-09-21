@@ -108,7 +108,17 @@ struct URLSessionNetworkTransport: SparkNetworkTransport {
 
 // MARK: - 日志用 URL / 头 / 体
 
-private enum NetworkLogSanitizer {
+enum NetworkLogSanitizer {
+    private static let sensitiveJSONKeys: Set<String> = [
+        "apikey",
+        "authorization",
+        "accesstoken",
+        "refreshtoken",
+        "token",
+        "secret",
+        "password"
+    ]
+
     static func loggableURL(_ url: URL?) -> String {
         guard let url else { return "-" }
         var path = url.path
@@ -132,14 +142,46 @@ private enum NetworkLogSanitizer {
         return serializeDictionary(normalized)
     }
 
-    /// 完整 UTF-8 正文；非 UTF-8 时返回占位，不截断。
+    /// 完整 UTF-8 正文；JSON 中的凭证字段递归脱敏，非 UTF-8 时返回占位。
     static func bodyFullUTF8(data: Data?, contentType: String?) -> String {
         guard let data, data.isEmpty == false else { return "" }
-        _ = contentType
         guard let text = String(data: data, encoding: .utf8) else {
             return "<二进制：\(data.count) 字节>"
         }
+        if isJSON(contentType: contentType),
+           let object = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed]),
+           let redacted = try? JSONSerialization.data(
+               withJSONObject: redactJSON(object),
+               options: [.fragmentsAllowed, .sortedKeys]
+           ),
+           let redactedText = String(data: redacted, encoding: .utf8) {
+            return redactedText
+        }
         return text
+    }
+
+    private static func isJSON(contentType: String?) -> Bool {
+        guard let contentType = contentType?.lowercased() else { return false }
+        return contentType.contains("application/json") || contentType.contains("+json")
+    }
+
+    private static func redactJSON(_ value: Any) -> Any {
+        if let dictionary = value as? [String: Any] {
+            return dictionary.mapValues { value in
+                redactJSON(value)
+            }.reduce(into: [String: Any]()) { result, item in
+                result[item.key] = isSensitiveJSONKey(item.key) ? "***" : item.value
+            }
+        }
+        if let array = value as? [Any] {
+            return array.map(redactJSON)
+        }
+        return value
+    }
+
+    private static func isSensitiveJSONKey(_ key: String) -> Bool {
+        let normalized = key.lowercased().filter(\.isLetter)
+        return sensitiveJSONKeys.contains(normalized)
     }
 
     private static func serializeDictionary(_ source: [String: String]) -> String {

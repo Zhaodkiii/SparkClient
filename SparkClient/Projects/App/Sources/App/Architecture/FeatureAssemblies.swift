@@ -421,6 +421,7 @@ struct HospitalCareAssembly: FeatureAssembly {
     let chatRepository: any ChatRepository
     let chatStateStore: ChatStateStore
     let fileTransferService: FileTransferService
+    let threadCreationProvenanceStore: ThreadCreationProvenanceStore
     let logger: Logger
     let scope: DependencyScope = .accountScoped
 
@@ -429,6 +430,7 @@ struct HospitalCareAssembly: FeatureAssembly {
         let remoteAPI = backend.hospitalCare
         // CHAT-000058：专用运行配置查询（single-flight），供创建会话与会话页后台校验共用。
         let fetchRuntimeConfig = FetchHospitalAgentRuntimeConfigUseCase(remoteAPI: remoteAPI)
+        let fetchTriageRuntimeConfig = FetchHospitalAITriageRuntimeConfigUseCase(remoteAPI: remoteAPI)
         return HospitalCareFeatureDependencies(
             remoteAPI: remoteAPI,
             catalogCache: catalogCache,
@@ -448,6 +450,15 @@ struct HospitalCareAssembly: FeatureAssembly {
                 runtimeConfigStore: runtimeConfigStore,
                 chatRepository: chatRepository,
                 chatStateStore: chatStateStore
+            ),
+            resolveOrCreateAITriage: ResolveOrCreateAITriageConversationUseCase(
+                remoteAPI: remoteAPI,
+                scopeStore: scopeStore,
+                fetchTriageRuntimeConfig: fetchTriageRuntimeConfig,
+                runtimeConfigStore: runtimeConfigStore,
+                chatRepository: chatRepository,
+                chatStateStore: chatStateStore,
+                provenanceStore: threadCreationProvenanceStore
             ),
             resolveScope: ResolveHospitalConversationScopeUseCase(
                 remoteAPI: remoteAPI,

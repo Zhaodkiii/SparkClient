@@ -185,6 +185,21 @@ nonisolated enum ToolSideEffectBlockMapper {
                     searchSummary: payload
                 )
             ]
+        case .registrationRecommendation(let payload):
+            guard isEncodable(payload) else { return nil }
+            // 与医院介绍 / 导诊引导卡一致：落为 timeline 展示块。
+            // show_registration_recommendation 会抑制工具过程气泡，若仍用 toolPresentation
+            // 且父 tool 块被跳过，时间线可能挂不到可见节点，表现为「只有工具文案、没有卡片」。
+            return [
+                ChatMessageBlock(
+                    anchor: normalizedAnchor.map(ChatBlockAnchor.toolCall),
+                    kind: .registrationRecommendationCards,
+                    toolCallID: normalizedAnchor,
+                    parentToolCallID: normalizedAnchor,
+                    nodeRole: .timeline,
+                    registrationRecommendationCards: [payload]
+                )
+            ]
         case .externalConnectorRichBlocks(let blocks):
             return blocks.isEmpty ? nil : blocks
         case .structuredHealthCardsPending,
@@ -197,6 +212,6 @@ nonisolated enum ToolSideEffectBlockMapper {
     }
 
     nonisolated private static func isEncodable<T: Encodable>(_ value: T) -> Bool {
-        (try? JSONEncoder().encode(value)) != nil
+        (try? JSONEncoder.default.encode(value)) != nil
     }
 }

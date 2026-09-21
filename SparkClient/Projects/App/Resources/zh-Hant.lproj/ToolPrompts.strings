@@ -193,3 +193,11 @@
 "tool.param.collect_symptoms_field_item" = "症狀欄位名稱。";
 "tool.param.collect_symptoms_questions" = "本輪必須且只能生成 1 個問題，包含 2 至 8 個選項；使用者提交後下一輪再生成下一個問題。";
 "tool.param.collect_symptoms_question_item" = "包含 id、question、field_key、options、selection_mode、allows_other 的問題物件。";
+"tool.summary.query_registration_catalog" = "用途：查詢目前醫院的本地掛號目錄，再推薦科室或醫生。scope 為 departments 或 doctors。";
+"tool.summary.show_registration_recommendation" = "用途：展示一張已驗證的掛號推薦卡片，可帶一名醫生和簡短推薦理由。必須先查詢目錄；完成推薦時必須呼叫本工具，不要把 JSON 參數直接寫進回覆文字。";
+"tool.param.registration_catalog_scope" = "目錄範圍：departments 或 doctors。";
+"tool.param.registration_department_id" = "query_registration_catalog 返回的目前醫院科室 UUID。";
+"tool.param.registration_keyword" = "可選，科室或醫生搜尋關鍵詞。";
+"tool.param.registration_limit" = "可選，目錄結果數量上限。";
+"tool.param.registration_agent_id" = "query_registration_catalog 返回的可選醫生 UUID。";
+"tool.param.registration_reason_summary" = "簡短推薦依據；概括說明，不要複製使用者原始症狀。";

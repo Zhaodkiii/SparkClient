@@ -33,7 +33,12 @@ enum ChatHospitalSystemMessageSupport {
 
     static func shouldRenderCenteredTip(for message: ChatMessage) -> Bool {
         guard message.role == .system else { return false }
-        if message.blocks.contains(where: { $0.kind == .hospitalDoctorIntroCard || $0.kind == .chatGuideCard }) {
+        if message.blocks.contains(where: {
+            $0.kind == .hospitalDoctorIntroCard
+                || $0.kind == .hospitalTriageIntroCard
+                || $0.kind == .aiTriageGuideCard
+                || $0.kind == .chatGuideCard
+        }) {
             return false
         }
         return plainText(from: message).isEmpty == false

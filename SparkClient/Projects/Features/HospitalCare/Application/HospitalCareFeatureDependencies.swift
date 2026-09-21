@@ -9,6 +9,7 @@ struct HospitalCareFeatureDependencies {
     let loadDirectory: LoadHospitalAgentDirectoryUseCase
     let resolveDemoHospital: ResolveDemoHospitalUseCase
     let resolveOrCreate: ResolveOrCreateHospitalConversationUseCase
+    let resolveOrCreateAITriage: ResolveOrCreateAITriageConversationUseCase
     let resolveScope: ResolveHospitalConversationScopeUseCase
     /// CHAT-000058：医院医生智能体专用运行配置查询（single-flight + 业务码映射）。
     let fetchRuntimeConfig: FetchHospitalAgentRuntimeConfigUseCase

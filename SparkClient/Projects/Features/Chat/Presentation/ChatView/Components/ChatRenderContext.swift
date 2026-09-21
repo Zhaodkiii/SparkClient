@@ -68,6 +68,8 @@ struct ChatRenderContext {
     let onSmallTaskCardOpen: (ChatSmallTaskMessageCardPayload) -> Void
     /// 引导卡片科普问题点击（上抛给 ViewModel 走当前会话发送链路）。
     let onGuideQuestionTap: (ChatGuideQuestion) -> Void
+    /// AI 导诊引导卡片快捷症状点击。
+    var onAITriagePromptTap: ((AITriageGuidePrompt) -> Void)? = nil
     /// 线上问诊消息卡片点击 → 打开问诊详情。
     let onConsultationCardTap: (ChatConsultationCardPayload) -> Void
     /// 引导卡片滑块点击 → 健康首页 destination（CHAT-000025）。
@@ -136,6 +138,7 @@ extension ChatRenderContext {
             onCaptureCancel: onCaptureCancel,
             onSmallTaskCardOpen: onSmallTaskCardOpen,
             onGuideQuestionTap: onGuideQuestionTap,
+            onAITriagePromptTap: onAITriagePromptTap,
             onConsultationCardTap: onConsultationCardTap,
             guideHomeDestinationBuilder: guideHomeDestinationBuilder,
             guideMetricSectionsProvider: guideMetricSectionsProvider,

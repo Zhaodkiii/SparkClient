@@ -189,6 +189,7 @@ private struct RemoteScenarioCollection: Decodable {
     let modelConfig: AIScenarioRemoteBundle?
     let reportInterpretation: AIScenarioRemoteBundle?
     let nutritionIntakeExtraction: AIScenarioRemoteBundle?
+    let aiTriage: AIScenarioRemoteBundle?
 
 
     /// Pro bootstrap 可能只返回部分场景；未出现的场景用空包占位（合并时由运行时逻辑回退到本地包）。
@@ -213,7 +214,8 @@ private struct RemoteScenarioCollection: Decodable {
             router: markPro(router) ?? empty,
             modelConfig: markPro(modelConfig) ?? empty,
             reportInterpretation: markPro(reportInterpretation) ?? empty,
-            nutritionIntakeExtraction: markPro(nutritionIntakeExtraction) ?? empty
+            nutritionIntakeExtraction: markPro(nutritionIntakeExtraction) ?? empty,
+            aiTriage: markPro(aiTriage) ?? empty
         )
     }
 

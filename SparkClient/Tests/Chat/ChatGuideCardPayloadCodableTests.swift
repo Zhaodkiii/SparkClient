@@ -51,6 +51,56 @@ final class ChatGuideCardPayloadCodableTests: XCTestCase {
         }
     }
 
+    func testRegistrationRecommendationPayloadDecodesAcronymIDsFromSnakeCase() throws {
+        let hospitalID = UUID()
+        let departmentID = UUID()
+        let doctorID = UUID()
+        let payload = ChatRegistrationRecommendationCardPayload(
+            hospitalID: hospitalID,
+            hospitalName: "天长市中医院",
+            departmentID: departmentID,
+            departmentName: "皮肤科",
+            agentID: UUID(),
+            doctorID: doctorID,
+            doctorName: "叶宇峰",
+            doctorTitle: "中医师",
+            reasonSummary: "皮肤相关症状建议优先咨询皮肤科。"
+        )
+
+        let data = try JSONEncoder.chatRemote.encode(payload)
+        let decoded = try JSONDecoder.chatRemote.decode(
+            ChatRegistrationRecommendationCardPayload.self,
+            from: data
+        )
+
+        XCTAssertEqual(decoded, payload)
+        XCTAssertTrue(String(decoding: data, as: UTF8.self).contains("hospital_id"))
+
+        let legacyJSON = """
+        {
+          "schemaVersion": 1,
+          "hospitalID": "\(hospitalID.uuidString)",
+          "hospitalName": "天长市中医院",
+          "departmentID": "\(departmentID.uuidString)",
+          "departmentName": "皮肤科",
+          "agentID": "\(payload.agentID!.uuidString)",
+          "doctorID": "\(doctorID.uuidString)",
+          "doctorName": "叶宇峰",
+          "doctorTitle": "中医师",
+          "doctorAvatarURL": null,
+          "reasonSummary": "根据症状建议咨询皮肤科。"
+        }
+        """
+        let legacyData = try XCTUnwrap(legacyJSON.data(using: .utf8))
+        let legacyDecoded = try JSONDecoder.chatRemote.decode(
+            ChatRegistrationRecommendationCardPayload.self,
+            from: legacyData
+        )
+        XCTAssertEqual(legacyDecoded.hospitalID, hospitalID)
+        XCTAssertEqual(legacyDecoded.departmentID, departmentID)
+        XCTAssertEqual(legacyDecoded.doctorID, doctorID)
+    }
+
     func testMiniChartNormalization() {
         XCTAssertNil(ChatGuideMiniChart.normalized(from: [1]))
         XCTAssertNil(ChatGuideMiniChart.normalized(from: []))

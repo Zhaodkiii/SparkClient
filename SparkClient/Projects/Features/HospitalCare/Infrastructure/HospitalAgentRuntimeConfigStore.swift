@@ -16,9 +16,21 @@ nonisolated final class HospitalAgentRuntimeConfigStore: @unchecked Sendable {
         let hospitalID: UUID
         let memberID: Int
         let agentID: UUID
+        var isAITriage: Bool = false
+
+        init(accountID: Int64, hospitalID: UUID, memberID: Int, agentID: UUID, isAITriage: Bool = false) {
+            self.accountID = accountID
+            self.hospitalID = hospitalID
+            self.memberID = memberID
+            self.agentID = agentID
+            self.isAITriage = isAITriage
+        }
 
         var storageKey: String {
-            "hospital-agent-runtime/\(accountID)/\(hospitalID.uuidString.lowercased())/\(memberID)/\(agentID.uuidString.lowercased())"
+            if isAITriage {
+                return "hospital-ai-triage-runtime/\(accountID)/\(hospitalID.uuidString.lowercased())/\(memberID)"
+            }
+            return "hospital-agent-runtime/\(accountID)/\(hospitalID.uuidString.lowercased())/\(memberID)/\(agentID.uuidString.lowercased())"
         }
     }
 
@@ -56,9 +68,10 @@ nonisolated final class HospitalAgentRuntimeConfigStore: @unchecked Sendable {
             return nil
         }
         // 字段/版本校验：scope 与内容必须一致，版本必须可识别。
-        guard decoded.agentID == scope.agentID,
-              decoded.hospitalID == scope.hospitalID,
+        guard decoded.hospitalID == scope.hospitalID,
               decoded.memberID == scope.memberID,
+              decoded.isAITriage == scope.isAITriage,
+              scope.isAITriage || decoded.agentID == scope.agentID,
               decoded.configVersion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
         else {
             keychain.delete(account: key)
@@ -77,7 +90,8 @@ nonisolated final class HospitalAgentRuntimeConfigStore: @unchecked Sendable {
             accountID: accountID,
             hospitalID: config.hospitalID,
             memberID: config.memberID,
-            agentID: config.agentID
+            agentID: config.agentID,
+            isAITriage: config.isAITriage
         )
         let key = scope.storageKey
         lock.lock()

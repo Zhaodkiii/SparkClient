@@ -68,6 +68,7 @@ struct ChatMessageBubbleContentView: View {
     let onCaptureCancel: (ChatCaptureMessageCardPayload) -> Void
     let onSmallTaskCardOpen: (ChatSmallTaskMessageCardPayload) -> Void
     let onGuideQuestionTap: (ChatGuideQuestion) -> Void
+    var onAITriagePromptTap: ((AITriageGuidePrompt) -> Void)? = nil
     let onConsultationCardTap: (ChatConsultationCardPayload) -> Void
     let onPresentToolPreview: (ToolPreviewPrompt, ChatRenderContext) -> Void
     let fileTransferService: FileTransferService
@@ -152,6 +153,7 @@ struct ChatMessageBubbleContentView: View {
             onCaptureCancel: onCaptureCancel,
             onSmallTaskCardOpen: onSmallTaskCardOpen,
             onGuideQuestionTap: onGuideQuestionTap,
+            onAITriagePromptTap: onAITriagePromptTap,
             onConsultationCardTap: onConsultationCardTap,
             guideHomeDestinationBuilder: guideHomeDestinationBuilder,
             guideMetricSectionsProvider: guideMetricSectionsProvider,
@@ -173,14 +175,17 @@ struct ChatMessageBubbleContentView: View {
     private var effectiveBlocks: [ChatMessageBlock] {
         var blocks = message.blocks
 
-        // collect_symptoms 的工具块只是本次模型运行的进度提示。
-        // 流式结束后由症状汇总卡和问答卡承载结果，不再展示工具过程。
+        // collect_symptoms / show_registration_recommendation 的工具块只是本次模型运行的进度提示。
+        // 流式结束后由消息内专用卡片承载结果，不再展示工具过程。
         if message.deliveryState != .sending {
             blocks.removeAll {
-                $0.kind == .tool
-                    && $0.toolName?.trimmingCharacters(in: .whitespacesAndNewlines)
-                        .replacingOccurrences(of: "\\_", with: "_")
-                        .lowercased() == SparkToolName.collectSymptoms.rawValue
+                guard $0.kind == .tool else { return false }
+                let name = $0.toolName?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .replacingOccurrences(of: "\\_", with: "_")
+                    .lowercased()
+                return name == SparkToolName.collectSymptoms.rawValue
+                    || name == SparkToolName.showRegistrationRecommendation.rawValue
             }
         }
 
@@ -687,7 +692,7 @@ private enum ChatMessageTimelineProjector {
 
     nonisolated private static func isToolPresentationBlock(_ kind: ChatMessageBlockKind) -> Bool {
         switch kind {
-        case .tool, .text, .deepThought, .error, .assistantStatusCard, .chatGuideCard, .hospitalDoctorIntroCard, .consultationCard:
+        case .tool, .text, .deepThought, .error, .assistantStatusCard, .chatGuideCard, .hospitalDoctorIntroCard, .hospitalTriageIntroCard, .aiTriageGuideCard, .consultationCard, .registrationRecommendationCards:
             return false
         case .imageGallery,
                 .fileAttachments,
@@ -764,6 +769,10 @@ private struct ChatToolTimelineNodeView: View {
             || toolBlock.toolName == SparkToolName.searchArxivPapers.rawValue
             || toolBlock.toolName == SparkToolName.insertHealthCitationSources.rawValue),
            node.presentations.contains(where: { $0.kind == .searchSummary }) {
+            return false
+        }
+        if toolBlock.toolName == SparkToolName.showRegistrationRecommendation.rawValue,
+           node.presentations.contains(where: { $0.kind == .registrationRecommendationCards }) {
             return false
         }
         return true

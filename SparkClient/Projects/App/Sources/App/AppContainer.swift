@@ -728,6 +728,7 @@ final class AppContainer {
             guideQuestionClickReporter: backend.chatGuideQuestion,
             hospitalRuntimeConfigStore: hospitalAgentRuntimeConfigStore,
             fetchHospitalRuntimeConfigUseCase: FetchHospitalAgentRuntimeConfigUseCase(remoteAPI: backend.hospitalCare),
+            fetchHospitalAITriageRuntimeConfigUseCase: FetchHospitalAITriageRuntimeConfigUseCase(remoteAPI: backend.hospitalCare),
             logger: logger
         )
         logger.info("AppContainer 组合完成：容器仅持有 Assembly facade 与共享运行时", module: .general)
@@ -1056,6 +1057,7 @@ final class AppContainer {
             chatRepository: chatRepository,
             chatStateStore: chatStateStore,
             fileTransferService: fileTransferService,
+            threadCreationProvenanceStore: threadCreationProvenanceStore,
             logger: logger
         ).makeFacade()
     }

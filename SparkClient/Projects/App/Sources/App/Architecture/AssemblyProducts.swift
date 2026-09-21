@@ -599,6 +599,10 @@ extension ChatAssembly {
             sideEffectSink: messageRunActor,
             toolInteractionCoordinator: toolInteractionCoordinator,
             healthResourceToolService: healthResourceToolService,
+            registrationCatalogService: RegistrationCatalogService(
+                remoteAPI: backend.hospitalCare,
+                catalogCache: HospitalCatalogMemoryCache()
+            ),
             logger: logger
         )
         let chatAttachmentPipeline = ChatAttachmentPipeline(

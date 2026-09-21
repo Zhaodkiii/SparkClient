@@ -17,6 +17,8 @@ enum ToolInteractionSnapshot: Codable, Equatable, Sendable {
     case apiKeysSettings
     /// 当前 ChatView 内的会话列表选择器（选择后原地切换 thread）。
     case conversationList
+    /// 挂号推荐卡点击后的非阻塞演示挂号路由。
+    case registrationRecommendation(ChatRegistrationRecommendationCardPayload)
 
     /// `true`：禁止下滑关闭（同意/提问/选成员）；`false`：允许工具详情 Sheet 手势关闭。
     var requiresForcedSheetDismiss: Bool {
@@ -26,7 +28,8 @@ enum ToolInteractionSnapshot: Codable, Equatable, Sendable {
              .healthResourceCandidates,
              .askReportPicker,
              .apiKeysSettings,
-             .conversationList:
+             .conversationList,
+             .registrationRecommendation:
             return false
         case .consent, .question, .member: return true
         }

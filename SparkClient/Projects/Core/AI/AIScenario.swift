@@ -40,6 +40,8 @@ enum AIScenario: String, Codable, CaseIterable, Sendable {
     case nutritionIntakeExtraction = "nutrition_intake_extraction"
     /// 体检计划生成场景。
     case medicalExamPlanGeneration = "medical_exam_plan_generation"
+    /// 医院 AI 导诊场景（症状采集与科室推荐，非诊断）。
+    case aiTriage = "ai_triage"
 }
 
 extension AIScenario {
@@ -83,6 +85,8 @@ extension AIScenario {
             return L10n.text("ai_settings.scenario.nutrition_intake_extraction")
         case .medicalExamPlanGeneration:
             return L10n.text("ai_settings.scenario.medical_exam_plan_generation")
+        case .aiTriage:
+            return L10n.text("ai_settings.scenario.ai_triage", fallback: "AI 导诊")
         }
     }
 
@@ -126,6 +130,8 @@ extension AIScenario {
             return "fork.knife"
         case .medicalExamPlanGeneration:
             return "list.clipboard"
+        case .aiTriage:
+            return "figure.walk.motion"
         }
     }
 
@@ -169,6 +175,8 @@ extension AIScenario {
             return L10n.text("ai_settings.prefs.explain.nutrition_intake_extraction")
         case .medicalExamPlanGeneration:
             return L10n.text("ai_settings.prefs.explain.medical_exam_plan_generation")
+        case .aiTriage:
+            return L10n.text("ai_settings.prefs.explain.ai_triage", fallback: "根据症状辅助推荐科室与就医建议，不能替代医生诊断。")
         }
     }
 }

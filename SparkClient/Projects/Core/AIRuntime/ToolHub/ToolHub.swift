@@ -26,6 +26,7 @@ final class ToolHub: @unchecked Sendable {
     let toolModelEgressConsentPolicy: ToolModelEgressConsentPolicy
     let webSearchGateway: WebSearchGateway
     let weatherGateway: WeatherGateway
+    let registrationCatalogService: (any RegistrationCatalogServing)?
     let logger: Logger
     let symptomCollectionSessionStore = SymptomCollectionSessionStore()
 
@@ -54,6 +55,7 @@ final class ToolHub: @unchecked Sendable {
         toolModelEgressConsentPolicy: ToolModelEgressConsentPolicy = ToolModelEgressConsentPolicy(),
         webSearchGateway: WebSearchGateway = WebSearchGateway(),
         weatherGateway: WeatherGateway = WeatherGateway(),
+        registrationCatalogService: (any RegistrationCatalogServing)? = nil,
         logger: Logger = ConsoleLogger()
     ) {
         self.chatRepository = chatRepository
@@ -78,6 +80,7 @@ final class ToolHub: @unchecked Sendable {
         self.toolModelEgressConsentPolicy = toolModelEgressConsentPolicy
         self.webSearchGateway = webSearchGateway
         self.weatherGateway = weatherGateway
+        self.registrationCatalogService = registrationCatalogService
         self.logger = logger
     }
 

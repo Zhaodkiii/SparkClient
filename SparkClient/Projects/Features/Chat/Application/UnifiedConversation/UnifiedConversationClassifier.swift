@@ -60,10 +60,28 @@ enum UnifiedConversationClassifier {
 
         // 2. 已验证医院 scope 缓存。
         if let scope = hospitalScopeStore?.scope(for: threadID, accountID: accountID) {
+            let kind: ConversationKind
+            if scope.isAITriage {
+                kind = .aiTriage
+            } else if scope.consultationID != nil {
+                kind = .telemedicine
+            } else {
+                kind = .hospitalAgent
+            }
             return Result(
-                kind: scope.consultationID == nil ? .hospitalAgent : .telemedicine,
+                kind: kind,
                 binding: nil,
                 scope: scope,
+                isAccessRevoked: false,
+                hasProvenanceConflict: false
+            )
+        }
+
+        if provenance?.origin == .aiTriageFlow {
+            return Result(
+                kind: .aiTriage,
+                binding: nil,
+                scope: nil,
                 isAccessRevoked: false,
                 hasProvenanceConflict: false
             )

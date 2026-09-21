@@ -2,13 +2,45 @@ import Foundation
 
 nonisolated struct HospitalConversationScope: Codable, Equatable, Sendable {
     let threadID: UUID
-    let agentID: UUID
+    /// 医生智能体 ID；AI 导诊会话为 nil。
+    let agentID: UUID?
     let memberID: Int
     let hospitalID: UUID
+    /// 医院 AI 导诊会话（无绑定医生智能体）。
+    var isAITriage: Bool = false
     /// 线上问诊单 ID；有值时该 Thread 按 telemedicine 分类，而不是医生智能体。
     var consultationID: UUID? = nil
     /// 问诊编号（如 C202609050001），供列表主标题展示。
     var consultNo: String? = nil
+
+    nonisolated init(
+        threadID: UUID,
+        agentID: UUID?,
+        memberID: Int,
+        hospitalID: UUID,
+        isAITriage: Bool = false,
+        consultationID: UUID? = nil,
+        consultNo: String? = nil
+    ) {
+        self.threadID = threadID
+        self.agentID = agentID
+        self.memberID = memberID
+        self.hospitalID = hospitalID
+        self.isAITriage = isAITriage
+        self.consultationID = consultationID
+        self.consultNo = consultNo
+    }
+
+    nonisolated init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        threadID = try c.decode(UUID.self, forKey: .threadID)
+        agentID = try c.decodeIfPresent(UUID.self, forKey: .agentID)
+        memberID = try c.decode(Int.self, forKey: .memberID)
+        hospitalID = try c.decode(UUID.self, forKey: .hospitalID)
+        isAITriage = try c.decodeIfPresent(Bool.self, forKey: .isAITriage) ?? false
+        consultationID = try c.decodeIfPresent(UUID.self, forKey: .consultationID)
+        consultNo = try c.decodeIfPresent(String.self, forKey: .consultNo)
+    }
 }
 
 /// 记录医院会话 `threadID -> agentID/memberID`，供跳过通用引导卡和会话内新建继承智能体。

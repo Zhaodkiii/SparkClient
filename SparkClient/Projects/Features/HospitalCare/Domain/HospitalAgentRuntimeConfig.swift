@@ -9,6 +9,7 @@ nonisolated struct HospitalAgentRuntimeConfig: Codable, Equatable, Sendable {
     let agentID: UUID
     let hospitalID: UUID
     let memberID: Int
+    var isAITriage: Bool = false
     let doctorName: String
     let doctorTitle: String?
     let departmentName: String?
@@ -48,12 +49,46 @@ nonisolated extension HospitalAgentRuntimeConfig {
             agentID: dto.agentId,
             hospitalID: dto.hospitalId,
             memberID: dto.memberId,
+            isAITriage: false,
             doctorName: dto.doctor.name,
             doctorTitle: dto.doctor.title,
             departmentName: dto.doctor.departmentName,
             doctorAvatarURL: dto.doctor.avatarUrl,
             profileName: dto.profile.name,
             profileVersion: dto.profile.profileVersion,
+            bindingID: dto.runtime.bindingId,
+            bindingVersion: dto.runtime.bindingVersion,
+            configVersion: configVersion,
+            streaming: dto.runtime.streaming ?? true,
+            modelRow: dto.runtime.model
+        )
+    }
+
+    static func makeFromTriage(
+        dto: HospitalAITriageRuntimeConfigDTO,
+        expectedMemberID: Int,
+        expectedHospitalID: UUID
+    ) -> HospitalAgentRuntimeConfig? {
+        guard dto.hospitalId == expectedHospitalID,
+              dto.memberId == expectedMemberID
+        else { return nil }
+        let configVersion = dto.runtime.configVersion.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard configVersion.isEmpty == false else { return nil }
+        let endpoint = dto.runtime.model.endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard endpoint.isEmpty == false, URL(string: endpoint)?.scheme != nil else { return nil }
+        let modelName = dto.runtime.model.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard modelName.isEmpty == false else { return nil }
+        return HospitalAgentRuntimeConfig(
+            agentID: expectedHospitalID,
+            hospitalID: expectedHospitalID,
+            memberID: expectedMemberID,
+            isAITriage: true,
+            doctorName: dto.profile.name,
+            doctorTitle: nil,
+            departmentName: nil,
+            doctorAvatarURL: nil,
+            profileName: dto.profile.name,
+            profileVersion: nil,
             bindingID: dto.runtime.bindingId,
             bindingVersion: dto.runtime.bindingVersion,
             configVersion: configVersion,

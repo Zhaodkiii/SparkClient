@@ -170,12 +170,18 @@ nonisolated enum ChatMessageBlockKind: String, Codable, Sendable {
     case healthResourceReference
     /// 医疗风险提示
     case medicalRiskNotice
+    /// AI 挂号推荐卡片
+    case registrationRecommendationCards
     /// 医疗分析免责声明（客户端自动追加，非工具）
     case medicalDisclaimerCard
     /// 新会话首条系统引导卡片（健康数据滑块 + 科普问题）
     case chatGuideCard
     /// 医院医生智能体会话首条系统身份卡
     case hospitalDoctorIntroCard
+    /// 医院 AI 导诊会话首条医院/就诊人介绍卡
+    case hospitalTriageIntroCard
+    /// AI 导诊引导卡片（快捷症状入口）
+    case aiTriageGuideCard
     /// 患者提交线上问诊时的问诊单消息卡片
     case consultationCard
 }
@@ -292,9 +298,12 @@ nonisolated enum ChatMessageBlockPayload: Codable, Equatable, Sendable {
     case assistantStatusCard(ChatAssistantStatusCardPayload)
     case healthResourceReference(ChatHealthResourceReferencePayload)
     case medicalRiskNotice(ChatMedicalRiskNoticePayload)
+    case registrationRecommendationCards([ChatRegistrationRecommendationCardPayload])
     case medicalDisclaimerCard(ChatMedicalDisclaimerCardPayload)
     case chatGuideCard(ChatGuideCardPayload)
     case hospitalDoctorIntroCard(HospitalDoctorIntroCardPayload)
+    case hospitalTriageIntroCard(HospitalTriageIntroCardPayload)
+    case aiTriageGuideCard(AITriageGuideCardPayload)
     case consultationCard(ChatConsultationCardPayload)
 
     nonisolated var kind: ChatMessageBlockKind {
@@ -334,9 +343,12 @@ nonisolated enum ChatMessageBlockPayload: Codable, Equatable, Sendable {
         case .assistantStatusCard: return .assistantStatusCard
         case .healthResourceReference: return .healthResourceReference
         case .medicalRiskNotice: return .medicalRiskNotice
+        case .registrationRecommendationCards: return .registrationRecommendationCards
         case .medicalDisclaimerCard: return .medicalDisclaimerCard
         case .chatGuideCard: return .chatGuideCard
         case .hospitalDoctorIntroCard: return .hospitalDoctorIntroCard
+        case .hospitalTriageIntroCard: return .hospitalTriageIntroCard
+        case .aiTriageGuideCard: return .aiTriageGuideCard
         case .consultationCard: return .consultationCard
         }
     }
@@ -551,6 +563,11 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         return payload
     }
 
+    nonisolated var registrationRecommendationCards: [ChatRegistrationRecommendationCardPayload] {
+        guard case .registrationRecommendationCards(let cards) = payload else { return [] }
+        return cards
+    }
+
     /// 医疗分析免责声明
     nonisolated var medicalDisclaimerCard: ChatMedicalDisclaimerCardPayload? {
         guard case .medicalDisclaimerCard(let payload) = payload else { return nil }
@@ -565,6 +582,16 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
 
     nonisolated var hospitalDoctorIntroCard: HospitalDoctorIntroCardPayload? {
         guard case .hospitalDoctorIntroCard(let payload) = payload else { return nil }
+        return payload
+    }
+
+    nonisolated var hospitalTriageIntroCard: HospitalTriageIntroCardPayload? {
+        guard case .hospitalTriageIntroCard(let payload) = payload else { return nil }
+        return payload
+    }
+
+    nonisolated var aiTriageGuideCard: AITriageGuideCardPayload? {
+        guard case .aiTriageGuideCard(let payload) = payload else { return nil }
         return payload
     }
 
@@ -640,9 +667,12 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         assistantStatusCard: ChatAssistantStatusCardPayload? = nil,
         healthResourceReference: ChatHealthResourceReferencePayload? = nil,
         medicalRiskNotice: ChatMedicalRiskNoticePayload? = nil,
+        registrationRecommendationCards: [ChatRegistrationRecommendationCardPayload] = [],
         medicalDisclaimerCard: ChatMedicalDisclaimerCardPayload? = nil,
         chatGuideCard: ChatGuideCardPayload? = nil,
         hospitalDoctorIntroCard: HospitalDoctorIntroCardPayload? = nil,
+        hospitalTriageIntroCard: HospitalTriageIntroCardPayload? = nil,
+        aiTriageGuideCard: AITriageGuideCardPayload? = nil,
         consultationCard: ChatConsultationCardPayload? = nil,
         status: ChatMessageBlockStatus = .ready,
         revision: Int64 = 1,
@@ -692,9 +722,12 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
             assistantStatusCard: assistantStatusCard,
             healthResourceReference: healthResourceReference,
             medicalRiskNotice: medicalRiskNotice,
+            registrationRecommendationCards: registrationRecommendationCards,
             medicalDisclaimerCard: medicalDisclaimerCard,
             chatGuideCard: chatGuideCard,
             hospitalDoctorIntroCard: hospitalDoctorIntroCard,
+            hospitalTriageIntroCard: hospitalTriageIntroCard,
+            aiTriageGuideCard: aiTriageGuideCard,
             consultationCard: consultationCard
         )
         self.status = status
@@ -741,9 +774,12 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         assistantStatusCard: ChatAssistantStatusCardPayload?,
         healthResourceReference: ChatHealthResourceReferencePayload?,
         medicalRiskNotice: ChatMedicalRiskNoticePayload?,
+        registrationRecommendationCards: [ChatRegistrationRecommendationCardPayload],
         medicalDisclaimerCard: ChatMedicalDisclaimerCardPayload?,
         chatGuideCard: ChatGuideCardPayload?,
         hospitalDoctorIntroCard: HospitalDoctorIntroCardPayload?,
+        hospitalTriageIntroCard: HospitalTriageIntroCardPayload?,
+        aiTriageGuideCard: AITriageGuideCardPayload?,
         consultationCard: ChatConsultationCardPayload?
     ) -> ChatMessageBlockPayload {
         switch kind {
@@ -873,6 +909,8 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
                 preconditionFailure("Missing medical risk notice payload for medicalRiskNotice block")
             }
             return .medicalRiskNotice(medicalRiskNotice)
+        case .registrationRecommendationCards:
+            return .registrationRecommendationCards(registrationRecommendationCards)
         case .medicalDisclaimerCard:
             guard let medicalDisclaimerCard else {
                 preconditionFailure("Missing medical disclaimer payload for medicalDisclaimerCard block")
@@ -888,6 +926,16 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
                 preconditionFailure("Missing hospital doctor intro payload for hospitalDoctorIntroCard block")
             }
             return .hospitalDoctorIntroCard(hospitalDoctorIntroCard)
+        case .hospitalTriageIntroCard:
+            guard let hospitalTriageIntroCard else {
+                preconditionFailure("Missing hospital triage intro payload for hospitalTriageIntroCard block")
+            }
+            return .hospitalTriageIntroCard(hospitalTriageIntroCard)
+        case .aiTriageGuideCard:
+            guard let aiTriageGuideCard else {
+                preconditionFailure("Missing AI triage guide payload for aiTriageGuideCard block")
+            }
+            return .aiTriageGuideCard(aiTriageGuideCard)
         case .consultationCard:
             guard let consultationCard else {
                 preconditionFailure("Missing consultation card payload for consultationCard block")
@@ -901,7 +949,12 @@ nonisolated struct ChatMessageBlock: Identifiable, Codable, Equatable, Sendable 
         toolCallID: String?,
         parentToolCallID: String?
     ) -> ChatMessageBlockNodeRole {
-        if kind == .medicalDisclaimerCard || kind == .hospitalDoctorIntroCard || kind == .consultationCard { return .timeline }
+        if kind == .medicalDisclaimerCard
+            || kind == .hospitalDoctorIntroCard
+            || kind == .hospitalTriageIntroCard
+            || kind == .aiTriageGuideCard
+            || kind == .consultationCard
+            || kind == .registrationRecommendationCards { return .timeline }
         if kind == .tool { return .tool }
         if parentToolCallID?.isEmpty == false { return .toolPresentation }
         if toolCallID?.isEmpty == false, kind != .text, kind != .deepThought, kind != .error, kind != .assistantStatusCard {
@@ -1297,7 +1350,10 @@ extension ChatMessageBlock {
             || kind == .medicalDisclaimerCard
             || kind == .chatGuideCard
             || kind == .hospitalDoctorIntroCard
+            || kind == .hospitalTriageIntroCard
+            || kind == .aiTriageGuideCard
             || kind == .consultationCard
+            || kind == .registrationRecommendationCards
             || isInlineToolInteractionPresentationBlock
     }
 

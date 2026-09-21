@@ -103,6 +103,7 @@ final class ToolInteractionCoordinator: ObservableObject {
         case askReportPickerDismissed
         case apiKeysSettingsDismissed
         case conversationListDismissed
+        case registrationRecommendationDismissed
     }
 
     // MARK: - 内部状态
@@ -356,6 +357,24 @@ final class ToolInteractionCoordinator: ObservableObject {
                 completion: nil
             )
         )
+    }
+
+    /// 展示挂号推荐卡对应的演示挂号流程，不等待工具 continuation。
+    func presentRegistrationRecommendation(_ payload: ChatRegistrationRecommendationCardPayload) {
+        enqueue(
+            QueuedWork(
+                id: UUID(),
+                snapshot: .registrationRecommendation(payload),
+                completion: nil
+            )
+        )
+    }
+
+    func dismissRegistrationRecommendation(id: UUID) {
+        guard activePresentation?.id == id, pendingOutcome == nil else { return }
+        guard case .registrationRecommendation = activePresentation?.snapshot else { return }
+        pendingOutcome = .registrationRecommendationDismissed
+        resumeUserGate()
     }
 
     /// 请求用户确认健康资料候选（阻塞直至确认或取消，与敏感数据授权一致）。
@@ -759,6 +778,7 @@ final class ToolInteractionCoordinator: ObservableObject {
         case .askReportPicker: return .askReportPickerDismissed
         case .apiKeysSettings: return .apiKeysSettingsDismissed
         case .conversationList: return .conversationListDismissed
+        case .registrationRecommendation: return .registrationRecommendationDismissed
         }
     }
 
@@ -778,6 +798,8 @@ final class ToolInteractionCoordinator: ObservableObject {
             dismissAPIKeysSettings(id: active.id)
         case .conversationList:
             dismissConversationList(id: active.id)
+        case .registrationRecommendation:
+            dismissRegistrationRecommendation(id: active.id)
         case .consent, .question, .member:
             break
         }

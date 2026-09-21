@@ -834,12 +834,17 @@ actor MessageRunActor: ChatSideEffectSink {
                 return false
             }
             return await submitRichBlocks(blocks, assistantClientMessageID: assistantClientMessageID)
-        case .knowledgeCards, .taskCards, .captureCard, .stepVisualization, .energyVisualization, .nutritionReadVisualization, .workoutVisualization, .sleepVisualization, .weatherVisualization, .weatherConfigCard, .searchSummary, .nutritionCards, .locationPermissionCards, .externalConnectorRichBlocks:
+        case .knowledgeCards, .taskCards, .captureCard, .stepVisualization, .energyVisualization, .nutritionReadVisualization, .workoutVisualization, .sleepVisualization, .weatherVisualization, .weatherConfigCard, .searchSummary, .nutritionCards, .locationPermissionCards, .externalConnectorRichBlocks, .registrationRecommendation:
             guard let blocks = ToolSideEffectBlockMapper.blocks(
                 for: effect,
                 assistantClientMessageID: assistantClientMessageID,
                 normalizedAnchor: normalizedAnchor
-            ) else { return false }
+            ) else {
+                if case .registrationRecommendation = effect {
+                    logger.warning("挂号推荐卡片发布跳过：payload 无法编码", module: .aiConfig)
+                }
+                return false
+            }
             if case .workoutVisualization = effect, blocks.isEmpty {
                 logger.warning("运动可视化卡片发布跳过：payload 无法编码", module: .aiConfig)
             }
@@ -849,8 +854,18 @@ actor MessageRunActor: ChatSideEffectSink {
             if case .weatherVisualization = effect, blocks.isEmpty {
                 logger.warning("天气结果卡片发布跳过：payload 无法编码", module: .aiConfig)
             }
+            if case .registrationRecommendation = effect, blocks.isEmpty {
+                logger.warning("挂号推荐卡片发布跳过：映射结果为空", module: .aiConfig)
+            }
             guard blocks.isEmpty == false else { return false }
-            return await submitRichBlocks(blocks, assistantClientMessageID: assistantClientMessageID)
+            let didApply = await submitRichBlocks(blocks, assistantClientMessageID: assistantClientMessageID)
+            if case .registrationRecommendation = effect {
+                logger.info(
+                    "挂号推荐卡片 sideEffect 落库\(didApply ? "成功" : "未生效")，assistantMessageClientID=\(assistantClientMessageID.uuidString), anchor=\(normalizedAnchor ?? "-")",
+                    module: .aiConfig
+                )
+            }
+            return didApply
         case .structuredHealthCardsPending:
             guard let toolCallID = normalizedAnchor else { return false }
             let messages = await repository.loadMessages(clientMessageIDs: [assistantClientMessageID])
@@ -1109,7 +1124,7 @@ actor MessageRunActor: ChatSideEffectSink {
         case .structuredHealthCards:
             // 须与父 tool 的 orderKey 绑定；无 tool 上下文时仅作兜底。
             return 2_100
-        case .sleepVisualization, .stepVisualization, .energyVisualization, .nutritionReadVisualization, .weatherVisualization, .weatherConfigCard, .searchSummary, .workoutVisualization, .nutritionCards, .healthResourceReference,
+        case .sleepVisualization, .stepVisualization, .energyVisualization, .nutritionReadVisualization, .weatherVisualization, .weatherConfigCard, .searchSummary, .workoutVisualization, .nutritionCards, .healthResourceReference, .registrationRecommendationCards,
                 .captureCard, .knowledgeCards, .html, .taskCards,
              .pendingMemberToolCards, .toolQuestionCards, .symptomCollectionCard, .toolMemberSelectionCards,
                 .healthResourceCandidateCards, .toolConsentCards, .locationPermissionCards:
@@ -1306,6 +1321,11 @@ private extension ChatMessageBlock {
 
     nonisolated func normalizedForToolPresentation(assistantClientMessageID: UUID) -> ChatMessageBlock {
         guard let toolCallID else { return self }
+        // 已显式声明为 timeline 的展示卡（挂号推荐 / 医院引导等）不得被改写成 toolPresentation，
+        // 否则在抑制工具过程气泡后，时间线挂不到可见节点。
+        if nodeRole == .timeline {
+            return self
+        }
         return ChatMessageBlock(
             id: id,
             anchor: anchor ?? .toolCall(toolCallID),
@@ -1345,6 +1365,13 @@ private extension ChatMessageBlock {
             deepThoughtCard: deepThoughtCard,
             healthResourceReference: healthResourceReferencePayload,
             medicalRiskNotice: medicalRiskNotice,
+            registrationRecommendationCards: registrationRecommendationCards,
+            medicalDisclaimerCard: medicalDisclaimerCard,
+            chatGuideCard: chatGuideCard,
+            hospitalDoctorIntroCard: hospitalDoctorIntroCard,
+            hospitalTriageIntroCard: hospitalTriageIntroCard,
+            aiTriageGuideCard: aiTriageGuideCard,
+            consultationCard: consultationCard,
             status: status,
             revision: revision,
             orderKey: orderKey,

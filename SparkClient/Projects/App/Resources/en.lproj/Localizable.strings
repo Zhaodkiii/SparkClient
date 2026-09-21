@@ -2019,6 +2019,8 @@
 "ai_settings.tools.fetch_nutrition_details" = "Nutrition Details";
 "ai_settings.tools.make_nutrition_data" = "Create Nutrition Data";
 "ai_settings.tools.show_medical_risk_notice" = "Medical Risk Notice";
+"ai_settings.tools.query_registration_catalog" = "Query Registration Directory";
+"ai_settings.tools.show_registration_recommendation" = "Show Registration Recommendation";
 "ai_settings.tools.collect_symptoms" = "Symptom Collection";
 "ai_settings.tools.fetch_sleep_details" = "Sleep Details";
 "ai_settings.tools.fetch_workout_details" = "Workout Details";

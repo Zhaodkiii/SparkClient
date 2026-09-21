@@ -233,6 +233,23 @@ extension ToolHub {
                 "recommended_action": AIRuntimeToolProperty(type: "string", description: td("tool.param.medical_risk_recommended_action")),
                 "related_reason": AIRuntimeToolProperty(type: "string", description: td("tool.param.medical_risk_related_reason"))
             ]
+        case .queryRegistrationCatalog:
+            return [
+                "scope": AIRuntimeToolProperty(
+                    type: "string",
+                    description: td("tool.param.registration_catalog_scope"),
+                    enumValues: ["departments", "doctors"]
+                ),
+                "department_id": AIRuntimeToolProperty(type: "string", description: td("tool.param.registration_department_id")),
+                "keyword": AIRuntimeToolProperty(type: "string", description: td("tool.param.registration_keyword")),
+                "limit": AIRuntimeToolProperty(type: "integer", description: td("tool.param.registration_limit"))
+            ]
+        case .showRegistrationRecommendation:
+            return [
+                "department_id": AIRuntimeToolProperty(type: "string", description: td("tool.param.registration_department_id")),
+                "agent_id": AIRuntimeToolProperty(type: "string", description: td("tool.param.registration_agent_id")),
+                "reason_summary": AIRuntimeToolProperty(type: "string", description: td("tool.param.registration_reason_summary"))
+            ]
         case .collectSymptoms:
             let optionProperty = AIRuntimeToolProperty(
                 type: "object",
@@ -385,6 +402,10 @@ extension ToolHub {
             return ["card_type"]
         case .showMedicalRiskNotice:
             return ["risk_level", "message"]
+        case .queryRegistrationCatalog:
+            return ["scope"]
+        case .showRegistrationRecommendation:
+            return ["department_id", "reason_summary"]
         case .collectSymptoms:
             return ["action"]
         case .askUserQuestion:

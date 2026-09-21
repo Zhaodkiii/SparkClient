@@ -2019,6 +2019,8 @@
 "ai_settings.tools.fetch_nutrition_details" = "营养详情";
 "ai_settings.tools.make_nutrition_data" = "生成营养数据";
 "ai_settings.tools.show_medical_risk_notice" = "医疗风险提示";
+"ai_settings.tools.query_registration_catalog" = "查询挂号目录";
+"ai_settings.tools.show_registration_recommendation" = "展示挂号推荐";
 "ai_settings.tools.collect_symptoms" = "症状采集";
 "ai_settings.tools.fetch_sleep_details" = "睡眠详情";
 "ai_settings.tools.fetch_workout_details" = "运动详情";

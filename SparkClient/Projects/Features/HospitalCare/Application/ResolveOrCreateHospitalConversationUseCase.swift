@@ -120,10 +120,10 @@ nonisolated struct ResolveOrCreateHospitalConversationUseCase {
             ),
             accountID: accountID
         )
-        // 仅当创建响应带有规范化 Thread 时登记医院新建上下文；
-        // 旧幂等快照缺少 thread 时按历史会话进入，由常规 pull 补齐。
-        if created.thread != nil {
-            let initialMessages = created.initialMessages.compactMap(ChatSyncEngineDTOMapper.toDomain)
+        // 创建响应里的初始系统卡（医生介绍等）交给 ChatView 入站落库。
+        // 不依赖 thread DTO：缺 thread 时仍登记消息，由常规 pull / 本地落库补齐。
+        let initialMessages = created.initialMessages.compactMap(ChatSyncEngineDTOMapper.toDomain)
+        if initialMessages.isEmpty == false {
             await MainActor.run {
                 chatStateStore.rememberHospitalInitialMessages(initialMessages, for: created.threadId)
             }

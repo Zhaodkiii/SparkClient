@@ -11,6 +11,8 @@ enum ThreadCreationOrigin: String, Codable, Sendable {
     case hospitalAgentFlow = "hospital_agent_flow"
     /// 线上问诊流程创建（预留）
     case telemedicineFlow = "telemedicine_flow"
+    /// 医院 AI 导诊流程创建
+    case aiTriageFlow = "ai_triage_flow"
     /// 跨设备同步/旧数据导入
     case imported
     /// 来源不明
