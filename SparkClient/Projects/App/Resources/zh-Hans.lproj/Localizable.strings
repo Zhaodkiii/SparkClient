@@ -1423,6 +1423,7 @@
 "settings.general.entry" = "通用";
 "settings.general.title" = "通用";
 "settings.general.subtitle" = "版本与缓存";
+"settings.general.app_store_review" = "App Store 评分";
 "settings.general.home_style.title" = "首页样式";
 "settings.general.home_style.dashboard" = "新款首页";
 "settings.general.home_style.classic" = "传统首页";
@@ -4132,3 +4133,11 @@
 "task.notification.status.denied" = "已开启，但系统通知权限关闭";
 "task.notification.status.missing_time" = "缺少提醒时间";
 "task.notification.status.past" = "提醒时间已过，本次不会补发";
+"settings.subscription.section" = "订阅与会员";
+"settings.subscription.open_paywall" = "健康 Pro";
+"settings.subscription.status_active" = "已订阅";
+"settings.subscription.status_inactive" = "未订阅";
+"settings.subscription.restore" = "恢复购买";
+"settings.subscription.restore_success" = "购买项目已恢复，健康 Pro 权益已生效。";
+"settings.subscription.restore_empty" = "未找到可恢复的健康 Pro 订阅。";
+"settings.subscription.footer" = "订阅由 Apple 管理，可随时在 App Store 账户中取消。";

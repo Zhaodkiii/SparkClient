@@ -8,6 +8,7 @@ struct SparkClientApp: App {
     @UIApplicationDelegateAdaptor(SparkApplicationDelegate.self) private var appDelegate
 
     init() {
+        RevenueCatClient.shared.configure()
         let container = AppContainer.live()
         self.container = container
         SparkApplicationDelegate.bootstrapPushAdapter = container.pushAdapter

@@ -230,6 +230,7 @@ enum HomeFullScreenCoverKind: String, Sendable {
     case customCamera
     case memberDetail
     case chat
+    case revenueCatPaywall
 }
 
 /// 首页宿主展示状态，由 HealthHomeView / IOS26HomeView 上报给调度器

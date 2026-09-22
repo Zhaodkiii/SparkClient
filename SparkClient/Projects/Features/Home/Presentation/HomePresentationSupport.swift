@@ -33,6 +33,7 @@ enum HomeFullScreenCover: Identifiable, Equatable {
     case customCamera
     case memberDetail(memberID: Int)
     case chat(threadID: UUID, source: ChatPresentationSource)
+    case revenueCatPaywall
 
     var id: String {
         switch self {
@@ -44,6 +45,8 @@ enum HomeFullScreenCover: Identifiable, Equatable {
             return "memberDetail-\(memberID)"
         case .chat(let threadID, let source):
             return "chat-\(source.rawValue)-\(threadID.uuidString)"
+        case .revenueCatPaywall:
+            return "revenueCatPaywall"
         }
     }
 }
@@ -80,6 +83,8 @@ extension HomeFullScreenCoverKind {
             self = .memberDetail
         case .chat:
             self = .chat
+        case .revenueCatPaywall:
+            self = .revenueCatPaywall
         }
     }
 }

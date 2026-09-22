@@ -79,6 +79,11 @@ final class AppLifecycleCoordinator: ObservableObject {
 
         logger.info("会话流程：进入未登录态，清理账号运行时", module: .auth)
         didHandleSignedOutState = true
+        do {
+            try await RevenueCatClient.shared.resetIdentity()
+        } catch {
+            logger.warning("RevenueCat：退出账号身份重置失败 error=\(error.localizedDescription)", module: .auth)
+        }
         resetSignedInLaunchPreparationState()
         container.onboardingStore.deactivate()
         let preserveDeviceRegistration = container.deviceRegistrationCoordinator.hasPendingAnonymousRegistration
@@ -177,6 +182,13 @@ final class AppLifecycleCoordinator: ObservableObject {
     ) async {
         logger.info("会话流程：准备账号运行时 accountID=\(session.accountID)", module: .auth)
         didHandleSignedOutState = false
+
+        do {
+            try await RevenueCatClient.shared.identify(accountID: session.accountID)
+        } catch {
+            // RevenueCat identity sync must not block the app's normal login flow.
+            logger.warning("RevenueCat：绑定账号失败 accountID=\(session.accountID) error=\(error.localizedDescription)", module: .auth)
+        }
 
         logger.debug("会话流程：准备步骤 activateUser 开始 accountID=\(session.accountID)", module: .auth)
         await container.accountSessionRuntime.activateUser(accountID: session.accountID)

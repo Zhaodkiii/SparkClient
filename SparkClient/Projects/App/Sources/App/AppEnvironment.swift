@@ -31,7 +31,7 @@ enum AppEnvironment: String, CaseIterable, Sendable {
 
     /// 法律文档站点根地址（隐私政策、服务条款等非 API 页面）。
     var siteBaseURL: URL {
-        let productionFallback = URL(string: "https://www.dreamhua.top")!
+        let productionFallback = URL(string: "https://www.dreamwhale.top")!
         guard var components = URLComponents(url: apiBaseURL, resolvingAgainstBaseURL: false) else {
             return productionFallback
         }

@@ -10,6 +10,8 @@
 		859450442F7FEFAE00DC419C /* CoreTelephony.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 859450432F7FEFAE00DC419C /* CoreTelephony.framework */; };
 		859450462F7FEFB900DC419C /* SystemConfiguration.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 859450452F7FEFB900DC419C /* SystemConfiguration.framework */; };
 		859450482F7FEFC700DC419C /* libresolv.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 859450472F7FEFC300DC419C /* libresolv.tbd */; };
+		8598DA3330629301007F2ABD /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = A9C4B8F02F9A4C4A00AC0010 /* RevenueCat */; };
+		8598DA3430629301007F2ABD /* RevenueCatUI in Frameworks */ = {isa = PBXBuildFile; productRef = A9C4B8F02F9A4C4A00AC0020 /* RevenueCatUI */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -45,6 +47,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8598DA3430629301007F2ABD /* RevenueCatUI in Frameworks */,
+				8598DA3330629301007F2ABD /* RevenueCat in Frameworks */,
 				859450462F7FEFB900DC419C /* SystemConfiguration.framework in Frameworks */,
 				859450442F7FEFAE00DC419C /* CoreTelephony.framework in Frameworks */,
 				859450482F7FEFC700DC419C /* libresolv.tbd in Frameworks */,
@@ -101,6 +105,8 @@
 			);
 			name = SparkClient;
 			packageProductDependencies = (
+				A9C4B8F02F9A4C4A00AC0010 /* RevenueCat */,
+				A9C4B8F02F9A4C4A00AC0020 /* RevenueCatUI */,
 			);
 			productName = SparkClient;
 			productReference = 859781EC2F7E4CD5002B7517 /* SparkClient.app */;
@@ -133,6 +139,7 @@
 			mainGroup = 859781E32F7E4CD5002B7517;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				A9C4B8F02F9A4C4A00AC0001 /* XCLocalSwiftPackageReference "Vendor/RevenueCat" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 859781ED2F7E4CD5002B7517 /* Products */;
@@ -552,6 +559,26 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		A9C4B8F02F9A4C4A00AC0001 /* XCLocalSwiftPackageReference "Vendor/RevenueCat" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Vendor/RevenueCat;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A9C4B8F02F9A4C4A00AC0010 /* RevenueCat */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A9C4B8F02F9A4C4A00AC0001 /* XCLocalSwiftPackageReference "Vendor/RevenueCat" */;
+			productName = RevenueCat;
+		};
+		A9C4B8F02F9A4C4A00AC0020 /* RevenueCatUI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A9C4B8F02F9A4C4A00AC0001 /* XCLocalSwiftPackageReference "Vendor/RevenueCat" */;
+			productName = RevenueCatUI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 859781E42F7E4CD5002B7517 /* Project object */;
 }

@@ -1423,6 +1423,7 @@
 "settings.general.entry" = "General";
 "settings.general.title" = "General";
 "settings.general.subtitle" = "Version & cache";
+"settings.general.app_store_review" = "Rate on the App Store";
 "settings.general.home_style.title" = "Home style";
 "settings.general.home_style.dashboard" = "New Home";
 "settings.general.home_style.classic" = "Classic Home";
@@ -4131,3 +4132,11 @@ Sex affects screening recommendations such as breast, cervical, and prostate exa
 "task.notification.status.denied" = "On, but system notifications are disabled";
 "task.notification.status.missing_time" = "No reminder time";
 "task.notification.status.past" = "The reminder time has passed; it will not fire immediately";
+"settings.subscription.section" = "Subscription";
+"settings.subscription.open_paywall" = "Health Pro";
+"settings.subscription.status_active" = "Active";
+"settings.subscription.status_inactive" = "Not subscribed";
+"settings.subscription.restore" = "Restore Purchases";
+"settings.subscription.restore_success" = "Purchases restored. Health Pro is now active.";
+"settings.subscription.restore_empty" = "No Health Pro subscription was found to restore.";
+"settings.subscription.footer" = "Subscriptions are managed by Apple and can be cancelled from your App Store account.";

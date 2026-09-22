@@ -1,4 +1,5 @@
 import SwiftUI
+import RevenueCatUI
 
 /// 已登录主界面中间页：集中选择 iOS 26 / 经典 Tab，并统一承载首页 sheet 与 fullScreenCover。
 struct SignedInMainTabHostView: View {
@@ -16,6 +17,7 @@ struct SignedInMainTabHostView: View {
     @State private var pendingHealthResourceConversationRequest: HealthResourceConversationRequest?
     @State private var showNoAvailableHealthChatModelAlert = false
     @State private var isPreparingHealthResourceConversation = false
+    @StateObject private var revenueCatPaywallCoordinator = RevenueCatPaywallCoordinator()
     
     init(session: UserSession, mainTab: MainTabDependencies) {
         self.session = session
@@ -25,11 +27,16 @@ struct SignedInMainTabHostView: View {
 
     var body: some View {
         tabContent
+            .environmentObject(revenueCatPaywallCoordinator)
             .sheet(item: $homeViewModel.activeSheet) { sheet in
                 homeSheetContent(sheet)
             }
             .fullScreenCover(item: $activeHomeFullScreenCover, onDismiss: handleFullScreenCoverDismissed) { cover in
                 homeFullScreenCoverContent(cover)
+            }
+            .onChange(of: revenueCatPaywallCoordinator.offering != nil) { hasOffering in
+                guard hasOffering, activeHomeFullScreenCover == nil else { return }
+                activeHomeFullScreenCover = .revenueCatPaywall
             }
             .onReceive(
                 NotificationCenter.default.publisher(for: .healthResourceConversationRequested)
@@ -237,6 +244,23 @@ private extension SignedInMainTabHostView {
 
         case .chat(let threadID, let source):
             chatFullScreenCover(threadID: threadID, source: source)
+
+        case .revenueCatPaywall:
+            if let offering = revenueCatPaywallCoordinator.offering {
+                PaywallView(offering: offering, displayCloseButton: true)
+                    .onPurchaseCompleted { customerInfo in
+                        revenueCatPaywallCoordinator.apply(customerInfo)
+                        revenueCatPaywallCoordinator.dismiss()
+                        activeHomeFullScreenCover = nil
+                    }
+                    .onRestoreCompleted { customerInfo in
+                        revenueCatPaywallCoordinator.apply(customerInfo)
+                        revenueCatPaywallCoordinator.dismiss()
+                        activeHomeFullScreenCover = nil
+                    }
+            } else {
+                ProgressView()
+            }
         }
     }
 
@@ -305,6 +329,8 @@ private extension SignedInMainTabHostView {
     }
 
     private func handleFullScreenCoverDismissed() {
+        revenueCatPaywallCoordinator.dismiss()
+
         guard let intent = pendingFullScreenDismissIntent else { return }
         pendingFullScreenDismissIntent = nil
 

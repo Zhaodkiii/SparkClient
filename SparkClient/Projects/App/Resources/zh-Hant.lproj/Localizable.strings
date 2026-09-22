@@ -278,3 +278,13 @@
 "api_error.reason.account_banned" = "您的帳號因違規行為已觸犯用戶協議，已被系統永久禁止登入。如有疑問請聯繫客服處理。";
 "api_error.code.40371" = "您的帳號因違規行為已觸犯用戶協議，已被系統永久禁止登入。如有疑問請聯繫客服處理。";
 "api_error.msg.user_inactive" = "當前帳號已停用，請聯繫管理員。";
+
+"settings.general.app_store_review" = "App Store 評分";
+"settings.subscription.section" = "訂閱與會員";
+"settings.subscription.open_paywall" = "健康 Pro";
+"settings.subscription.status_active" = "已訂閱";
+"settings.subscription.status_inactive" = "未訂閱";
+"settings.subscription.restore" = "恢復購買";
+"settings.subscription.restore_success" = "購買項目已恢復，健康 Pro 權益已生效。";
+"settings.subscription.restore_empty" = "未找到可恢復的健康 Pro 訂閱。";
+"settings.subscription.footer" = "訂閱由 Apple 管理，可隨時在 App Store 帳戶中取消。";

@@ -1,4 +1,19 @@
+import StoreKit
 import SwiftUI
+import UIKit
+
+enum AppStoreReviewRequester {
+    @MainActor
+    static func request() {
+        guard let scene = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive }) else {
+            return
+        }
+
+        SKStoreReviewController.requestReview(in: scene)
+    }
+}
 
 struct AppCoordinatorView: View {
     private let facades: AppFeatureFacades
@@ -6,6 +21,7 @@ struct AppCoordinatorView: View {
     @StateObject private var lifecycle: AppLifecycleCoordinator
     @StateObject private var versionUpdateCoordinator: AppVersionUpdateCoordinator
     @ObservedObject private var onboardingStore: OnboardingStore
+    @State private var shouldRequestReviewAfterOnboarding = false
 
     init(dependencies: AppCoordinatorDependencies) {
         self.facades = dependencies.facades
@@ -58,6 +74,7 @@ struct AppCoordinatorView: View {
                         aiSettingsViewModel: mainTab.aiSettingsViewModel,
                         homeDependencies: mainTab.homeDependencies
                     ) {
+                        shouldRequestReviewAfterOnboarding = true
                         Task { @MainActor in
                             await mainTab.homeViewModel.forceReload(syncRemote: true)
                         }
@@ -81,6 +98,15 @@ struct AppCoordinatorView: View {
                                 $0.accountID = session.accountID
                                 $0.isAccountPrepared = true
                                 $0.isOnboardingBlocking = false
+                            }
+                            if shouldRequestReviewAfterOnboarding {
+                                shouldRequestReviewAfterOnboarding = false
+                                Task { @MainActor in
+                                    // 等待主页面完成挂载，确保评分请求绑定到前台窗口场景。
+                                    try? await Task.sleep(for: .milliseconds(500))
+                                    guard Task.isCancelled == false else { return }
+                                    AppStoreReviewRequester.request()
+                                }
                             }
                         }
                         .task(id: session.accountID) {

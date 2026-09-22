@@ -11,6 +11,8 @@ struct GeneralSettingsView: View {
     var body: some View {
         List {
             versionSection
+            RevenueCatSubscriptionSection()
+            appStoreReviewSection
             homeStyleSection
             homeAIConversationSection
             homeNutritionEntrySection
@@ -19,6 +21,19 @@ struct GeneralSettingsView: View {
             cacheSection
         }
         .navigationTitle(L10n.text("settings.general.title"))
+    }
+
+    private var appStoreReviewSection: some View {
+        Section {
+            Button {
+                AppStoreReviewRequester.request()
+            } label: {
+                Label(
+                    L10n.text("settings.general.app_store_review"),
+                    systemImage: "star.bubble"
+                )
+            }
+        }
     }
 
     private var homeStyleSection: some View {
