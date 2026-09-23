@@ -438,25 +438,21 @@ struct IOS26TabBarView: View {
     }
 
     private var chatContainer: some View {
-        CompatibleRouteNavigationContainer(path: routePath(.chat)) {
-            ChatConversationListPage(
-                stateStore: chatStateStore,
-                listViewModel: chatListViewModel,
-                detailViewModel: chatDetailViewModel,
-                knowledgeDependencies: knowledgeDependencies,
-                knowledgeViewModel: knowledgeViewModel,
-                taskManager: taskManager,
-                homeViewModel: homeViewModel,
-                aiSettingsViewModel: aiSettingsViewModel,
-                pushAdapter: pushAdapter,
-                guideHomeDestinationBuilder: guideHomeDestinationBuilder,
-                onPresentChat: { request in
-                    routeStore.route(to: .automaticChatThread(request.threadID))
-                }
-            )
-        } destination: { route in
-            destinationBuilder.destination(route)
-        }
+        ChatConversationListPage(
+            stateStore: chatStateStore,
+            listViewModel: chatListViewModel,
+            detailViewModel: chatDetailViewModel,
+            knowledgeDependencies: knowledgeDependencies,
+            knowledgeViewModel: knowledgeViewModel,
+            taskManager: taskManager,
+            homeViewModel: homeViewModel,
+            aiSettingsViewModel: aiSettingsViewModel,
+            pushAdapter: pushAdapter,
+            guideHomeDestinationBuilder: guideHomeDestinationBuilder,
+            onPresentChat: { request in
+                routeStore.route(to: .automaticChatThread(request.threadID))
+            }
+        )
     }
 
     private var healthContainer: some View {
@@ -508,7 +504,7 @@ struct IOS26TabBarView: View {
                 routeStore.routes(for: tab)
             },
             set: { routes in
-                routeStore.replaceStack(routes, for: tab)
+                routeStore.synchronizeStack(routes, for: tab)
             }
         )
     }

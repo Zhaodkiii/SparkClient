@@ -5,6 +5,7 @@ import Foundation
 @MainActor
 final class AppLifecycleCoordinator: ObservableObject {
     let sessionStore: AppSessionStore
+    let subscriptionSyncCoordinator: SubscriptionSyncCoordinator
 
     /// 根视图直接观察的会话状态。
     ///
@@ -26,6 +27,7 @@ final class AppLifecycleCoordinator: ObservableObject {
         self.container = container
         self.logger = container.logger
         self.sessionStore = container.sessionStore
+        self.subscriptionSyncCoordinator = container.subscriptionSyncCoordinator
         self.sessionState = container.sessionStore.state
         self.lastObservedSessionState = container.sessionStore.state
         self.preparedAccountID = signedInPreparationRegistry.preparedAccountID
@@ -84,6 +86,7 @@ final class AppLifecycleCoordinator: ObservableObject {
         } catch {
             logger.warning("RevenueCat：退出账号身份重置失败 error=\(error.localizedDescription)", module: .auth)
         }
+        subscriptionSyncCoordinator.reset()
         resetSignedInLaunchPreparationState()
         container.onboardingStore.deactivate()
         let preserveDeviceRegistration = container.deviceRegistrationCoordinator.hasPendingAnonymousRegistration
@@ -105,6 +108,7 @@ final class AppLifecycleCoordinator: ObservableObject {
         await container.memorySyncSupervisor.scheduleForegroundSyncIfNeeded()
         await container.taskRuntime.syncIncremental(memberID: container.memberContextStore.context.selectedMemberID)
         await container.versionUpdateCoordinator.checkOnLaunchIfNeeded()
+        subscriptionSyncCoordinator.synchronizeIfAllowed(reason: .foreground)
         if case .signedIn(let session) = sessionStore.state {
             container.medicationReminderSyncCoordinator.rebuildIfStale(
                 accountID: session.accountID,
@@ -183,11 +187,15 @@ final class AppLifecycleCoordinator: ObservableObject {
         logger.info("会话流程：准备账号运行时 accountID=\(session.accountID)", module: .auth)
         didHandleSignedOutState = false
 
+        subscriptionSyncCoordinator.beginBinding(accountID: session.accountID)
         do {
             try await RevenueCatClient.shared.identify(accountID: session.accountID)
+            subscriptionSyncCoordinator.markBound(accountID: session.accountID)
+            subscriptionSyncCoordinator.synchronizeIfAllowed(reason: .sessionRestored)
         } catch {
             // RevenueCat identity sync must not block the app's normal login flow.
             logger.warning("RevenueCat：绑定账号失败 accountID=\(session.accountID) error=\(error.localizedDescription)", module: .auth)
+            subscriptionSyncCoordinator.markBindingFailed(accountID: session.accountID, error: error)
         }
 
         logger.debug("会话流程：准备步骤 activateUser 开始 accountID=\(session.accountID)", module: .auth)

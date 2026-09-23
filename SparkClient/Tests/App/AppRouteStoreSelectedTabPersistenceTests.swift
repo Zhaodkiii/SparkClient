@@ -129,6 +129,46 @@ final class AppRouteStoreSelectedTabPersistenceTests: XCTestCase {
         XCTAssertEqual(persistedRawValue(storage), AppRouteStore.RootTab.fitness.rawValue)
     }
 
+    func testNavigationStackSynchronizationDoesNotChangeSelectedTab() {
+        let storage = makeStorage()
+        let store = AppRouteStore(storage: storage)
+        let threadID = UUID()
+        store.selectedTab = .healthHome
+
+        store.synchronizeStack([.chatThread(threadID)], for: .chat)
+
+        XCTAssertEqual(store.routes(for: .chat), [.chatThread(threadID)])
+        XCTAssertEqual(store.selectedTab, .healthHome)
+        XCTAssertEqual(persistedRawValue(storage), AppRouteStore.RootTab.healthHome.rawValue)
+    }
+
+    func testCloseAutomaticChatClearsChatStackAndReturnsToCleanHome() {
+        let storage = makeStorage()
+        let store = AppRouteStore(storage: storage)
+        let threadID = UUID()
+        store.route(to: .taskDetail(memberID: 1, taskID: 2))
+        store.route(to: .automaticChatThread(threadID))
+
+        store.closeAutomaticChatAndReturnHome()
+
+        XCTAssertEqual(store.selectedTab, .healthHome)
+        XCTAssertTrue(store.routes(for: .chat).isEmpty)
+        XCTAssertTrue(store.routes(for: .healthHome).isEmpty)
+        XCTAssertEqual(persistedRawValue(storage), AppRouteStore.RootTab.healthHome.rawValue)
+    }
+
+    func testLateChatPathWritebackCannotOverrideAutomaticChatClose() {
+        let store = AppRouteStore(storage: makeStorage())
+        store.route(to: .automaticChatThread(UUID()))
+        store.closeAutomaticChatAndReturnHome()
+
+        // 模拟 iOS 26 在 Chat 导航容器销毁时发生的迟到路径回写。
+        store.synchronizeStack([], for: .chat)
+
+        XCTAssertEqual(store.selectedTab, .healthHome)
+        XCTAssertTrue(store.routes(for: .chat).isEmpty)
+    }
+
     // MARK: - resetRouteGraph
 
     func testResetRouteGraphClearsStacksButPreservesSelectedTab() {

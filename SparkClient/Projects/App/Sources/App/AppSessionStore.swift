@@ -54,6 +54,19 @@ final class AppSessionStore: ObservableObject {
         state = .signedOut
     }
 
+    /// 仅允许当前账号用服务端权威摘要更新会话，避免 RevenueCat 本地状态直接成为权限事实。
+    func replaceCurrentSession(_ session: UserSession) {
+        guard case .signedIn(let current) = state, current.accountID == session.accountID else { return }
+        state = .signedIn(session)
+        Task {
+            do {
+                try await sessionSnapshotStore?.save(session)
+            } catch {
+                logger.warning("AppSessionStore：订阅会话快照保存失败 accountID=\(session.accountID) error=\(error.localizedDescription)", module: .auth)
+            }
+        }
+    }
+
     /// 检测「内存 signedIn」与 `SessionSnapshotStore` 是否一致（快照缺失/解码失败/账号不一致）。
     private func verifyPersistedSnapshotMatchesMemory(_ session: UserSession, context: String) async {
         guard let sessionSnapshotStore else { return }

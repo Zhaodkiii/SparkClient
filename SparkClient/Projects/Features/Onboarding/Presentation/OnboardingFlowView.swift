@@ -1,10 +1,16 @@
 import SwiftUI
+import RevenueCat
+import RevenueCatUI
 
 struct OnboardingFlowView: View {
     @StateObject private var viewModel: OnboardingFlowViewModel
     @ObservedObject private var memberContextStore: MemberContextStore
     @ObservedObject private var aiSettingsViewModel: AISettingsViewModel
+    @ObservedObject private var sessionStore: AppSessionStore
+    @ObservedObject private var subscriptionSyncCoordinator: SubscriptionSyncCoordinator
     @State private var didBootstrapDefaultMember = false
+    @State private var onboardingOffering: Offering?
+    @State private var isLoadingOffering = false
     private let homeDependencies: HomeFeatureDependencies?
     private let onCompleted: () -> Void
 
@@ -12,12 +18,16 @@ struct OnboardingFlowView: View {
         viewModel: OnboardingFlowViewModel,
         memberContextStore: MemberContextStore,
         aiSettingsViewModel: AISettingsViewModel,
+        sessionStore: AppSessionStore,
+        subscriptionSyncCoordinator: SubscriptionSyncCoordinator,
         homeDependencies: HomeFeatureDependencies? = nil,
         onCompleted: @escaping () -> Void = {}
     ) {
         _viewModel = StateObject(wrappedValue: viewModel)
         self.memberContextStore = memberContextStore
         self.aiSettingsViewModel = aiSettingsViewModel
+        self._sessionStore = ObservedObject(wrappedValue: sessionStore)
+        self._subscriptionSyncCoordinator = ObservedObject(wrappedValue: subscriptionSyncCoordinator)
         self.homeDependencies = homeDependencies
         self.onCompleted = onCompleted
     }
@@ -60,9 +70,22 @@ struct OnboardingFlowView: View {
                         }
                     )
                 case .start:
-                    OnboardingStartStep {
-                        viewModel.complete()
-                        onCompleted()
+                    if currentSession?.isPro == true {
+                        OnboardingStartStep {
+                            completeOnboarding()
+                        }
+                    } else {
+                        OnboardingSubscriptionStep(
+                            offering: onboardingOffering,
+                            isLoading: isLoadingOffering,
+                            onClose: completeOnboarding,
+                            onPurchaseCompleted: { customerInfo in
+                                handlePaywallCustomerInfo(customerInfo, reason: .purchaseCompleted)
+                            },
+                            onRestoreCompleted: { customerInfo in
+                                handlePaywallCustomerInfo(customerInfo, reason: .restoreCompleted)
+                            }
+                        )
                     }
                 }
             }
@@ -84,7 +107,12 @@ struct OnboardingFlowView: View {
 //            )
         }
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
-//        .navigationBarBackButtonHidden(step == .profile)
+        .task(id: paywallLoadTaskID) {
+            await loadOnboardingOfferingIfNeeded()
+        }
+        // 订阅页由 RevenueCat 的关闭按钮负责退出；不能再叠加外层导航返回按钮，
+        // 否则真实设备上会与 Paywall 顶部控件重叠。
+        .navigationBarBackButtonHidden(step == .start)
         .toolbar {
 //            ToolbarItem(placement: .navigationBarLeading) {
 //                if step != .profile {
@@ -107,6 +135,56 @@ struct OnboardingFlowView: View {
                 }
             }
         }
+    }
+
+    private var currentSession: UserSession? {
+        guard case .signedIn(let session) = sessionStore.state else { return nil }
+        return session
+    }
+
+    private var paywallLoadTaskID: String {
+        let accountID = currentSession?.accountID ?? 0
+        let isPro = currentSession?.isPro ?? false
+        return "\(accountID)-\(viewModel.currentStep.rawValue)-\(isPro)"
+    }
+
+    @MainActor
+    private func loadOnboardingOfferingIfNeeded() async {
+        guard viewModel.currentStep == .start,
+              currentSession?.isPro != true,
+              onboardingOffering == nil,
+              isLoadingOffering == false,
+              RevenueCatClient.shared.isConfigured else {
+            return
+        }
+
+        isLoadingOffering = true
+        defer { isLoadingOffering = false }
+
+        do {
+            let offerings = try await Purchases.shared.offerings()
+            onboardingOffering = offerings.offering(identifier: RevenueCatConfiguration.offeringIdentifier)
+        } catch {
+            onboardingOffering = nil
+        }
+    }
+
+    private func handlePaywallCustomerInfo(
+        _ customerInfo: CustomerInfo,
+        reason: SubscriptionSyncCoordinator.Reason
+    ) {
+        let hasProEntitlement = customerInfo.entitlements
+            .activeInCurrentEnvironment[RevenueCatConfiguration.entitlementIdentifier] != nil
+
+        if hasProEntitlement {
+            subscriptionSyncCoordinator.synchronizeIfAllowed(reason: reason, force: true)
+        }
+        completeOnboarding()
+    }
+
+    private func completeOnboarding() {
+        viewModel.complete()
+        onCompleted()
     }
 
     @MainActor
@@ -144,6 +222,47 @@ struct OnboardingFlowView: View {
         } catch {
             didBootstrapDefaultMember = false
         }
+    }
+}
+
+private struct OnboardingSubscriptionStep: View {
+    let offering: Offering?
+    let isLoading: Bool
+    let onClose: () -> Void
+    let onPurchaseCompleted: (CustomerInfo) -> Void
+    let onRestoreCompleted: (CustomerInfo) -> Void
+
+    var body: some View {
+        Group {
+            if let offering {
+                PaywallView(offering: offering, displayCloseButton: true)
+                    .tint(Color.accentColor)
+                    .onRequestedDismissal {
+                        onClose()
+                    }
+                    .onPurchaseCompleted { customerInfo in
+                        onPurchaseCompleted(customerInfo)
+                    }
+                    .onRestoreCompleted { customerInfo in
+                        onRestoreCompleted(customerInfo)
+                    }
+            } else if isLoading {
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                VStack(spacing: 16) {
+                    Text(L10n.text("onboarding.subscription.unavailable", fallback: "订阅服务暂时不可用"))
+                        .font(.headline)
+                    Button(L10n.text("common.continue", fallback: "继续使用"), action: onClose)
+                        .buttonStyle(.borderedProminent)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        // 让 Paywall 自己的 NavigationView/关闭按钮使用系统安全区，避免
+        // 状态栏时间、Logo 和关闭按钮在刘海屏上发生重叠。
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.systemGroupedBackground))
     }
 }
 

@@ -140,6 +140,24 @@ final class AppRouteStore: ObservableObject {
         selectedTab = tab
     }
 
+    /// 接收 `NavigationStack(path:)` 的路径回写。
+    ///
+    /// SwiftUI 在切换 Tab 或销毁嵌套导航容器时仍可能回写旧栈。路径同步不能顺带
+    /// 改变当前 Tab，否则一次迟到的 Chat 栈回写会覆盖“返回健康首页”的显式路由。
+    func synchronizeStack(_ routes: [AppRoute], for tab: RootTab) {
+        routeStacks[tab] = routes
+    }
+
+    /// 关闭首次自动进入的对话并回到干净的健康首页。
+    ///
+    /// 自动会话属于 Chat 栈；仅清空首页栈会让下次进入 Chat 时再次显示已关闭会话。
+    /// 先清理两个相关栈，最后切换 Tab，确保观察者只看到完整的目标状态。
+    func closeAutomaticChatAndReturnHome() {
+        routeStacks[.chat] = []
+        routeStacks[.healthHome] = []
+        selectedTab = .healthHome
+    }
+
     /// 清理当前账号的导航栈，但保留设备级最后选中 Tab。
     /// 账号切换/退出登录不应覆盖用户下次冷启动的入口偏好。
     func resetRouteGraph() {

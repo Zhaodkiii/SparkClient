@@ -12,6 +12,8 @@
 		859450482F7FEFC700DC419C /* libresolv.tbd in Frameworks */ = {isa = PBXBuildFile; fileRef = 859450472F7FEFC300DC419C /* libresolv.tbd */; };
 		8598DA3330629301007F2ABD /* RevenueCat in Frameworks */ = {isa = PBXBuildFile; productRef = A9C4B8F02F9A4C4A00AC0010 /* RevenueCat */; };
 		8598DA3430629301007F2ABD /* RevenueCatUI in Frameworks */ = {isa = PBXBuildFile; productRef = A9C4B8F02F9A4C4A00AC0020 /* RevenueCatUI */; };
+		8598E7153062C6A6007F2ABD /* Look Health-Family Med Cabinet.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 8598E7143062C6A6007F2ABD /* Look Health-Family Med Cabinet.storekit */; };
+		8598E7173062C73A007F2ABD /* StoreKitTestCertificate.cer in Resources */ = {isa = PBXBuildFile; fileRef = 8598E7163062C73A007F2ABD /* StoreKitTestCertificate.cer */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -19,6 +21,8 @@
 		859450452F7FEFB900DC419C /* SystemConfiguration.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SystemConfiguration.framework; path = System/Library/Frameworks/SystemConfiguration.framework; sourceTree = SDKROOT; };
 		859450472F7FEFC300DC419C /* libresolv.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libresolv.tbd; path = usr/lib/libresolv.tbd; sourceTree = SDKROOT; };
 		859781EC2F7E4CD5002B7517 /* SparkClient.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SparkClient.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		8598E7143062C6A6007F2ABD /* Look Health-Family Med Cabinet.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = "Look Health-Family Med Cabinet.storekit"; sourceTree = "<group>"; };
+		8598E7163062C73A007F2ABD /* StoreKitTestCertificate.cer */ = {isa = PBXFileReference; lastKnownFileType = file; path = StoreKitTestCertificate.cer; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -71,6 +75,8 @@
 		859781E32F7E4CD5002B7517 = {
 			isa = PBXGroup;
 			children = (
+				8598E7143062C6A6007F2ABD /* Look Health-Family Med Cabinet.storekit */,
+				8598E7163062C73A007F2ABD /* StoreKitTestCertificate.cer */,
 				859781EE2F7E4CD5002B7517 /* SparkClient */,
 				859450422F7FEFAE00DC419C /* Frameworks */,
 				859781ED2F7E4CD5002B7517 /* Products */,
@@ -156,6 +162,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8598E7173062C73A007F2ABD /* StoreKitTestCertificate.cer in Resources */,
+				8598E7153062C6A6007F2ABD /* Look Health-Family Med Cabinet.storekit in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -335,7 +343,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.9.1;
+				MARKETING_VERSION = 1.9.2;
 				ONLY_ACTIVE_ARCH = YES;
 				PRODUCT_BUNDLE_IDENTIFIER = cn.Zhaodk.Health;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -393,7 +401,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.9.1;
+				MARKETING_VERSION = 1.9.2;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = cn.Zhaodk.Health;
 				PRODUCT_NAME = "$(TARGET_NAME)";
@@ -515,7 +523,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 1.9.1;
+				MARKETING_VERSION = 1.9.2;
 				ONLY_ACTIVE_ARCH = NO;
 				PRODUCT_BUNDLE_IDENTIFIER = cn.Zhaodk.Health;
 				PRODUCT_NAME = "$(TARGET_NAME)";

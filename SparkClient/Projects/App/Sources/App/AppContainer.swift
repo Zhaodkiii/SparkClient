@@ -248,6 +248,7 @@ final class AppContainer {
 
     /// 登录态与恢复会话的 Observable 封装。
     let sessionStore: AppSessionStore
+    let subscriptionSyncCoordinator: SubscriptionSyncCoordinator
     /// 新用户引导状态：按账号持久化，根协调器只观察这个 Store 做分流。
     let onboardingStore: OnboardingStore
     /// 当前选中的医疗成员上下文（首页与聊天共用）。
@@ -550,6 +551,12 @@ final class AppContainer {
         self.sessionStore = AppSessionStore(
             restoreSessionUseCase: restoreSessionUseCase,
             sessionSnapshotStore: auth.sessionSnapshotStore
+        )
+        self.subscriptionSyncCoordinator = SubscriptionSyncCoordinator(
+            api: backend.subscriptions,
+            sessionStore: sessionStore,
+            aiConfigCenter: aiConfigCenter,
+            logger: logger
         )
         self.onboardingStore = OnboardingStore(repository: UserDefaultsOnboardingStateRepository())
         self.memberContextStore = notification.memberContextStore

@@ -72,6 +72,8 @@ struct AppCoordinatorView: View {
                         viewModel: facades.onboarding.makeFlowViewModel(),
                         memberContextStore: mainTab.memberContextStore,
                         aiSettingsViewModel: mainTab.aiSettingsViewModel,
+                        sessionStore: lifecycle.sessionStore,
+                        subscriptionSyncCoordinator: lifecycle.subscriptionSyncCoordinator,
                         homeDependencies: mainTab.homeDependencies
                     ) {
                         shouldRequestReviewAfterOnboarding = true
@@ -89,8 +91,13 @@ struct AppCoordinatorView: View {
                         }
                     }
                 } else {
-                    SignedInMainTabHostView(session: session, mainTab: mainTab)
+                    SignedInMainTabHostView(
+                        session: session,
+                        mainTab: mainTab,
+                        sessionStore: lifecycle.sessionStore
+                    )
                         .environmentObject(mainTab.memberContextStore)
+                        .environmentObject(lifecycle.subscriptionSyncCoordinator)
                         .id(session.accountID)
                         .onAppear {
                             mainTab.launchIntentCoordinator.updateReadiness {

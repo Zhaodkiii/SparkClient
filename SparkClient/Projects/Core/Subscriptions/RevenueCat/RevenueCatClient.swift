@@ -21,7 +21,9 @@ final class RevenueCatClient {
         #else
         Purchases.logLevel = .warn
         #endif
-        Purchases.configure(withAPIKey: RevenueCatConfiguration.apiKey)
+        Purchases.configure(with:
+                .init(withAPIKey: RevenueCatConfiguration.apiKey)
+                .with(usesStoreKit2IfAvailable:  true))
         isConfigured = true
     }
 
@@ -29,6 +31,18 @@ final class RevenueCatClient {
     func identify(accountID: Int64) async throws {
         guard isConfigured else { return }
         _ = try await Purchases.shared.logIn(String(accountID))
+        guard Purchases.shared.appUserID == String(accountID) else {
+            throw NSError(
+                domain: "RevenueCatIdentity",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "RevenueCat identity did not match the signed-in account"]
+            )
+        }
+    }
+
+    var currentAppUserID: String? {
+        guard isConfigured else { return nil }
+        return Purchases.shared.appUserID
     }
 
     /// Call when the app signs out of the SparkService account.

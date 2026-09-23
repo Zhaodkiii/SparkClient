@@ -1,4 +1,6 @@
 import AuthenticationServices
+import RevenueCat
+import RevenueCatUI
 import SwiftUI
 
 struct AccountManagementView: View {
@@ -12,7 +14,8 @@ struct AccountManagementView: View {
             ScrollView {
                 VStack(spacing: 24) {
                     if let profile = viewModel.profile {
-                        AccountProfileCard(profile: profile)
+                        AccountProfileSection(profile: profile)
+                        AccountProSubscriptionSection()
                         accountInfoSection(profile)
                     } else if viewModel.isLoadingProfile {
                         ProgressView()
@@ -76,9 +79,237 @@ struct AccountManagementView: View {
         .onChange(of: viewModel.identityTargetOTPCode) { _ in
             viewModel.submitIdentityTargetOTPIfReady()
         }
+}
+
+private struct AccountProfileSection: View {
+    let profile: AccountProfile
+
+    var body: some View {
+        AccountSection(title: L10n.text("account_management.section.profile")) {
+            AccountProfileCard(profile: profile)
+        }
+    }
+}
+
+private struct AccountProSubscriptionSection: View {
+    var body: some View {
+        AccountSection(title: L10n.text("account_management.section.pro_subscription")) {
+            AccountProSubscriptionControls()
+        }
+    }
+}
+
+private struct AccountProSubscriptionControls: View {
+    @EnvironmentObject private var paywallCoordinator: RevenueCatPaywallCoordinator
+    @EnvironmentObject private var subscriptionSyncCoordinator: SubscriptionSyncCoordinator
+    @StateObject private var viewModel = RevenueCatSubscriptionViewModel()
+    @State private var isOpeningPaywall = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            statusRow
+            Divider()
+            if showsExpiry {
+                expiryRow
+            }
+            Divider()
+            actionRow
+        }
+        .task {
+            subscriptionSyncCoordinator.synchronizeIfAllowed(reason: .manualRefresh, force: true)
+            if let customerInfo = await viewModel.refresh() {
+                paywallCoordinator.apply(customerInfo)
+            }
+        }
     }
 
-    private func accountInfoSection(_ profile: AccountProfile) -> some View {
+    private var statusRow: some View {
+        HStack(spacing: 12) {
+            AccountSquareBadge(
+                color: statusColor,
+                icon: statusIcon
+            )
+            VStack(alignment: .leading, spacing: 4) {
+                Text(statusTitle)
+                    .font(.body.weight(.semibold))
+                Text(statusSubtitle)
+                .font(.footnote)
+                .foregroundStyle(statusColor)
+                if !isPro && !isExpired {
+                    Text(L10n.text("account_management.pro_subscription.benefits"))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+        }
+        .padding(16)
+    }
+
+    private var expiryRow: some View {
+        HStack(spacing: 12) {
+            AccountSquareBadge(color: .orange, icon: "calendar")
+            Text(expiryTitle)
+            Spacer(minLength: 12)
+            Text(expiryText)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.trailing)
+        }
+        .padding(16)
+    }
+
+    private var actionRow: some View {
+        VStack(spacing: 12) {
+            Button {
+                guard subscriptionSyncCoordinator.canPurchaseOrRestore,
+                      !viewModel.isRefreshing,
+                      !isOpeningPaywall,
+                      paywallCoordinator.offering == nil else { return }
+
+                isOpeningPaywall = true
+                Task {
+                    let customerInfo = await viewModel.refresh()
+                    if let customerInfo {
+                        paywallCoordinator.apply(customerInfo)
+                    }
+                    if !Task.isCancelled, let offering = viewModel.offering {
+                        paywallCoordinator.present(offering: offering)
+                    }
+                    isOpeningPaywall = false
+                }
+            } label: {
+                HStack {
+                    Label(
+                        L10n.text("settings.subscription.open_paywall"),
+                        systemImage: "crown"
+                    )
+                    Spacer()
+                    if isOpeningPaywall || viewModel.isRefreshing {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: "chevron.right")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .foregroundStyle(.white)
+            }
+            .disabled(
+                viewModel.isRefreshing
+                    || isOpeningPaywall
+                    || paywallCoordinator.offering != nil
+                    || !subscriptionSyncCoordinator.canPurchaseOrRestore
+            )
+
+            HStack(spacing: 12) {
+                if isPro {
+                    Link(destination: URL(string: "https://apps.apple.com/account/subscriptions")!) {
+                        Label(L10n.text("account_management.pro_subscription.manage"), systemImage: "gearshape")
+                    }
+                }
+
+                Button {
+                    Task {
+                        guard subscriptionSyncCoordinator.canPurchaseOrRestore else { return }
+                        if let customerInfo = await viewModel.restorePurchases() {
+                            paywallCoordinator.apply(customerInfo)
+                            subscriptionSyncCoordinator.synchronizeIfAllowed(reason: .restoreCompleted, force: true)
+                        }
+                    }
+                } label: {
+                    Label(L10n.text("settings.subscription.restore"), systemImage: "arrow.counterclockwise")
+                }
+                .disabled(viewModel.isRestoring || !subscriptionSyncCoordinator.canPurchaseOrRestore)
+
+                Spacer()
+
+                Button {
+                    subscriptionSyncCoordinator.synchronizeIfAllowed(reason: .manualRefresh, force: true)
+                } label: {
+                    Image(systemName: "arrow.triangle.2.circlepath")
+                        .accessibilityLabel(L10n.text("settings.subscription.refresh_status"))
+                }
+                .disabled(!subscriptionSyncCoordinator.canPurchaseOrRestore)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 10)
+
+            HStack(spacing: 16) {
+                Link(L10n.text("auth.login.legal.terms"), destination: AppEnvironment.current.termsOfServiceURL)
+                Link(L10n.text("auth.login.legal.privacy"), destination: AppEnvironment.current.privacyPolicyURL)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .padding(.bottom, 14)
+        }
+        .buttonStyle(.borderless)
+    }
+
+    private var expiryText: String {
+        let syncedExpirationDate = subscriptionSyncCoordinator.latestSummary?.sources.first(where: {
+            $0.type == "revenuecat"
+        })?.expiresAt
+
+        guard let expiresAt = syncedExpirationDate else { return "-" }
+        let date = expiresAt.formatted(date: .abbreviated, time: .shortened)
+        return isExpired ? String(format: L10n.text("account_management.pro_subscription.expired_on"), date) : date
+    }
+
+    private var isPro: Bool {
+        subscriptionSyncCoordinator.latestSummary?.isPro ?? false
+    }
+
+    private var revenueCatSource: SparkSubscriptionAPI.Source? {
+        subscriptionSyncCoordinator.latestSummary?.sources.first(where: { $0.type == "revenuecat" })
+    }
+
+    private var isExpired: Bool {
+        guard let source = revenueCatSource else { return false }
+        if source.status == "expired" || source.status == "revoked" { return true }
+        guard let expiresAt = source.expiresAt else { return false }
+        return expiresAt <= Date() && !source.active
+    }
+
+    private var showsExpiry: Bool {
+        revenueCatSource?.expiresAt != nil && (isPro || isExpired)
+    }
+
+    private var statusTitle: String {
+        if isPro { return L10n.text("account_management.pro_subscription.active_title") }
+        if isExpired { return L10n.text("account_management.pro_subscription.expired_title") }
+        return L10n.text("account_management.pro_subscription.free_title")
+    }
+
+    private var statusSubtitle: String {
+        if isPro { return L10n.text("settings.subscription.status_active") }
+        if isExpired { return L10n.text("account_management.pro_subscription.expired_subtitle") }
+        return L10n.text("account_management.pro_subscription.free_subtitle")
+    }
+
+    private var statusColor: Color {
+        if isPro { return .pink }
+        if isExpired { return .orange }
+        return .gray
+    }
+
+    private var statusIcon: String {
+        if isPro { return "crown.fill" }
+        if isExpired { return "clock.badge.exclamationmark" }
+        return "crown"
+    }
+
+    private var expiryTitle: String {
+        isExpired
+            ? L10n.text("account_management.pro_subscription.expired_at")
+            : L10n.text("account_management.pro_subscription.expires_at")
+    }
+}
+
+private func accountInfoSection(_ profile: AccountProfile) -> some View {
         AccountSection(title: L10n.text("account_management.section.account_info")) {
             AccountInfoRow(
                 icon: "person.text.rectangle",
@@ -93,14 +324,7 @@ struct AccountManagementView: View {
                 title: profile.signInMethod == .phone
                     ? L10n.text("account_management.field.phone")
                     : L10n.text("settings.email"),
-                value: profile.contact
-            )
-            Divider()
-            AccountInfoRow(
-                icon: "checkmark.shield.fill",
-                tint: .purple,
-                title: L10n.text("settings.sign_in_method"),
-                value: profile.signInMethodDescription
+                value: maskedAccountContact(profile.contact)
             )
             Divider()
             AccountInfoRow(

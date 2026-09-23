@@ -10,6 +10,7 @@ struct SignedInMainTabHostView: View {
     let session: UserSession
     let mainTab: MainTabDependencies
     @ObservedObject private var homeViewModel: HomeViewModel
+    @ObservedObject private var sessionStore: AppSessionStore
 
     @State private var activeHomeFullScreenCover: HomeFullScreenCover?
     @State private var pendingFullScreenDismissIntent: FullScreenDismissIntent?
@@ -18,11 +19,23 @@ struct SignedInMainTabHostView: View {
     @State private var showNoAvailableHealthChatModelAlert = false
     @State private var isPreparingHealthResourceConversation = false
     @StateObject private var revenueCatPaywallCoordinator = RevenueCatPaywallCoordinator()
+    @EnvironmentObject private var subscriptionSyncCoordinator: SubscriptionSyncCoordinator
     
-    init(session: UserSession, mainTab: MainTabDependencies) {
+    init(session: UserSession, mainTab: MainTabDependencies, sessionStore: AppSessionStore) {
         self.session = session
         self.mainTab = mainTab
         self._homeViewModel = ObservedObject(wrappedValue: mainTab.homeViewModel)
+        self._sessionStore = ObservedObject(wrappedValue: sessionStore)
+    }
+
+    /// 订阅同步会替换 AppSessionStore 中的当前会话。页面下游统一读取这里，
+    /// 避免继续使用进入主页面时捕获的旧 UserSession。
+    private var currentSession: UserSession {
+        guard case .signedIn(let current) = sessionStore.state,
+              current.accountID == session.accountID else {
+            return session
+        }
+        return current
     }
 
     var body: some View {
@@ -65,9 +78,9 @@ struct SignedInMainTabHostView: View {
     private var tabContent: some View {
         
         
-        if #available(iOS 28.0, *) {
+        if #available(iOS 26.0, *) {
             IOS26TabBarView(
-                session: session,
+                session: currentSession,
                 routeStore: mainTab.routeStore,
                 homeDependencies: mainTab.homeDependencies,
                 knowledgeDependencies: mainTab.knowledgeDependencies,
@@ -96,7 +109,7 @@ struct SignedInMainTabHostView: View {
             )
         } else {
             MainTabCoordinatorView(
-                session: session,
+                session: currentSession,
                 routeStore: mainTab.routeStore,
                 homeDependencies: mainTab.homeDependencies,
                 knowledgeDependencies: mainTab.knowledgeDependencies,
@@ -248,15 +261,22 @@ private extension SignedInMainTabHostView {
         case .revenueCatPaywall:
             if let offering = revenueCatPaywallCoordinator.offering {
                 PaywallView(offering: offering, displayCloseButton: true)
+                    .tint(Color.accentColor)
+                    .onRequestedDismissal {
+                        revenueCatPaywallCoordinator.dismiss()
+                        activeHomeFullScreenCover = nil
+                    }
                     .onPurchaseCompleted { customerInfo in
                         revenueCatPaywallCoordinator.apply(customerInfo)
                         revenueCatPaywallCoordinator.dismiss()
                         activeHomeFullScreenCover = nil
+                        subscriptionSyncCoordinator.synchronizeIfAllowed(reason: .purchaseCompleted, force: true)
                     }
                     .onRestoreCompleted { customerInfo in
                         revenueCatPaywallCoordinator.apply(customerInfo)
                         revenueCatPaywallCoordinator.dismiss()
                         activeHomeFullScreenCover = nil
+                        subscriptionSyncCoordinator.synchronizeIfAllowed(reason: .restoreCompleted, force: true)
                     }
             } else {
                 ProgressView()
@@ -313,7 +333,7 @@ private extension SignedInMainTabHostView {
                     medicalDocumentUploadViewModel: mainTab.medicalDocumentUploadViewModel,
                     externalMedicalDocumentImportCoordinator: mainTab.externalMedicalDocumentImportCoordinator,
                     launchIntentCoordinator: mainTab.launchIntentCoordinator,
-                    session: session,
+                    session: currentSession,
                     chatListViewModel: mainTab.chatListViewModel,
                     autoSmallTaskRegistry: mainTab.autoSmallTaskRegistry,
                     autoSmallTaskIntentStore: mainTab.chatAutoSmallTaskIntentStore,

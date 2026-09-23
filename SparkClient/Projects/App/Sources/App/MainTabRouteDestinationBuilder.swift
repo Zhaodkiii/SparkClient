@@ -74,7 +74,7 @@ struct MainTabRouteDestinationBuilder {
                 guideHomeDestinationBuilder: guideHomeDestinationBuilder,
                 leadingAction: .home,
                 onClose: {
-                    routeStore.route(to: .home, replaceStack: true)
+                    routeStore.closeAutomaticChatAndReturnHome()
                 }
             )
             .task(id: threadID) {

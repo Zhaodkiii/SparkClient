@@ -39,6 +39,19 @@ nonisolated struct UserSession: Codable, Equatable, Sendable {
         self.isDeviceAccount = isDeviceAccount
     }
 
+    func replacing(isPro: Bool) -> UserSession {
+        UserSession(
+            accountID: accountID,
+            email: email,
+            displayName: displayName,
+            signedInAt: signedInAt,
+            signInMethod: signInMethod,
+            isPro: isPro,
+            isNewUser: isNewUser,
+            isDeviceAccount: isDeviceAccount
+        )
+    }
+
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodableKey.self)
         accountID = try container.decode(Int64.self, forKey: .key("accountId"))

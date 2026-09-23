@@ -14,7 +14,7 @@ struct AccountProfileCard: View {
                     .font(.system(size: 34, weight: .semibold))
                     .foregroundStyle(.white)
             }
-            Text(profile.displayName.isEmpty ? profile.contact : profile.displayName)
+            Text(profile.displayName.isEmpty ? L10n.text("account_management.profile.default_name") : profile.displayName)
                 .font(.title3.weight(.semibold))
             Text(profile.signInMethodDescription)
                 .font(.footnote)
@@ -28,6 +28,25 @@ struct AccountProfileCard: View {
                 .stroke(Color(.separator).opacity(0.35))
         }
     }
+}
+
+func maskedAccountContact(_ contact: String) -> String {
+    if contact.contains("@") {
+        let parts = contact.split(separator: "@", maxSplits: 1).map(String.init)
+        guard let name = parts.first, let domain = parts.last, name.isEmpty == false else { return contact }
+        let visible = String(name.prefix(1))
+        return "\(visible)***@\(domain)"
+    }
+
+    let digits = contact.filter(\.isNumber)
+    guard digits.count >= 8 else { return contact }
+
+    if digits.hasPrefix("86"), digits.count >= 13 {
+        let local = String(digits.dropFirst(2))
+        return "+86 \(local.prefix(3))****\(local.suffix(4))"
+    }
+
+    return "\(digits.prefix(3))****\(digits.suffix(4))"
 }
 
 struct AccountInfoRow: View {

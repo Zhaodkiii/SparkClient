@@ -11,7 +11,6 @@ struct GeneralSettingsView: View {
     var body: some View {
         List {
             versionSection
-            RevenueCatSubscriptionSection()
             appStoreReviewSection
             homeStyleSection
             homeAIConversationSection

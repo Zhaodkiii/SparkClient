@@ -24,8 +24,9 @@ final class RevenueCatPaywallCoordinator: ObservableObject {
 }
 
 @MainActor
-private final class RevenueCatSubscriptionViewModel: ObservableObject {
+final class RevenueCatSubscriptionViewModel: ObservableObject {
     @Published private(set) var hasProEntitlement = false
+    @Published private(set) var entitlementExpirationDate: Date?
     @Published private(set) var offering: Offering?
     @Published private(set) var isRefreshing = false
     @Published private(set) var isRestoring = false
@@ -69,19 +70,23 @@ private final class RevenueCatSubscriptionViewModel: ObservableObject {
     }
 
     func apply(_ customerInfo: CustomerInfo) {
-        hasProEntitlement = customerInfo.entitlements
-            .activeInCurrentEnvironment[RevenueCatConfiguration.entitlementIdentifier] != nil
+        let entitlement = customerInfo.entitlements
+            .all[RevenueCatConfiguration.entitlementIdentifier]
+        hasProEntitlement = entitlement?.isActive == true
+        entitlementExpirationDate = entitlement?.expirationDate
     }
 }
 
 struct RevenueCatSubscriptionSection: View {
     @EnvironmentObject private var paywallCoordinator: RevenueCatPaywallCoordinator
+    @EnvironmentObject private var subscriptionSyncCoordinator: SubscriptionSyncCoordinator
     @StateObject private var viewModel = RevenueCatSubscriptionViewModel()
     @State private var isOpeningPaywall = false
 
     var body: some View {
         Section {
             Button {
+                guard subscriptionSyncCoordinator.canPurchaseOrRestore else { return }
                 guard !viewModel.isRefreshing, !isOpeningPaywall, paywallCoordinator.offering == nil else { return }
 
                 isOpeningPaywall = true
@@ -119,7 +124,7 @@ struct RevenueCatSubscriptionSection: View {
                     }
                 }
             }
-            .disabled(viewModel.isRefreshing || isOpeningPaywall || paywallCoordinator.offering != nil)
+            .disabled(viewModel.isRefreshing || isOpeningPaywall || paywallCoordinator.offering != nil || !subscriptionSyncCoordinator.canPurchaseOrRestore)
             .task {
                 if let customerInfo = await viewModel.refresh() {
                     paywallCoordinator.apply(customerInfo)
@@ -128,8 +133,10 @@ struct RevenueCatSubscriptionSection: View {
 
             Button {
                 Task {
+                    guard subscriptionSyncCoordinator.canPurchaseOrRestore else { return }
                     if let customerInfo = await viewModel.restorePurchases() {
                         paywallCoordinator.apply(customerInfo)
+                        subscriptionSyncCoordinator.synchronizeIfAllowed(reason: .restoreCompleted, force: true)
                     }
                 }
             } label: {
@@ -142,7 +149,20 @@ struct RevenueCatSubscriptionSection: View {
                     )
                 }
             }
-            .disabled(viewModel.isRestoring)
+            .disabled(viewModel.isRestoring || !subscriptionSyncCoordinator.canPurchaseOrRestore)
+
+            Button {
+                subscriptionSyncCoordinator.synchronizeIfAllowed(reason: .manualRefresh, force: true)
+            } label: {
+                Label(L10n.text("settings.subscription.refresh_status"), systemImage: "arrow.triangle.2.circlepath")
+            }
+            .disabled(!subscriptionSyncCoordinator.canPurchaseOrRestore)
+
+            if let syncMessage {
+                Text(syncMessage)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
 
             if let message = viewModel.message {
                 Text(message)
@@ -153,6 +173,27 @@ struct RevenueCatSubscriptionSection: View {
             Text(L10n.text("settings.subscription.section"))
         } footer: {
             Text(L10n.text("settings.subscription.footer"))
+        }
+    }
+
+    private var syncMessage: String? {
+        switch subscriptionSyncCoordinator.identityState {
+        case .unbound, .binding:
+            return L10n.text("settings.subscription.binding_required")
+        case .failed:
+            return L10n.text("settings.subscription.binding_required")
+        case .bound:
+            break
+        }
+        switch subscriptionSyncCoordinator.syncState {
+        case .idle:
+            return nil
+        case .syncing:
+            return L10n.text("settings.subscription.syncing")
+        case .pendingRetry:
+            return L10n.text("settings.subscription.sync_pending")
+        case .failed:
+            return L10n.text("settings.subscription.sync_pending")
         }
     }
 }

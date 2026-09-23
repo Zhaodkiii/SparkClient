@@ -281,6 +281,22 @@
 
 "settings.general.app_store_review" = "App Store 評分";
 "settings.subscription.section" = "訂閱與會員";
+"account_management.section.pro_subscription" = "Pro 訂閱";
+"account_management.section.profile" = "個人資料";
+"account_management.pro_subscription.expires_at" = "到期時間";
+"account_management.pro_subscription.lifetime" = "永久有效";
+"account_management.pro_subscription.next_renewal" = "下次續費：%@";
+"account_management.pro_subscription.valid_until" = "權益有效至：%@";
+"account_management.profile.default_name" = "Apple 使用者";
+"account_management.pro_subscription.active_title" = "健康 Pro 尊享會員";
+"account_management.pro_subscription.free_title" = "健康 Pro";
+"account_management.pro_subscription.free_subtitle" = "目前為免費版 · 未訂閱";
+"account_management.pro_subscription.benefits" = "解鎖進階健康分析與資料同步";
+"account_management.pro_subscription.expired_title" = "健康 Pro 已到期";
+"account_management.pro_subscription.expired_subtitle" = "權益已失效，請重新開通";
+"account_management.pro_subscription.expired_at" = "到期時間";
+"account_management.pro_subscription.expired_on" = "已於 %@ 到期";
+"account_management.pro_subscription.manage" = "管理訂閱";
 "settings.subscription.open_paywall" = "健康 Pro";
 "settings.subscription.status_active" = "已訂閱";
 "settings.subscription.status_inactive" = "未訂閱";
@@ -288,3 +304,7 @@
 "settings.subscription.restore_success" = "購買項目已恢復，健康 Pro 權益已生效。";
 "settings.subscription.restore_empty" = "未找到可恢復的健康 Pro 訂閱。";
 "settings.subscription.footer" = "訂閱由 Apple 管理，可隨時在 App Store 帳戶中取消。";
+"settings.subscription.refresh_status" = "重新整理會員狀態";
+"settings.subscription.syncing" = "權益同步中…";
+"settings.subscription.sync_pending" = "權益同步將在網路恢復後自動重試。";
+"settings.subscription.binding_required" = "正在連線購買服務，請稍後再試。";

@@ -428,7 +428,7 @@ struct MainTabCoordinatorView: View {
                 routeStore.routes(for: tab)
             },
             set: { routes in
-                routeStore.replaceStack(routes, for: tab)
+                routeStore.synchronizeStack(routes, for: tab)
             }
         )
     }
