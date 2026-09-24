@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// iOS 26 正式主导航：系统 Liquid Glass 浮动 TabBar，底部 Tab 为首页、对话、知识背包、搜索、设置（IOS26-TABBAR-000002）。
+/// iOS 26 正式主导航：系统 Liquid Glass 浮动 TabBar，包含健康、用药、对话及当前首页样式对应的功能 Tab。
 @available(iOS 26.0, *)
 struct IOS26TabBarView: View {
     let session: UserSession
@@ -43,9 +43,9 @@ struct IOS26TabBarView: View {
     /// 当前布局下实际渲染的根 Tab 集合：classic 含饮食/运动独立 Tab，dashboard 含设置 Tab。
     private var visibleTabs: Set<AppRouteStore.RootTab> {
         if homeStylePreferenceStore.style == .classic {
-            return [.healthHome, .chat, .nutrition, .fitness]
+            return [.healthHome, .medication, .chat, .nutrition, .fitness]
         }
-        return [.healthHome, .chat, .settings]
+        return [.healthHome, .medication, .chat, .settings]
     }
 
     private var destinationBuilder: MainTabRouteDestinationBuilder {
@@ -90,6 +90,10 @@ struct IOS26TabBarView: View {
                     } else {
                         healthContainer
                     }
+                }
+
+                Tab(L10n.text("tab.medication"), systemImage: "pills.fill", value: AppRouteStore.RootTab.medication) {
+                    medicationContainer
                 }
 
                 if homeStylePreferenceStore.style == .classic {
@@ -203,6 +207,8 @@ struct IOS26TabBarView: View {
             return L10n.text("nutrition.home.title")
         case .fitness:
             return L10n.text("fitness.home.title")
+        case .medication:
+            return L10n.text("home.medical.medication_execution.nav_title")
         case .knowledge:
             return L10n.text("knowledge.library.title")
         case .settings:
@@ -277,6 +283,14 @@ struct IOS26TabBarView: View {
                 } label: {
                     Text(L10n.text("nutrition.history.entry"))
                 }
+            }
+        case .medication:
+            ToolbarItem(placement: .topBarLeading) {
+                memberSelectorHeader
+            }
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                medicationPlanToolbarLink
+                medicationBoxToolbarLink
             }
         case .knowledge:
             ToolbarItemGroup(placement: .topBarTrailing) {
@@ -353,6 +367,72 @@ struct IOS26TabBarView: View {
             ToolbarItem(placement: .topBarTrailing) {
                 EmptyView()
             }
+        }
+    }
+
+    private var medicationCompleteData: SparkMedicalSyncAPI.RemoteMemberCompleteData? {
+        homeViewModel.dashboard?.medical.completeData
+    }
+
+    private var medicationMemberID: Int? {
+        homeViewModel.selectedMemberID ?? homeViewModel.memberContextStoreForBinding.context.selectedMember?.id
+    }
+
+    @ViewBuilder
+    private var medicationPlanToolbarLink: some View {
+        MainNavigationLink {
+            HomeMedicalListView(
+                route: .medicationPlans,
+                completeData: medicationCompleteData,
+                dependencies: homeDependencies,
+                initialFocus: nil,
+                onDismiss: nil,
+                onMedicalCasesUpdated: nil,
+                onHealthExamReportsUpdated: nil,
+                onExaminationReportsUpdated: nil,
+                onMedicationPlansUpdated: { plans in
+                    homeViewModel.updateMedicalCompleteData { $0.medicationPlans = plans }
+                    HomeMedicalRouteSupport.triggerMedicationReminderRebuild(
+                        reminderEnabled: plans.contains(where: \.reminderEnabled),
+                        homeViewModel: homeViewModel,
+                        dependencies: homeDependencies,
+                        session: session
+                    )
+                },
+                onPrescriptionsUpdated: { prescriptions in
+                    homeViewModel.updateMedicalCompleteData { $0.prescriptions = prescriptions }
+                },
+                onMedicineBoxesUpdated: { boxes in
+                    homeViewModel.updateMedicalCompleteData { $0.medicineBoxes = boxes }
+                },
+                selectedMemberID: medicationMemberID,
+                onMemberIDSelected: { memberID in
+                    Task { await homeViewModel.switchMemberAndLoad(memberID) }
+                }
+            )
+        } label: {
+            Image(systemName: "list.bullet.rectangle")
+        }
+        .accessibilityLabel(L10n.text("home.medical.list.medications.title", fallback: "服药计划"))
+    }
+
+    @ViewBuilder
+    private var medicationBoxToolbarLink: some View {
+        if let memberID = medicationMemberID {
+            MainNavigationLink {
+                FamilyMedicineCabinetPage(
+                    entryMemberID: memberID,
+                    mode: .personal,
+                    initialMedicineBoxes: medicationCompleteData?.medicineBoxes ?? [],
+                    dependencies: homeDependencies,
+                    onMedicineBoxesChanged: { boxes in
+                        homeViewModel.updateMedicalCompleteData { $0.medicineBoxes = boxes }
+                    }
+                )
+            } label: {
+                Image(systemName: "pills.fill")
+            }
+            .accessibilityLabel(L10n.text("home.medical.list.medications.action.medicine_box", fallback: "药箱"))
         }
     }
 
@@ -477,6 +557,16 @@ struct IOS26TabBarView: View {
 
     private var fitnessContainer: some View {
         FitnessHomeView(dependencies: homeDependencies.fitnessDependencies)
+    }
+
+    private var medicationContainer: some View {
+        HomeMedicalRouteSupport.medicalListView(
+            route: .medication,
+            medicationFocus: nil,
+            homeViewModel: homeViewModel,
+            dependencies: homeDependencies,
+            session: session
+        )
     }
 
     private var knowledgeContainer: some View {

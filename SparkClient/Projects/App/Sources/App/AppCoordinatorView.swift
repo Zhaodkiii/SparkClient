@@ -3,14 +3,22 @@ import SwiftUI
 import UIKit
 
 enum AppStoreReviewRequester {
+    private static let didRequestKey = "app_store_review.did_request"
+
     @MainActor
-    static func request() {
+    static func requestIfNeeded() {
+        guard UserDefaults.standard.bool(forKey: didRequestKey) == false else {
+            return
+        }
+
         guard let scene = UIApplication.shared.connectedScenes
             .compactMap({ $0 as? UIWindowScene })
             .first(where: { $0.activationState == .foregroundActive }) else {
             return
         }
 
+        // 这是应用级状态，不绑定账户；系统评分请求只发起一次。
+        UserDefaults.standard.set(true, forKey: didRequestKey)
         SKStoreReviewController.requestReview(in: scene)
     }
 }
@@ -21,15 +29,14 @@ struct AppCoordinatorView: View {
     @StateObject private var lifecycle: AppLifecycleCoordinator
     @StateObject private var versionUpdateCoordinator: AppVersionUpdateCoordinator
     @ObservedObject private var onboardingStore: OnboardingStore
-    @State private var shouldRequestReviewAfterOnboarding = false
-
+    
     init(dependencies: AppCoordinatorDependencies) {
         self.facades = dependencies.facades
         self.onboardingStore = dependencies.facades.onboarding.store
         _lifecycle = StateObject(wrappedValue: dependencies.lifecycle)
         _versionUpdateCoordinator = StateObject(wrappedValue: dependencies.versionUpdateCoordinator)
     }
-
+    
     var body: some View {
         ZStack {
             sessionContent
@@ -48,7 +55,7 @@ struct AppCoordinatorView: View {
             networkMonitor.start()
         }
     }
-
+    
     @ViewBuilder
     private var sessionContent: some View {
         switch lifecycle.sessionState {
@@ -60,10 +67,14 @@ struct AppCoordinatorView: View {
                         isNetworkSatisfied: networkMonitor.isSatisfied
                     )
                 }
-
+            
         case .signedOut:
-            SignedOutAuthCoordinatorView(facades: facades, lifecycle: lifecycle)
-
+            if lifecycle.isAutomaticGuestLoginInProgress {
+                AppLaunchScreenView()
+            } else {
+                SignedOutAuthCoordinatorView(facades: facades, lifecycle: lifecycle)
+            }
+            
         case .signedIn(let session):
             if lifecycle.preparedAccountID == session.accountID {
                 let mainTab = facades.mainTab.makeDependencies(session.accountID)
@@ -76,7 +87,6 @@ struct AppCoordinatorView: View {
                         subscriptionSyncCoordinator: lifecycle.subscriptionSyncCoordinator,
                         homeDependencies: mainTab.homeDependencies
                     ) {
-                        shouldRequestReviewAfterOnboarding = true
                         Task { @MainActor in
                             await mainTab.homeViewModel.forceReload(syncRemote: true)
                         }
@@ -96,32 +106,29 @@ struct AppCoordinatorView: View {
                         mainTab: mainTab,
                         sessionStore: lifecycle.sessionStore
                     )
-                        .environmentObject(mainTab.memberContextStore)
-                        .environmentObject(lifecycle.subscriptionSyncCoordinator)
-                        .id(session.accountID)
-                        .onAppear {
-                            mainTab.launchIntentCoordinator.updateReadiness {
-                                $0.isSignedIn = true
-                                $0.accountID = session.accountID
-                                $0.isAccountPrepared = true
-                                $0.isOnboardingBlocking = false
-                            }
-                            if shouldRequestReviewAfterOnboarding {
-                                shouldRequestReviewAfterOnboarding = false
-                                Task { @MainActor in
-                                    // 等待主页面完成挂载，确保评分请求绑定到前台窗口场景。
-                                    try? await Task.sleep(for: .milliseconds(500))
-                                    guard Task.isCancelled == false else { return }
-                                    AppStoreReviewRequester.request()
-                                }
-                            }
+                    .environmentObject(mainTab.memberContextStore)
+                    .environmentObject(lifecycle.subscriptionSyncCoordinator)
+                    .id(session.accountID)
+                    .onAppear {
+                        mainTab.launchIntentCoordinator.updateReadiness {
+                            $0.isSignedIn = true
+                            $0.accountID = session.accountID
+                            $0.isAccountPrepared = true
+                            $0.isOnboardingBlocking = false
                         }
-                        .task(id: session.accountID) {
-                            // 通知权限仅在用户已进入已登录态后询问（含会话恢复），避免登录页弹系统对话框。
-                            //                        lifecycle.requestNotificationAuthorizationIfNeeded()
-                            // 设备登记由 AppLifecycleCoordinator / DeviceRegistrationCoordinator 在启动与会话恢复时统一触发。
-                            await versionUpdateCoordinator.checkOnLaunchIfNeeded(force: true)
+                        Task { @MainActor in
+                            // 等待首页完成挂载，确保评分请求绑定到前台窗口场景。
+                            try? await Task.sleep(for: .milliseconds(500))
+                            guard Task.isCancelled == false else { return }
+                            AppStoreReviewRequester.requestIfNeeded()
                         }
+                    }
+                    .task(id: session.accountID) {
+                        // 通知权限仅在用户已进入已登录态后询问（含会话恢复），避免登录页弹系统对话框。
+                        //                        lifecycle.requestNotificationAuthorizationIfNeeded()
+                        // 设备登记由 AppLifecycleCoordinator / DeviceRegistrationCoordinator 在启动与会话恢复时统一触发。
+                        await versionUpdateCoordinator.checkOnLaunchIfNeeded(force: true)
+                    }
                 }
             } else {
                 // 账号准备由 AppLifecycleCoordinator 统一调度（冷启动 / 登录），避免 SwiftUI .task 取消导致登记中断。

@@ -13,6 +13,7 @@ final class AppLifecycleCoordinator: ObservableObject {
     /// `AppLifecycleCoordinator.objectWillChange`，登录成功后根视图可能停留在 signedOut。
     @Published private(set) var sessionState: AppSessionStore.State = .loading
     @Published private(set) var preparedAccountID: Int64?
+    @Published private(set) var isAutomaticGuestLoginInProgress = false
 
     private let container: AppContainer
     private let logger: Logger
@@ -58,6 +59,7 @@ final class AppLifecycleCoordinator: ObservableObject {
         defer { isColdLaunchBootstrapInProgress = false }
 
         await sessionStore.restoreIfNeeded()
+        await signInAsGuestIfNeeded()
         await container.appBootstrapper.bootstrapAppLaunchIfNeeded()
 
         switch sessionStore.state {
@@ -70,6 +72,38 @@ final class AppLifecycleCoordinator: ObservableObject {
             await registerDeviceForSignedOutLaunchIfNeeded()
         case .loading:
             break
+        }
+    }
+
+    /// 冷启动没有可恢复会话时，沿用历史设备账户登录链路自动进入游客模式。
+    /// 只在冷启动执行，避免用户主动退出后被立即重新登录。
+    private func signInAsGuestIfNeeded() async {
+        guard case .signedOut = sessionStore.state else { return }
+
+        isAutomaticGuestLoginInProgress = true
+        defer { isAutomaticGuestLoginInProgress = false }
+
+        logger.info("会话流程：无可恢复会话，开始自动游客登录", module: .auth)
+        do {
+            let session = try await container.signInWithDeviceUseCase.execute()
+            guard session.isDeviceAccount else {
+                logger.warning(
+                    "会话流程：自动游客登录返回非设备账号，保留 signedOut accountID=\(session.accountID)",
+                    module: .auth
+                )
+                return
+            }
+
+            sessionStore.setAuthenticated(session)
+            logger.info(
+                "会话流程：自动游客登录成功 accountID=\(session.accountID)",
+                module: .auth
+            )
+        } catch {
+            logger.warning(
+                "会话流程：自动游客登录失败，回退登录页 error=\(error.localizedDescription)",
+                module: .auth
+            )
         }
     }
 

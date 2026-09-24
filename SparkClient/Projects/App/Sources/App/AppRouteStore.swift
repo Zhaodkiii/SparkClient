@@ -68,6 +68,8 @@ final class AppRouteStore: ObservableObject {
         case nutrition = 8
         /// 运动健康 Tab，使用新 raw value，避免影响历史 Tab 选中态。
         case fitness = 9
+        /// 用药执行中心 Tab，使用新 raw value，避免影响历史 Tab 选中态。
+        case medication = 10
     }
 
     private let preferenceStore: RootTabPreferenceStore

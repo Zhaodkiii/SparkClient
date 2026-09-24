@@ -25,7 +25,7 @@ struct GeneralSettingsView: View {
     private var appStoreReviewSection: some View {
         Section {
             Button {
-                AppStoreReviewRequester.request()
+                AppStoreReviewRequester.requestIfNeeded()
             } label: {
                 Label(
                     L10n.text("settings.general.app_store_review"),

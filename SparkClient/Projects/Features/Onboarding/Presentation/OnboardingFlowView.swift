@@ -41,9 +41,9 @@ struct OnboardingFlowView: View {
         } destination: { step in
             onboardingDestination(for: step)
         }
-//        .task {
-//            await bootstrapDefaultMemberIfNeeded()
-//        }
+        .task {
+            await bootstrapDefaultMemberIfNeeded()
+        }
     }
 
     @ViewBuilder
@@ -70,6 +70,10 @@ struct OnboardingFlowView: View {
                         }
                     )
                 case .start:
+                    
+//                    OnboardingStartStep {
+//                        completeOnboarding()
+//                    }
                     if currentSession?.isPro == true {
                         OnboardingStartStep {
                             completeOnboarding()
@@ -196,7 +200,7 @@ struct OnboardingFlowView: View {
         didBootstrapDefaultMember = true
 
         let created = await memberContextStore.addMember(
-            name: "初始成员",
+            name: "演示",
             relationship: "self",
             gender: "male",
             birthDate: nil
